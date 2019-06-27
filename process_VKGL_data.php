@@ -1,3 +1,4 @@
+#!/usr/bin/php
 <?php
 /*******************************************************************************
  *
@@ -42,8 +43,12 @@ if (isset($_SERVER['HTTP_HOST'])) {
 
 // Default settings. Everything in 'user' will be verified with the user, and stored in settings.json.
 $_CONFIG = array(
+    'name' => 'VKGL data importer',
     'version' => '0.0',
     'settings_file' => 'settings.json',
+    'flags' => array(
+        'y' => false,
+    ),
     'columns_mandatory' => array(
         // These are the columns that need to be present in order for the file to get processed.
         'id',
@@ -68,6 +73,8 @@ $_CONFIG = array(
     'user' => array(
         // Variables we will be asking the user.
         'lovd_path' => '/www/databases.lovd.nl/shared/',
+        'mutalyzer_cache_NC' => 'NC_cache.txt', // Stores NC g. descriptions and their corrected output.
+        'mutalyzer_cache_NM' => 'NM_cache.txt', // Stores NM c. descriptions and their corrected output.
     ),
 );
 
@@ -76,16 +83,17 @@ $_CONFIG = array(
 // "[I propose] restricting user-defined exit codes to the range 64 - 113 (...), to conform with the C/C++ standard."
 define('EXIT_OK', 0);
 define('EXIT_WARNINGS_OCCURRED', 64);
-define('EXIT_ERROR_INSUFFICIENT_ARGS', 65);
-define('EXIT_ERROR_INPUT_NOT_A_FILE', 66);
-define('EXIT_ERROR_INPUT_UNREADABLE', 67);
-define('EXIT_ERROR_INPUT_CANT_OPEN', 68);
-define('EXIT_ERROR_SETTINGS_CANNOT_CREATE', 69);
-define('EXIT_ERROR_SETTINGS_UNREADABLE', 70);
-define('EXIT_ERROR_SETTINGS_CANNOT_UPDATE', 71);
-define('EXIT_ERROR_HEADER_FIELDS_NOT_FOUND', 72);
-define('EXIT_ERROR_HEADER_FIELDS_INCORRECT', 73);
-define('EXIT_ERROR_DATA_FIELD_COUNT_INCORRECT', 74);
+define('EXIT_ERROR_ARGS_INSUFFICIENT', 65);
+define('EXIT_ERROR_ARGS_NOT_UNDERSTOOD', 66);
+define('EXIT_ERROR_INPUT_NOT_A_FILE', 67);
+define('EXIT_ERROR_INPUT_UNREADABLE', 68);
+define('EXIT_ERROR_INPUT_CANT_OPEN', 69);
+define('EXIT_ERROR_SETTINGS_CANT_CREATE', 70);
+define('EXIT_ERROR_SETTINGS_UNREADABLE', 71);
+define('EXIT_ERROR_SETTINGS_CANT_UPDATE', 72);
+define('EXIT_ERROR_HEADER_FIELDS_NOT_FOUND', 73);
+define('EXIT_ERROR_HEADER_FIELDS_INCORRECT', 74);
+define('EXIT_ERROR_DATA_FIELD_COUNT_INCORRECT', 75);
 
 define('VERBOSITY_NONE', 0); // No output whatsoever.
 define('VERBOSITY_LOW', 3); // Low output, only the really important messages.
@@ -225,4 +233,116 @@ function lovd_verifySettings ($sKeyName, $sMessage, $sVerifyType, $options)
 }
 
 
+
+
+
+// Parse command line options.
+$aArgs = $_SERVER['argv'];
+$nArgs = $_SERVER['argc'];
+// We need at least one argument, the file to convert.
+$nArgsRequired = 1;
+
+$sScriptName = array_shift($aArgs);
+$nArgs --;
+$bWarningsOcurred = false;
+
+if ($nArgs < $nArgsRequired) {
+    lovd_printIfVerbose(VERBOSITY_LOW,
+        $_CONFIG['name'] . ' v' . $_CONFIG['version'] . '.' . "\n" .
+        'Usage: ' . $sScriptName . ' file_to_import.tsv [-y]' . "\n\n");
+    die(EXIT_ERROR_ARGS_INSUFFICIENT);
+}
+
+// First argument should be the file to convert.
+$sFile = array_shift($aArgs);
+$nArgs --;
+
+while ($nArgs) {
+    // Check for flags.
+    $sArg = array_shift($aArgs);
+    $nArgs --;
+    if (preg_match('/^-[A-Z]+$/i', $sArg)) {
+        $sArg = substr($sArg, 1);
+        foreach (str_split($sArg) as $sFlag) {
+            if (isset($_CONFIG['flags'][$sFlag])) {
+                $_CONFIG['flags'][$sFlag] = true;
+            } else {
+                // Flag not recognized.
+                lovd_printIfVerbose(VERBOSITY_LOW,
+                    'Error: Flag -' . $sFlag . ' not understood.' . "\n\n");
+                die(EXIT_ERROR_ARGS_NOT_UNDERSTOOD);
+            }
+        }
+    }
+}
+
+
+
+
+
+// Check file passed as an argument.
+if (!file_exists($sFile) || !is_file($sFile)) {
+    lovd_printIfVerbose(VERBOSITY_LOW,
+        'Error: Input is not a file.' . "\n\n");
+    die(EXIT_ERROR_INPUT_NOT_A_FILE);
+}
+if (!is_readable($sFile)) {
+    lovd_printIfVerbose(VERBOSITY_LOW,
+        'Error: Unreadable input file.' . "\n\n");
+    die(EXIT_ERROR_INPUT_UNREADABLE);
+}
+
+
+
+// Check headers. Isolate the center names, so we can ask the user about them.
+$aHeaders = array();
+$nHeaders = 0;
+$nCentersFound = 0;
+$nLine = 0;
+$fInput = fopen($sFile, 'r');
+if ($fInput === false) {
+    lovd_printIfVerbose(VERBOSITY_LOW,
+        'Error: Can not open file.' . "\n\n");
+    die(EXIT_ERROR_INPUT_CANT_OPEN);
+}
+
+while ($sLine = fgets($fInput)) {
+    $nLine++;
+    $sLine = trim($sLine);
+    if (!$sLine) {
+        continue;
+    }
+
+    // First line should be headers.
+    $aHeaders = explode("\t", $sLine);
+    $nHeaders = count($aHeaders);
+
+    // Check for mandatory headers.
+    $aHeadersMissing = array();
+    foreach ($_CONFIG['columns_mandatory'] as $sColumn) {
+        if (!in_array($sColumn, $aHeaders, true)) {
+            $aHeadersMissing[] = $sColumn;
+        }
+    }
+    if ($aHeadersMissing) {
+        lovd_printIfVerbose(VERBOSITY_LOW,
+            'Error: File does not conform to format; missing column' . (count($aHeadersMissing) == 1? '' : 's') . ': ' . implode(', ', $aHeadersMissing) . ".\n\n");
+        die(EXIT_ERROR_HEADER_FIELDS_INCORRECT);
+    }
+    break;
+}
+
+if (!$aHeaders) {
+    lovd_printIfVerbose(VERBOSITY_LOW,
+        'Error: File does not conform to format; can not find headers.' . "\n\n");
+    die(EXIT_ERROR_HEADER_FIELDS_NOT_FOUND);
+}
+
+
+
+
+
+// Now we have the headers, and all required ones are there.
+// Parse the rest, ignore everything we don't care about, assume the rest must be centers.
+// Verify these and store.
 ?>
