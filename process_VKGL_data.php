@@ -63,6 +63,7 @@ $_CONFIG = array(
     ),
     'columns_ignore' => array(
         // These are the columns that we'll ignore. If we find any others, we'll complain.
+        'stop',
         'consensus_classification',
         'matches',
         'disease',
@@ -88,12 +89,13 @@ define('EXIT_ERROR_ARGS_NOT_UNDERSTOOD', 66);
 define('EXIT_ERROR_INPUT_NOT_A_FILE', 67);
 define('EXIT_ERROR_INPUT_UNREADABLE', 68);
 define('EXIT_ERROR_INPUT_CANT_OPEN', 69);
-define('EXIT_ERROR_SETTINGS_CANT_CREATE', 70);
-define('EXIT_ERROR_SETTINGS_UNREADABLE', 71);
-define('EXIT_ERROR_SETTINGS_CANT_UPDATE', 72);
-define('EXIT_ERROR_HEADER_FIELDS_NOT_FOUND', 73);
-define('EXIT_ERROR_HEADER_FIELDS_INCORRECT', 74);
+define('EXIT_ERROR_HEADER_FIELDS_NOT_FOUND', 70);
+define('EXIT_ERROR_HEADER_FIELDS_INCORRECT', 71);
+define('EXIT_ERROR_SETTINGS_CANT_CREATE', 72);
+define('EXIT_ERROR_SETTINGS_UNREADABLE', 73);
+define('EXIT_ERROR_SETTINGS_CANT_UPDATE', 74);
 define('EXIT_ERROR_DATA_FIELD_COUNT_INCORRECT', 75);
+define('EXIT_ERROR_CONNECTION_PROBLEM', 76);
 
 define('VERBOSITY_NONE', 0); // No output whatsoever.
 define('VERBOSITY_LOW', 3); // Low output, only the really important messages.
@@ -297,7 +299,6 @@ if (!is_readable($sFile)) {
 // Check headers. Isolate the center names, so we can ask the user about them.
 $aHeaders = array();
 $nHeaders = 0;
-$nCentersFound = 0;
 $nLine = 0;
 $fInput = fopen($sFile, 'r');
 if ($fInput === false) {
@@ -308,7 +309,7 @@ if ($fInput === false) {
 
 while ($sLine = fgets($fInput)) {
     $nLine++;
-    $sLine = trim($sLine);
+    $sLine = strtolower(trim($sLine));
     if (!$sLine) {
         continue;
     }
@@ -345,4 +346,93 @@ if (!$aHeaders) {
 // Now we have the headers, and all required ones are there.
 // Parse the rest, ignore everything we don't care about, assume the rest must be centers.
 // Verify these and store.
+$aCentersFound = array();
+$nCentersFound = 0;
+$aHeadersSorted = array_diff($aHeaders, $_CONFIG['columns_mandatory'], $_CONFIG['columns_ignore']);
+sort($aHeadersSorted); // This makes it easier to find the centers and their *_link column.
+foreach ($aHeadersSorted as $sHeader) {
+    // Are we a center name?
+    if (in_array($sHeader . $_CONFIG['columns_center_suffix'], $aHeadersSorted)) {
+        // Yes, this is a center. Its *_link column is present.
+        $aCentersFound[] = $sHeader;
+        $nCentersFound ++;
+        $_CONFIG['user']['center_' . $sHeader . '_id'] = 0;
+    } elseif (in_array(str_replace($_CONFIG['columns_center_suffix'], '', $sHeader), $aCentersFound)) {
+        // This is a center's *_link column.
+        continue;
+    } else {
+        // Column not recognized. Better warn, in case we're missing something.
+        lovd_printIfVerbose(VERBOSITY_LOW,
+            'Error: File header contains unrecognized column: ' . $sHeader . ".\n" .
+            'In case you would like to ignore this column, please add it to the columns_ignore list.' . "\n\n");
+        die(EXIT_ERROR_HEADER_FIELDS_INCORRECT);
+    }
+}
+
+
+
+
+
+// Get settings file, if it exists.
+$_SETT = array();
+if (!file_exists($_CONFIG['settings_file'])) {
+    if (!touch($_CONFIG['settings_file'])) {
+        lovd_printIfVerbose(VERBOSITY_LOW,
+            'Error: Could not create settings file.' . "\n\n");
+        die(EXIT_ERROR_SETTINGS_CANT_CREATE);
+    }
+} elseif (!is_file($_CONFIG['settings_file']) || !is_readable($_CONFIG['settings_file'])
+    || !($_SETT = json_decode(file_get_contents($_CONFIG['settings_file']), true))) {
+    lovd_printIfVerbose(VERBOSITY_LOW,
+        'Error: Unreadable settings file.' . "\n\n");
+    die(EXIT_ERROR_SETTINGS_UNREADABLE);
+}
+
+// The settings file always replaces the standard defaults.
+$_CONFIG['user'] = array_merge($_CONFIG['user'], $_SETT);
+
+
+
+// User may have requested to continue without verifying the settings, but we may not have them all.
+// If at least one setting evaluates to "false", we will ask anyway.
+if ($_CONFIG['flags']['y']) {
+    foreach ($_CONFIG['user'] as $Value) {
+        if (!$Value) {
+            $_CONFIG['flags']['y'] = false;
+            break;
+        }
+    }
+}
+
+
+
+
+
+// Verify all the settings, if needed.
+if (!$_CONFIG['flags']['y']) {
+    if (!lovd_verifySettings('lovd_path', 'Path of LOVD installation to load data into', 'lovd_path', '')) {
+        lovd_printIfVerbose(VERBOSITY_LOW,
+            'Error: Failed to get LOVD path.' . "\n\n");
+        die(EXIT_ERROR_CONNECTION_PROBLEM);
+    }
+    lovd_verifySettings('mutalyzer_cache_NC', 'File containing the Mutalyzer cache for genomic (NC) variants', 'file', '');
+    lovd_verifySettings('mutalyzer_cache_NM', 'File containing the Mutalyzer cache for transcript (NM) variants', 'file', '');
+
+    // Verify all centers.
+    $aIDsUsed = array(); // Make sure IDs are unique.
+    foreach ($aCentersFound as $sCenter) {
+        while (!$_CONFIG['user']['center_' . $sCenter . '_id'] || in_array($_CONFIG['user']['center_' . $sCenter . '_id'], $aIDsUsed)) {
+            lovd_verifySettings('center_' . $sCenter . '_id', 'The LOVD user ID for VKGL center ' . $sCenter, 'int', '1,99999');
+            if (in_array($_CONFIG['user']['center_' . $sCenter . '_id'], $aIDsUsed)) {
+                lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                    '    This ID is already assigned to a different center.' . "\n");
+                $_CONFIG['user']['center_' . $sCenter . '_id'] = 0;
+            } else {
+                $aIDsUsed[] = $_CONFIG['user']['center_' . $sCenter . '_id'];
+                break;
+            }
+        }
+    }
+}
+
 ?>
