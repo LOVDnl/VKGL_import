@@ -97,6 +97,9 @@ define('EXIT_ERROR_SETTINGS_UNREADABLE', 73);
 define('EXIT_ERROR_SETTINGS_CANT_UPDATE', 74);
 define('EXIT_ERROR_SETTINGS_INCORRECT', 75);
 define('EXIT_ERROR_CONNECTION_PROBLEM', 76);
+define('EXIT_ERROR_CACHE_CANT_CREATE', 77);
+define('EXIT_ERROR_CACHE_UNREADABLE', 78);
+define('EXIT_ERROR_CACHE_CANT_UPDATE', 79);
 
 define('VERBOSITY_NONE', 0); // No output whatsoever.
 define('VERBOSITY_LOW', 3); // Low output, only the really important messages.
@@ -554,4 +557,47 @@ if (!$bRefSeqBuildOK || !$bAccountsOK) {
     die(EXIT_ERROR_SETTINGS_INCORRECT);
 }
 
+
+
+
+
+// Load the caches, create if they don't exist. They can only not exist, when the defaults are used.
+$_CACHE = array();
+foreach (array('mutalyzer_cache_NC', 'mutalyzer_cache_NM') as $sKeyName) {
+    $_CACHE[$sKeyName] = array();
+    if (!file_exists($_CONFIG['user'][$sKeyName])) {
+        // It doesn't exist, create it.
+        if (!touch($_CONFIG['user'][$sKeyName])) {
+            lovd_printIfVerbose(VERBOSITY_LOW,
+                'Error: Could not create Mutalyzer cache file.' . "\n\n");
+            die(EXIT_ERROR_CACHE_CANT_CREATE);
+        } else {
+            lovd_printIfVerbose(VERBOSITY_HIGH,
+                '  Cache created: ' . $_CONFIG['user'][$sKeyName] . "\n");
+        }
+    } elseif (!is_file($_CONFIG['user'][$sKeyName]) || !is_readable($_CONFIG['user'][$sKeyName])) {
+        // It does exist, but we can't read it.
+        lovd_printIfVerbose(VERBOSITY_LOW,
+            'Error: Unreadable Mutalyzer cache file.' . "\n\n");
+        die(EXIT_ERROR_CACHE_UNREADABLE);
+    } else {
+        // Load the cache.
+        $aCache = file($_CONFIG['user'][$sKeyName], FILE_IGNORE_NEW_LINES);
+        foreach ($aCache as $sVariant) {
+            $aVariant = explode("\t", $sVariant);
+            if (count($aVariant) == 2) {
+                $_CACHE[$sKeyName][$aVariant[0]] = $aVariant[1];
+            } else {
+                // Malformed line.
+                lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                    '[' . $sKeyName . '] Warning: Malformed line in Mutalyzer cache file.' . "\n" .
+                    $sVariant . "\n");
+                $bWarningsOcurred = true;
+            }
+        }
+        lovd_printIfVerbose(VERBOSITY_MEDIUM,
+            '[' . $sKeyName . '] Cache loaded, ' . count($_CACHE[$sKeyName]) . ' variants.' . "\n");
+    }
+}
+lovd_printIfVerbose(VERBOSITY_MEDIUM, "\n");
 ?>
