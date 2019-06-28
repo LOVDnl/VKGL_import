@@ -73,6 +73,7 @@ $_CONFIG = array(
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
     'user' => array(
         // Variables we will be asking the user.
+        'refseq_build' => 'hg19',
         'lovd_path' => '/www/databases.lovd.nl/shared/',
         'mutalyzer_cache_NC' => 'NC_cache.txt', // Stores NC g. descriptions and their corrected output.
         'mutalyzer_cache_NM' => 'NM_cache.txt', // Stores NM c. descriptions and their corrected output.
@@ -94,7 +95,7 @@ define('EXIT_ERROR_HEADER_FIELDS_INCORRECT', 71);
 define('EXIT_ERROR_SETTINGS_CANT_CREATE', 72);
 define('EXIT_ERROR_SETTINGS_UNREADABLE', 73);
 define('EXIT_ERROR_SETTINGS_CANT_UPDATE', 74);
-define('EXIT_ERROR_DATA_FIELD_COUNT_INCORRECT', 75);
+define('EXIT_ERROR_SETTINGS_INCORRECT', 75);
 define('EXIT_ERROR_CONNECTION_PROBLEM', 76);
 
 define('VERBOSITY_NONE', 0); // No output whatsoever.
@@ -436,6 +437,7 @@ if (!$_CONFIG['flags']['y']) {
     lovd_printIfVerbose(VERBOSITY_HIGH,
         $_CONFIG['name'] . ' v' . $_CONFIG['version'] . '.' . "\n");
 
+    lovd_verifySettings('refseq_build', 'The genome build that the data file uses (hg19/hg38)', 'array', array('hg19', 'hg38'));
     if (!lovd_verifySettings('lovd_path', 'Path of LOVD installation to load data into', 'lovd_path', '')) {
         lovd_printIfVerbose(VERBOSITY_LOW,
             'Error: Failed to get LOVD path.' . "\n\n");
@@ -496,4 +498,60 @@ ini_set('display_errors', '1'); // We do want to see errors from here on.
 
 lovd_printIfVerbose(VERBOSITY_HIGH,
     ' Connected!' . "\n\n");
+
+
+
+// Check given refseq build.
+$sRefSeqBuild = $_DB->query('SELECT refseq_build FROM ' . TABLE_CONFIG)->fetchColumn();
+$bRefSeqBuildOK = ($_CONFIG['user']['refseq_build'] == $sRefSeqBuild);
+
+lovd_printIfVerbose(VERBOSITY_MEDIUM,
+    'RefSeq build set to ' . $_CONFIG['user']['refseq_build'] .
+    ($bRefSeqBuildOK? '.' : ', but LOVD uses ' . $sRefSeqBuild . '!!!') . "\n\n");
+
+if (!$bRefSeqBuildOK) {
+    $_CONFIG['user']['refseq_build'] = '';
+}
+
+
+
+// Check given user accounts.
+// Get IDs. It is assumed that all numeric values in the user array are user IDs.
+$aUserIDs = array_filter($_CONFIG['user'], function ($Val) { return (is_int($Val)); });
+// Cast id to UNSIGNED to make sure our ints match.
+$aUsers = $_DB->query('SELECT CAST(id AS UNSIGNED) AS id, name FROM ' . TABLE_USERS . ' WHERE id IN (?' . str_repeat(', ?', count($aUserIDs) - 1) . ') ORDER BY id',
+    array_values($aUserIDs))->fetchAllCombine();
+
+$bAccountsOK = true;
+$lCenters = max(array_map('strlen', $aCentersFound));
+foreach ($aCentersFound as $sCenter) {
+    // If the user was changing settings, then print the center's name, and user name from LOVD.
+    // If not found, reset the ID so it doesn't get saved.
+    $bFound = (isset($aUsers[$_CONFIG['user']['center_' . $sCenter . '_id']]));
+
+    lovd_printIfVerbose(VERBOSITY_MEDIUM,
+        'Center ' . str_pad($sCenter, $lCenters, '.') . '... LOVD account #' .
+        str_pad($_CONFIG['user']['center_' . $sCenter . '_id'], 5, '0', STR_PAD_LEFT) .
+        (!$bFound? ' --- not found!!!' : ' "' . $aUsers[$_CONFIG['user']['center_' . $sCenter . '_id']] . '"') . "\n");
+
+    if (!$bFound) {
+        $bAccountsOK = false;
+        $_CONFIG['user']['center_' . $sCenter . '_id'] = 0;
+    }
+}
+if (!$_CONFIG['flags']['y']) {
+    lovd_printIfVerbose(VERBOSITY_MEDIUM, "\n");
+}
+
+if (!$bRefSeqBuildOK || !$bAccountsOK) {
+    // One of the settings is no good. Settings have been updated, save changes (but don't die if that doesn't work).
+    lovd_saveSettings(false);
+
+    // Now, die because of the incorrect settings.
+    lovd_printIfVerbose(VERBOSITY_LOW,
+        ($bRefSeqBuildOK? '' : 'Error: Failed to set RefSeq build.' . "\n") .
+        ($bAccountsOK? '' : 'Error: Failed to get all LOVD user accounts.' . "\n") . "\n");
+    die(EXIT_ERROR_SETTINGS_INCORRECT);
+}
+
 ?>
