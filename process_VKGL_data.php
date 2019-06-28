@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-06-27
+ * Modified    : 2019-06-28
  * Version     : 0.0
  * For LOVD+   : 3.0-22
  *
@@ -119,6 +119,27 @@ function lovd_printIfVerbose ($nVerbosity, $sMessage)
     if (VERBOSITY >= $nVerbosity) {
         // Write to STDERR, as this script dumps the resulting output file to STDOUT.
         fwrite(STDERR, $sMessage);
+    }
+    return true;
+}
+
+
+
+
+
+function lovd_saveSettings ($bHaltOnError = true)
+{
+    // Saves the settings we currently have to the JSON file.
+    global $_CONFIG;
+
+    if (!file_put_contents($_CONFIG['settings_file'], json_encode($_CONFIG['user'], JSON_PRETTY_PRINT))) {
+        lovd_printIfVerbose(VERBOSITY_LOW,
+            'Error: Could not save settings.' . "\n\n");
+        if ($bHaltOnError) {
+            die(EXIT_ERROR_SETTINGS_CANT_UPDATE);
+        } else {
+            return false;
+        }
     }
     return true;
 }
@@ -277,6 +298,8 @@ while ($nArgs) {
         }
     }
 }
+$bCron = (empty($_SERVER['REMOTE_ADDR']) && empty($_SERVER['TERM']));
+define('VERBOSITY', ($bCron? 5 : 7));
 
 
 
@@ -410,6 +433,9 @@ if ($_CONFIG['flags']['y']) {
 
 // Verify all the settings, if needed.
 if (!$_CONFIG['flags']['y']) {
+    lovd_printIfVerbose(VERBOSITY_HIGH,
+        $_CONFIG['name'] . ' v' . $_CONFIG['version'] . '.' . "\n");
+
     if (!lovd_verifySettings('lovd_path', 'Path of LOVD installation to load data into', 'lovd_path', '')) {
         lovd_printIfVerbose(VERBOSITY_LOW,
             'Error: Failed to get LOVD path.' . "\n\n");
@@ -421,7 +447,7 @@ if (!$_CONFIG['flags']['y']) {
     // Verify all centers.
     $aIDsUsed = array(); // Make sure IDs are unique.
     foreach ($aCentersFound as $sCenter) {
-        while (!$_CONFIG['user']['center_' . $sCenter . '_id'] || in_array($_CONFIG['user']['center_' . $sCenter . '_id'], $aIDsUsed)) {
+        while (true) {
             lovd_verifySettings('center_' . $sCenter . '_id', 'The LOVD user ID for VKGL center ' . $sCenter, 'int', '1,99999');
             if (in_array($_CONFIG['user']['center_' . $sCenter . '_id'], $aIDsUsed)) {
                 lovd_printIfVerbose(VERBOSITY_MEDIUM,
@@ -435,4 +461,39 @@ if (!$_CONFIG['flags']['y']) {
     }
 }
 
+// Save settings already, in case the connection breaks just below. Settings may be incorrect.
+lovd_saveSettings();
+
+
+
+
+
+// Open connection, and check if user accounts exist.
+lovd_printIfVerbose(VERBOSITY_HIGH,
+    '  Connecting to LOVD...');
+
+// Find LOVD installation, run it's inc-init.php to get DB connection, initiate $_SETT, etc.
+define('ROOT_PATH', $_CONFIG['user']['lovd_path'] . '/');
+define('FORMAT_ALLOW_TEXTPLAIN', true);
+$_GET['format'] = 'text/plain';
+// To prevent notices when running inc-init.php.
+$_SERVER = array_merge($_SERVER, array(
+    'HTTP_HOST' => 'localhost',
+    'REQUEST_URI' => '/' . basename(__FILE__),
+    'QUERY_STRING' => '',
+    'REQUEST_METHOD' => 'GET',
+));
+// If I put a require here, I can't nicely handle errors, because PHP will die if something is wrong.
+// However, I need to get rid of the "headers already sent" warnings from inc-init.php.
+// So, sadly if there is a problem connecting to LOVD, the script will die here without any output whatsoever.
+ini_set('display_errors', '0');
+ini_set('log_errors', '0'); // CLI logs errors to the screen, apparently.
+// Let the LOVD believe we're accessing it through SSL. LOVDs that demand this, will otherwise block us.
+// We have error messages surpressed anyway, as the LOVD in question will complain when it tries to define "SSL" as well.
+define('SSL', true);
+require ROOT_PATH . 'inc-init.php';
+ini_set('display_errors', '1'); // We do want to see errors from here on.
+
+lovd_printIfVerbose(VERBOSITY_HIGH,
+    ' Connected!' . "\n\n");
 ?>
