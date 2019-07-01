@@ -197,9 +197,14 @@ function lovd_getVariantDescription (&$aVariant, $sRef, $sAlt)
             } else {
                 // Insertion.
                 $aVariant['type'] = 'ins';
-                // Exchange g_start and g_end; after the 'letter eating' we did, start is actually end + 1!
-                $aVariant['position_g_start'] --;
-                $aVariant['position_g_end'] ++;
+                if (!$sRefOriginal) {
+                    // We never got a Ref. This is not allowed, but some centers have it anyway.
+                    $aVariant['position_g_end'] += 2;
+                } else {
+                    // Exchange g_start and g_end; after the 'letter eating' we did, start is actually end + 1!
+                    $aVariant['position_g_start'] --;
+                    $aVariant['position_g_end'] ++;
+                }
                 $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . '_' . $aVariant['position_g_end'] . 'ins' . $sAlt;
             }
         } elseif ($sRef == strrev(str_replace(array('a', 'c', 'g', 't'), array('T', 'G', 'C', 'A'), strtolower($sAlt)))) {
