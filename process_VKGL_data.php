@@ -71,6 +71,7 @@ $_CONFIG = array(
         'history',
     ),
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
+    'mutalyzer_URL' => 'https://test.mutalyzer.nl/', // Test may be faster than www.mutalyzer.nl.
     'user' => array(
         // Variables we will be asking the user.
         'refseq_build' => 'hg19',
@@ -101,12 +102,121 @@ define('EXIT_ERROR_CACHE_CANT_CREATE', 77);
 define('EXIT_ERROR_CACHE_UNREADABLE', 78);
 define('EXIT_ERROR_CACHE_CANT_UPDATE', 79);
 define('EXIT_ERROR_DATA_FIELD_COUNT_INCORRECT', 80);
+define('EXIT_ERROR_DATA_CONTENT_ERROR', 81);
 
 define('VERBOSITY_NONE', 0); // No output whatsoever.
 define('VERBOSITY_LOW', 3); // Low output, only the really important messages.
 define('VERBOSITY_MEDIUM', 5); // Medium output. No output if there is nothing to do. Useful for when using cron.
 define('VERBOSITY_HIGH', 7); // High output. The default.
 define('VERBOSITY_FULL', 9); // Full output, including debug statements.
+
+
+
+
+
+function lovd_getVariantDescription (&$aVariant, $sRef, $sAlt)
+{
+    // Constructs a variant description from $sRef and $sAlt and adds it to $aVariant in a new 'VariantOnGenome/DNA' key.
+    // The 'position_g_start' and 'position_g_end' keys in $aVariant are adjusted accordingly and a 'type' key is added too.
+    // The numbering scheme is either g. or m. and depends on the 'chromosome' key in $aVariant.
+    // Requires:
+    //   $aVariant['chromosome']
+    //   $aVariant['position']
+    // Adds:
+    //   $aVariant['position_g_start']
+    //   $aVariant['position_g_end']
+    //   $aVariant['type']
+    //   $aVariant['VariantOnGenome/DNA']
+
+    // Make all bases uppercase.
+    $sRef = strtoupper($sRef);
+    $sAlt = strtoupper($sAlt);
+
+    // Clear out empty REF and ALTs. This is not allowed in the VCF specs,
+    //  but some tools create them nonetheless.
+    foreach (array('sRef', 'sAlt') as $var) {
+        if (in_array($$var, array('.', '-'))) {
+            $$var = '';
+        }
+    }
+
+    // Use the right prefix for the numbering scheme.
+    $sHGVSPrefix = 'g.';
+    if ($aVariant['chromosome'] == 'M') {
+        $sHGVSPrefix = 'm.';
+    }
+
+    // Even substitutions are sometimes mentioned as longer Refs and Alts, so we'll always need to isolate the actual difference.
+    $aVariant['position_g_start'] = $aVariant['position'];
+    $aVariant['position_g_end'] = $aVariant['position'] + strlen($sRef) - 1;
+
+    // Save original values before we edit them.
+    $sRefOriginal = $sRef;
+    $sAltOriginal = $sAlt;
+
+    // 'Eat' letters from either end - first left, then right - to isolate the difference.
+    while (strlen($sRef) > 0 && strlen($sAlt) > 0 && $sRef{0} == $sAlt{0}) {
+        $sRef = substr($sRef, 1);
+        $sAlt = substr($sAlt, 1);
+        $aVariant['position_g_start'] ++;
+    }
+    while (strlen($sRef) > 0 && strlen($sAlt) > 0 && $sRef[strlen($sRef) - 1] == $sAlt[strlen($sAlt) - 1]) {
+        $sRef = substr($sRef, 0, -1);
+        $sAlt = substr($sAlt, 0, -1);
+        $aVariant['position_g_end'] --;
+    }
+
+    // Substitution, or something else?
+    if (strlen($sRef) == 1 && strlen($sAlt) == 1) {
+        // Substitutions.
+        $aVariant['type'] = 'subst';
+        $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . $sRef . '>' . $sAlt;
+    } else {
+        // Insertions/duplications, deletions, inversions, indels.
+
+        // Now find out the variant type.
+        if (strlen($sRef) > 0 && strlen($sAlt) == 0) {
+            // Deletion.
+            $aVariant['type'] = 'del';
+            if ($aVariant['position_g_start'] == $aVariant['position_g_end']) {
+                $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . 'del';
+            } else {
+                $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . '_' . $aVariant['position_g_end'] . 'del';
+            }
+        } elseif (strlen($sAlt) > 0 && strlen($sRef) == 0) {
+            // Something has been added... could be an insertion or a duplication.
+            if ($sRefOriginal && substr($sAltOriginal, strrpos($sAltOriginal, $sAlt) - strlen($sAlt), strlen($sAlt)) == $sAlt) {
+                // Duplicaton (not allowed when REF was empty from the start).
+                $aVariant['type'] = 'dup';
+                $aVariant['position_g_start'] -= strlen($sAlt);
+                if ($aVariant['position_g_start'] == $aVariant['position_g_end']) {
+                    $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . 'dup';
+                } else {
+                    $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . '_' . $aVariant['position_g_end'] . 'dup';
+                }
+            } else {
+                // Insertion.
+                $aVariant['type'] = 'ins';
+                // Exchange g_start and g_end; after the 'letter eating' we did, start is actually end + 1!
+                $aVariant['position_g_start'] --;
+                $aVariant['position_g_end'] ++;
+                $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . '_' . $aVariant['position_g_end'] . 'ins' . $sAlt;
+            }
+        } elseif ($sRef == strrev(str_replace(array('a', 'c', 'g', 't'), array('T', 'G', 'C', 'A'), strtolower($sAlt)))) {
+            // Inversion.
+            $aVariant['type'] = 'inv';
+            $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . '_' . $aVariant['position_g_end'] . 'inv';
+        } else {
+            // Deletion/insertion.
+            $aVariant['type'] = 'delins';
+            if ($aVariant['position_g_start'] == $aVariant['position_g_end']) {
+                $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . 'delins' . $sAlt;
+            } else {
+                $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . '_' . $aVariant['position_g_end'] . 'delins' . $sAlt;
+            }
+        }
+    }
+}
 
 
 
@@ -305,6 +415,7 @@ while ($nArgs) {
 }
 $bCron = (empty($_SERVER['REMOTE_ADDR']) && empty($_SERVER['TERM']));
 define('VERBOSITY', ($bCron? 5 : 7));
+$tStart = time() + date('Z', 0); // Correct for timezone, otherwise the start value is not 0.
 
 
 
@@ -561,6 +672,8 @@ if (!$bRefSeqBuildOK || !$bAccountsOK) {
 
 
 // Load the caches, create if they don't exist. They can only not exist, when the defaults are used.
+lovd_printIfVerbose(VERBOSITY_MEDIUM,
+    ' ' . date('H:i:s', time() - $tStart) . ' [      ] Loading Mutalyzer cache files...' . "\n");
 $_CACHE = array();
 foreach (array('mutalyzer_cache_NC', 'mutalyzer_cache_NM') as $sKeyName) {
     $_CACHE[$sKeyName] = array();
@@ -582,23 +695,27 @@ foreach (array('mutalyzer_cache_NC', 'mutalyzer_cache_NM') as $sKeyName) {
     } else {
         // Load the cache.
         $aCache = file($_CONFIG['user'][$sKeyName], FILE_IGNORE_NEW_LINES);
+        $nCacheLine = 0;
+        $nCacheLines = count($aCache);
         foreach ($aCache as $sVariant) {
+            $nCacheLine ++;
             $aVariant = explode("\t", $sVariant);
             if (count($aVariant) == 2) {
                 $_CACHE[$sKeyName][$aVariant[0]] = $aVariant[1];
             } else {
                 // Malformed line.
                 lovd_printIfVerbose(VERBOSITY_MEDIUM,
-                    '[' . $sKeyName . '] Warning: Malformed line in Mutalyzer cache file.' . "\n" .
-                    $sVariant . "\n");
+                    ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(round($nCacheLine * 100 / $nCacheLines, 1), 1),
+                        5, ' ', STR_PAD_LEFT) . '%] Warning: ' . ucfirst(str_replace('_', ' ', $sKeyName)) . ' line ' . $nCacheLine . ' malformed.' . "\n");
                 $bWarningsOcurred = true;
             }
         }
         lovd_printIfVerbose(VERBOSITY_MEDIUM,
-            '[' . $sKeyName . '] Cache loaded, ' . count($_CACHE[$sKeyName]) . ' variants.' . "\n");
+            ' ' . date('H:i:s', time() - $tStart) . ' [100.0%] ' . ucfirst(str_replace('_', ' ', $sKeyName)) . ' loaded, ' . count($_CACHE[$sKeyName]) . ' variants.' . "\n");
     }
 }
-lovd_printIfVerbose(VERBOSITY_MEDIUM, "\n");
+lovd_printIfVerbose(VERBOSITY_MEDIUM, "\n" .
+    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Parsing VKGL file...' . "\n");
 
 
 
@@ -639,8 +756,89 @@ while ($sLine = fgets($fInput)) {
 }
 
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
-    '[  0%] VKGL file successfully parsed. Verifying variants...' . "\n");
+    ' ' . date('H:i:s', time() - $tStart) . ' [100.0%] VKGL file successfully parsed.' . "\n\n" .
+    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Verifying variants...' . "\n");
 
 // We might be running for some time.
 set_time_limit(0);
+
+
+
+
+
+// Correct all genomic variants, using the cache. Skip substitutions.
+// And don't bother using the database, we'll assume the cache knows it all.
+$nVariants = count($aData);
+$nVariantsDone = 0;
+$nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you can see the progress.
+$tProgressReported = microtime(true); // Don't report progress again within one second (interrupted runs).
+foreach ($aData as $sID => $aVariant) {
+    if (!isset($_SETT['human_builds'][$_CONFIG['user']['refseq_build']]['ncbi_sequences'][$aVariant['chromosome']])) {
+        // Can't get chromosome's NC refseq?
+        lovd_printIfVerbose(VERBOSITY_LOW,
+            'Error: Variant ID ' . $sID . ' has unknown chromosome value ' . $aVariant['chromosome'] . ".\n\n");
+        die(EXIT_ERROR_DATA_CONTENT_ERROR);
+    }
+
+    // Use LOVD+'s lovd_getVariantDescription() to build the HGVS from the VCF fields.
+    // Also adjusts the positions when needed, and creates the 'type' field for us.
+    $aVariant['position'] = $aVariant['start']; // The function needs this.
+    lovd_getVariantDescription($aVariant, $aVariant['ref'], $aVariant['alt']);
+
+    // Don't check substitutions, we'll assume them to be OK. This saves a huge amount of time.
+    // Check everything else.
+    if ($aVariant['type'] != 'subst') {
+        $sVariant =
+            $_SETT['human_builds'][$_CONFIG['user']['refseq_build']]['ncbi_sequences'][$aVariant['chromosome']] .
+            ':' . $aVariant['VariantOnGenome/DNA'];
+        // Check cache. If not found there, add it.
+        if (isset($_CACHE['mutalyzer_cache_NC'][$sVariant])) {
+            $sVariantCorrected = $_CACHE['mutalyzer_cache_NC'][$sVariant];
+        } else {
+            $aResult = json_decode(file_get_contents($_CONFIG['mutalyzer_URL'] . '/json/runMutalyzerLight?variant=' . $sVariant), true);
+            if (!$aResult) {
+                // Error? Just report. They must be new variants, anyway.
+                lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                    ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                            floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                        5, ' ', STR_PAD_LEFT) . '%] Warning: Error parsing reply from Mutalyzer for variant ' . $sID . ".\n" .
+                    '                   It was sent as ' . $sVariant . ".\n");
+                $bWarningsOcurred = true;
+                $nVariantsDone ++;
+                continue; // Next variant.
+            }
+
+            $sVariantCorrected = $aResult['genomicDescription'];
+            // Add to cache. We won't see it again here, to just add to the file.
+            file_put_contents($_CONFIG['user']['mutalyzer_cache_NC'], $sVariant . "\t" . $sVariantCorrected . "\n", FILE_APPEND);
+
+            // Since we called Mutalyzer now already, better make use of these:
+            $aVariant['mutalyzer_legend'] = $aResult['legend'];
+            $aVariant['mutalyzer_transcripts'] = $aResult['transcriptDescriptions'];
+            $aVariant['mutalyzer_proteins'] = $aResult['proteinDescriptions'];
+        }
+
+        // Store corrected variant description.
+        $aVariant['VariantOnGenome/DNA'] = $sVariantCorrected;
+    }
+
+    // Print update, for every percentage changed.
+    $nVariantsDone ++;
+    if ((microtime(true) - $tProgressReported) > 1 && $nVariantsDone != $nVariants
+        && floor($nVariantsDone * 1000 / $nVariants) != $nPercentageComplete) {
+        $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
+        lovd_printIfVerbose(VERBOSITY_MEDIUM,
+            ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
+                5, ' ', STR_PAD_LEFT) . '%] ' . $nVariantsDone . ' variants verified...' . "\n");
+        $tProgressReported = microtime(true); // Don't report again for another second.
+    }
+}
+
+// Last message.
+if (floor($nVariantsDone * 1000 / $nVariants) != $nPercentageComplete) {
+    $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
+    lovd_printIfVerbose(VERBOSITY_MEDIUM,
+        ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
+            5, ' ', STR_PAD_LEFT) . '%] ' . $nVariantsDone . ' variants verified.' . "\n");
+}
 ?>
