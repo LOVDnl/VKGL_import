@@ -100,6 +100,7 @@ define('EXIT_ERROR_CONNECTION_PROBLEM', 76);
 define('EXIT_ERROR_CACHE_CANT_CREATE', 77);
 define('EXIT_ERROR_CACHE_UNREADABLE', 78);
 define('EXIT_ERROR_CACHE_CANT_UPDATE', 79);
+define('EXIT_ERROR_DATA_FIELD_COUNT_INCORRECT', 80);
 
 define('VERBOSITY_NONE', 0); // No output whatsoever.
 define('VERBOSITY_LOW', 3); // Low output, only the really important messages.
@@ -542,9 +543,7 @@ foreach ($aCentersFound as $sCenter) {
         $_CONFIG['user']['center_' . $sCenter . '_id'] = 0;
     }
 }
-if (!$_CONFIG['flags']['y']) {
-    lovd_printIfVerbose(VERBOSITY_MEDIUM, "\n");
-}
+lovd_printIfVerbose(VERBOSITY_MEDIUM, "\n");
 
 if (!$bRefSeqBuildOK || !$bAccountsOK) {
     // One of the settings is no good. Settings have been updated, save changes (but don't die if that doesn't work).
@@ -600,4 +599,48 @@ foreach (array('mutalyzer_cache_NC', 'mutalyzer_cache_NM') as $sKeyName) {
     }
 }
 lovd_printIfVerbose(VERBOSITY_MEDIUM, "\n");
+
+
+
+
+
+// Read out all variants, with labels per center, and store cDNA/protein annotation.
+$aData = array();
+// 'disease' is currently empty. When we'll start using it, then add it to the mandatory columns and copy it here.
+// 'comments' is currently the same as 'id'.
+$aColumnsToUse = array_merge($_CONFIG['columns_mandatory'], $aCentersFound);
+while ($sLine = fgets($fInput)) {
+    $nLine++;
+    $sLine = strtolower(trim($sLine));
+    if (!$sLine) {
+        continue;
+    }
+
+    $aDataLine = explode("\t", $sLine);
+    // Trim quotes off of the data.
+    $aDataRow = array_map(function($sData) {
+        return trim($sData, '"');
+    }, $aDataLine);
+    $nDataColumns = count($aDataLine);
+    if ($nHeaders > $nDataColumns) {
+        // We accidentally trimmed off empty fields.
+        $aDataLine = array_pad($aDataLine, $nHeaders, '');
+    } elseif ($nHeaders < $nDataColumns) {
+        // Eh? More data received than headers.
+        lovd_printIfVerbose(VERBOSITY_LOW,
+            'Error: Data line ' . $nLine . ' has ' . count($aDataLine) . ' columns instead of the expected ' . $nHeaders . ".\n\n");
+        die(EXIT_ERROR_DATA_FIELD_COUNT_INCORRECT);
+    }
+
+    $aDataLine = array_combine($aHeaders, $aDataLine);
+
+    // Store data. We assume here that the ID field is unique.
+    $aData[$aDataLine['id']] = array_intersect_key($aDataLine, array_flip($aColumnsToUse));
+}
+
+lovd_printIfVerbose(VERBOSITY_MEDIUM,
+    '[  0%] VKGL file successfully parsed. Verifying variants...' . "\n");
+
+// We might be running for some time.
+set_time_limit(0);
 ?>
