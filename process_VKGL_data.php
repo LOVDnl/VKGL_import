@@ -733,7 +733,7 @@ $aData = array();
 $aColumnsToUse = array_merge($_CONFIG['columns_mandatory'], $aCentersFound);
 while ($sLine = fgets($fInput)) {
     $nLine++;
-    $sLine = strtolower(trim($sLine));
+    $sLine = trim($sLine);
     if (!$sLine) {
         continue;
     }
@@ -760,8 +760,9 @@ while ($sLine = fgets($fInput)) {
     $aData[$aDataLine['id']] = array_intersect_key($aDataLine, array_flip($aColumnsToUse));
 }
 
+$nVariants = count($aData);
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
-    ' ' . date('H:i:s', time() - $tStart) . ' [100.0%] VKGL file successfully parsed.' . "\n\n" .
+    ' ' . date('H:i:s', time() - $tStart) . ' [100.0%] VKGL file successfully parsed, found ' . $nVariants . ' variants.' . "\n\n" .
     ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Verifying variants...' . "\n");
 
 // We might be running for some time.
@@ -773,8 +774,8 @@ set_time_limit(0);
 
 // Correct all genomic variants, using the cache. Skip substitutions.
 // And don't bother using the database, we'll assume the cache knows it all.
-$nVariants = count($aData);
 $nVariantsDone = 0;
+$nVariantsAddedToCache = 0;
 $nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you can see the progress.
 $tProgressReported = microtime(true); // Don't report progress again within one second (interrupted runs).
 foreach ($aData as $sID => $aVariant) {
@@ -816,6 +817,7 @@ foreach ($aData as $sID => $aVariant) {
             $sVariantCorrected = $aResult['genomicDescription'];
             // Add to cache. We won't see it again here, to just add to the file.
             file_put_contents($_CONFIG['user']['mutalyzer_cache_NC'], $sVariant . "\t" . $sVariantCorrected . "\n", FILE_APPEND);
+            $nVariantsAddedToCache ++;
 
             // Since we called Mutalyzer now already, better make use of these:
             $aVariant['mutalyzer_legend'] = $aResult['legend'];
@@ -844,6 +846,6 @@ if (floor($nVariantsDone * 1000 / $nVariants) != $nPercentageComplete) {
     $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
     lovd_printIfVerbose(VERBOSITY_MEDIUM,
         ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
-            5, ' ', STR_PAD_LEFT) . '%] ' . $nVariantsDone . ' variants verified.' . "\n");
+            5, ' ', STR_PAD_LEFT) . '%] ' . $nVariantsDone . ' variants verified. Variants added to cache: ' . $nVariantsAddedToCache . ".\n\n");
 }
 ?>
