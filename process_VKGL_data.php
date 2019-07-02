@@ -850,7 +850,8 @@ foreach ($aData as $sID => $aVariant) {
 $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
     ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
-        5, ' ', STR_PAD_LEFT) . '%] ' . $nVariantsDone . ' variants verified. Variants added to cache: ' . $nVariantsAddedToCache . ".\n\n" .
+        5, ' ', STR_PAD_LEFT) . '%] ' .
+    $nVariantsDone . ' variants verified. Variants added to cache: ' . $nVariantsAddedToCache . ".\n\n" .
     ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Merging variants after corrections...' . "\n");
 
 
@@ -861,10 +862,13 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
 $nVariantsMerged = 0;
 foreach ($aData as $sID => $aVariant) {
     // Translate all classification values to easier values.
+    $aVariant['classifications'] = array();
     foreach ($aCentersFound as $sCenter) {
         if ($aVariant[$sCenter]) {
-            $aVariant[$sCenter] = str_replace(array('likely ', 'benign', 'pathogenic', 'vus'), array('L', 'B', 'P', 'VUS'), strtolower($aVariant[$sCenter]));
+            $aVariant['classifications'][$sCenter] = str_replace(array('likely ', 'benign', 'pathogenic', 'vus'),
+                array('L', 'B', 'P', 'VUS'), strtolower($aVariant[$sCenter]));
         }
+        unset($aVariant[$sCenter]);
     }
 
     if (!isset($aData[$aVariant['VariantOnGenome/DNA']])) {
@@ -883,4 +887,123 @@ $nVariants = count($aData);
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
     ' ' . date('H:i:s', time() - $tStart) . ' [100.0%] ' . $nVariantsMerged . ' variants merged. Variants left: ' . $nVariants . ".\n\n" .
     ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Determining consensus classifications...' . "\n");
+
+
+
+
+
+// Loop variants again, fixing multiple classifications from the same center (report opposites, */VUS to VUS,
+// LB/B to LB, LP/P to LP), and determining overall consensus (opposite, non-consensus, consensus, single-lab).
+$nVariantsDone = 0;
+$aStatusCounts = array(
+    'single-lab' => 0,
+    'consensus' => 0,
+    'non-consensus' => 0,
+    'opposite' => 0,
+);
+foreach ($aData as $sID => $aVariant) {
+    // Per center, first make sure we only have one classification left.
+    $bInternalConflict = false;
+    foreach ($aVariant['classifications'] as $sCenter => $Classification) {
+        if (is_array($Classification)) {
+            // Flipping the array makes the values unique and makes it easier to work with the values
+            // (isset()s are faster than array_search() and in_array()).
+            $aClassifications = array_flip($Classification);
+
+            if (count($aClassifications) > 1) {
+                // Rules: report opposites, */VUS to VUS, LB/B to LB, LP/P to LP.
+                if ((isset($aClassifications['B']) || isset($aClassifications['LB']))
+                    && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
+                    // Internal conflict within center.
+                    lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                        ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                            floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                            5, ' ', STR_PAD_LEFT) .
+                        '%] Warning: Internal conflict in center ' . $sCenter . ': ' . implode(', ', $Classification) . ".\n" .
+                        '                   IDs: ' . implode("\n                        ", $aVariant['id']) . "\n");
+                    // Reduce to one string, we want to store the conflict to report this in LOVD in a non-public entry.
+                    $aClassifications = array(implode(',', $Classification) => 1);
+                    $bInternalConflict = true; // This'll make the consensus code a lot cleaner.
+
+                } elseif (isset($aClassifications['VUS'])) {
+                    // VUS and something else, not a conflict. OK, VUS then.
+                    $aClassifications = array('VUS' => 1); // Remove the other classification(s).
+
+                } else {
+                    // Still multiple values. LB/B to LB, LP/P to LP.
+                    if (isset($aClassifications['B']) && isset($aClassifications['LB'])) {
+                        unset($aClassifications['B']);
+                    }
+                    if (isset($aClassifications['P']) && isset($aClassifications['LP'])) {
+                        unset($aClassifications['P']);
+                    }
+                }
+
+                if (count($aClassifications) > 1) {
+                    // How can this be?
+                    lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                        ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                            floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                            5, ' ', STR_PAD_LEFT) .
+                        '%] Warning: Failed to resolve classification string for center ' . $sCenter . ': ' . implode(', ', $Classification) . ".\n" .
+                        '                   IDs: ' . implode("\n                        ", $aVariant['id']) . "\n");
+                }
+            }
+
+            // Store string value.
+            $aVariant['classifications'][$sCenter] = key($aClassifications); // Should of course have one value.
+        }
+    }
+
+
+
+    // Determine consensus (opposite, non-consensus, consensus, single-lab).
+    $aVariant['status'] = '';
+    if (count($aVariant['classifications']) == 1) {
+        $aVariant['status'] = 'single-lab';
+        $aStatusCounts['single-lab'] ++;
+
+    } elseif ($bInternalConflict) {
+        // One center had a conflict, so we all have a conflict.
+        $aVariant['status'] = 'opposite';
+        $aStatusCounts['opposite'] ++;
+
+    } else {
+        // We should have clean, one-classification values.
+        // Handle it similarly as we did within the labs. Take unique values only and look at the combos.
+
+        // Flipping the array makes the values unique and makes it easier to work with the values
+        // (isset()s are faster than array_search() and in_array()).
+        $aClassifications = array_flip($aVariant['classifications']);
+
+        if (count($aClassifications) == 1) {
+            // One unique value, everybody agrees.
+            $aVariant['status'] = 'consensus';
+            $aStatusCounts['consensus'] ++;
+
+        } elseif ((isset($aClassifications['B']) || isset($aClassifications['LB']))
+            && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
+            // Opposite.
+            $aVariant['status'] = 'opposite';
+            $aStatusCounts['opposite'] ++;
+
+        } elseif (isset($aClassifications['VUS'])) {
+            // VUS and something else, not a conflict, but no consensus either.
+            $aVariant['status'] = 'non-consensus';
+            $aStatusCounts['non-consensus'] ++;
+
+        } else {
+            // Rest is consensus (possible LP/P or LB/B differences are ignored.
+            $aVariant['status'] = 'consensus';
+            $aStatusCounts['consensus'] ++;
+        }
+    }
+
+    $nVariantsDone ++;
+}
+
+$lPadding = max(array_map('strlen', array_keys($aStatusCounts)));
+lovd_printIfVerbose(VERBOSITY_MEDIUM,
+    ' ' . date('H:i:s', time() - $tStart) . ' [100.0%] Done.' . "\n" .
+    implode("\n", array_map(function ($sKey, $nValue) { global $lPadding; return '                   ' . str_pad(ucfirst($sKey), $lPadding, ' ') . ' : ' . $nValue; }, array_keys($aStatusCounts), array_values($aStatusCounts))) . "\n\n");
 ?>
