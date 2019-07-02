@@ -5,14 +5,14 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-06-28
+ * Modified    : 2019-07-02
  * Version     : 0.0
  * For LOVD+   : 3.0-22
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.1    2019-06-??
+ * Changelog   : 0.1    2019-07-??
  *               Initial release.
  *
  * Copyright   : 2004-2019 Leiden University Medical Center; http://www.LUMC.nl/
@@ -829,6 +829,10 @@ foreach ($aData as $sID => $aVariant) {
         $aVariant['VariantOnGenome/DNA'] = $sVariantCorrected;
     }
 
+    // Store new information.
+    unset($aVariant['position']);
+    $aData[$sID] = $aVariant;
+
     // Print update, for every percentage changed.
     $nVariantsDone ++;
     if ((microtime(true) - $tProgressReported) > 1 && $nVariantsDone != $nVariants
@@ -836,16 +840,47 @@ foreach ($aData as $sID => $aVariant) {
         $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
         lovd_printIfVerbose(VERBOSITY_MEDIUM,
             ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
-                5, ' ', STR_PAD_LEFT) . '%] ' . $nVariantsDone . ' variants verified...' . "\n");
+                5, ' ', STR_PAD_LEFT) . '%] ' .
+            str_pad($nVariantsDone, strlen($nVariants), ' ', STR_PAD_LEFT) . ' variants verified...' . "\n");
         $tProgressReported = microtime(true); // Don't report again for another second.
     }
 }
 
 // Last message.
-if (floor($nVariantsDone * 1000 / $nVariants) != $nPercentageComplete) {
-    $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
-    lovd_printIfVerbose(VERBOSITY_MEDIUM,
-        ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
-            5, ' ', STR_PAD_LEFT) . '%] ' . $nVariantsDone . ' variants verified. Variants added to cache: ' . $nVariantsAddedToCache . ".\n\n");
+$nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
+lovd_printIfVerbose(VERBOSITY_MEDIUM,
+    ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
+        5, ' ', STR_PAD_LEFT) . '%] ' . $nVariantsDone . ' variants verified. Variants added to cache: ' . $nVariantsAddedToCache . ".\n\n" .
+    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Merging variants after corrections...' . "\n");
+
+
+
+
+
+// Loop variants again, merging entries.
+$nVariantsMerged = 0;
+foreach ($aData as $sID => $aVariant) {
+    // Translate all classification values to easier values.
+    foreach ($aCentersFound as $sCenter) {
+        if ($aVariant[$sCenter]) {
+            $aVariant[$sCenter] = str_replace(array('likely ', 'benign', 'pathogenic', 'vus'), array('L', 'B', 'P', 'VUS'), strtolower($aVariant[$sCenter]));
+        }
+    }
+
+    if (!isset($aData[$aVariant['VariantOnGenome/DNA']])) {
+        $aData[$aVariant['VariantOnGenome/DNA']] = $aVariant;
+    } else {
+        // Variant has already been seen before.
+        $aData[$aVariant['VariantOnGenome/DNA']] = array_merge_recursive($aData[$aVariant['VariantOnGenome/DNA']], $aVariant);
+        $nVariantsMerged ++;
+    }
+
+    // Get rid of the old data.
+    unset($aData[$sID]);
 }
+
+$nVariants = count($aData);
+lovd_printIfVerbose(VERBOSITY_MEDIUM,
+    ' ' . date('H:i:s', time() - $tStart) . ' [100.0%] ' . $nVariantsMerged . ' variants merged. Variants left: ' . $nVariants . ".\n\n" .
+    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Determining consensus classifications...' . "\n");
 ?>
