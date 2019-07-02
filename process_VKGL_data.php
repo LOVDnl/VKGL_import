@@ -829,8 +829,10 @@ foreach ($aData as $sID => $aVariant) {
         $aVariant['VariantOnGenome/DNA'] = $sVariantCorrected;
     }
 
-    // Store new information.
-    unset($aVariant['position']);
+    // Store new information, dropping some excess information.
+    unset($aVariant['position']); // Never needed.
+    unset($aVariant['start'], $aVariant['ref'], $aVariant['alt']); // We're done using VCF now.
+    unset($aVariant['position_g_start'], $aVariant['position_g_end'], $aVariant['type']); // Are unreliable now.
     $aData[$sID] = $aVariant;
 
     // Print update, for every percentage changed.
@@ -997,6 +999,48 @@ foreach ($aData as $sID => $aVariant) {
             $aVariant['status'] = 'consensus';
             $aStatusCounts['consensus'] ++;
         }
+    }
+
+
+
+    // Do some cleaning up.
+    if (is_array($aVariant['chromosome'])) {
+        // Multiple variants have been merged, but much information is duplicated.
+        // We keep arrays only if needed.
+
+        // Chromosome can't really be different.
+        $aVariant['chromosome'] = current($aVariant['chromosome']);
+
+        // Since we're grouping on variant, the gene doesn't have to be unique anymore.
+        $aVariant['gene'] = array_unique($aVariant['gene']);
+        if (count($aVariant['gene']) == 1) {
+            $aVariant['gene'] = current($aVariant['gene']);
+        }
+
+        // Then, transcript.
+        $aVariant['transcript'] = array_unique($aVariant['transcript']);
+        if (count($aVariant['transcript']) == 1) {
+            $aVariant['transcript'] = current($aVariant['transcript']);
+        }
+
+        // cDNA; we can have quite a few different values here.
+        $aVariant['c_dna'] = array_unique($aVariant['c_dna']);
+        if (count($aVariant['c_dna']) == 1) {
+            $aVariant['c_dna'] = current($aVariant['c_dna']);
+        } else {
+            sort($aVariant['c_dna']);
+        }
+
+        // Protein; not sure how many centers provide this info.
+        $aVariant['protein'] = array_unique($aVariant['protein']);
+        if (count($aVariant['protein']) == 1) {
+            $aVariant['protein'] = current($aVariant['protein']);
+        } else {
+            sort($aVariant['protein']);
+        }
+
+        // VariantOnGenome/DNA, we grouped on this, so just remove.
+        $aVariant['VariantOnGenome/DNA'] = current($aVariant['VariantOnGenome/DNA']);
     }
 
     $nVariantsDone ++;
