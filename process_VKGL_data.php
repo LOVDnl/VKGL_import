@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-07-02
+ * Modified    : 2019-07-03
  * Version     : 0.0
  * For LOVD+   : 3.0-22
  *
@@ -388,7 +388,7 @@ $nArgsRequired = 1;
 
 $sScriptName = array_shift($aArgs);
 $nArgs --;
-$bWarningsOcurred = false;
+$nWarningsOccurred = 0;
 
 if ($nArgs < $nArgsRequired) {
     lovd_printIfVerbose(VERBOSITY_LOW,
@@ -718,7 +718,7 @@ foreach (array('mutalyzer_cache_NC', 'mutalyzer_cache_NM', 'mutalyzer_cache_mapp
                 lovd_printIfVerbose(VERBOSITY_MEDIUM,
                     ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(round($nCacheLine * 100 / $nCacheLines, 1), 1),
                         5, ' ', STR_PAD_LEFT) . '%] Warning: ' . ucfirst(str_replace('_', ' ', $sKeyName)) . ' line ' . $nCacheLine . ' malformed.' . "\n");
-                $bWarningsOcurred = true;
+                $nWarningsOccurred ++;
             }
         }
         lovd_printIfVerbose(VERBOSITY_MEDIUM,
@@ -783,7 +783,7 @@ set_time_limit(0);
 $nVariantsDone = 0;
 $nVariantsAddedToCache = 0;
 $nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you can see the progress.
-$tProgressReported = microtime(true); // Don't report progress again within one second (interrupted runs).
+$tProgressReported = microtime(true); // Don't report progress again within a certain amount of time.
 foreach ($aData as $sID => $aVariant) {
     if (!isset($_SETT['human_builds'][$_CONFIG['user']['refseq_build']]['ncbi_sequences'][$aVariant['chromosome']])) {
         // Can't get chromosome's NC refseq?
@@ -809,14 +809,14 @@ foreach ($aData as $sID => $aVariant) {
             $sVariantCorrected = $_CACHE['mutalyzer_cache_NC'][$sVariant];
         } else {
             $aResult = json_decode(file_get_contents($_CONFIG['mutalyzer_URL'] . '/json/runMutalyzerLight?variant=' . $sVariant), true);
-            if (!$aResult) {
+            if (!$aResult || !isset($aResult['genomicDescription'])) {
                 // Error? Just report. They must be new variants, anyway.
                 lovd_printIfVerbose(VERBOSITY_MEDIUM,
                     ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                             floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                         5, ' ', STR_PAD_LEFT) . '%] Warning: Error parsing reply from Mutalyzer for variant ' . $sID . ".\n" .
                     '                   It was sent as ' . $sVariant . ".\n");
-                $bWarningsOcurred = true;
+                $nWarningsOccurred ++;
                 $nVariantsDone ++;
                 continue; // Next variant.
             }
@@ -842,14 +842,14 @@ foreach ($aData as $sID => $aVariant) {
 
     // Print update, for every percentage changed.
     $nVariantsDone ++;
-    if ((microtime(true) - $tProgressReported) > 1 && $nVariantsDone != $nVariants
+    if ((microtime(true) - $tProgressReported) > 5 && $nVariantsDone != $nVariants
         && floor($nVariantsDone * 1000 / $nVariants) != $nPercentageComplete) {
         $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
         lovd_printIfVerbose(VERBOSITY_MEDIUM,
             ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
                 5, ' ', STR_PAD_LEFT) . '%] ' .
             str_pad($nVariantsDone, strlen($nVariants), ' ', STR_PAD_LEFT) . ' variants verified...' . "\n");
-        $tProgressReported = microtime(true); // Don't report again for another second.
+        $tProgressReported = microtime(true); // Don't report again for a certain amount of time.
     }
 }
 
@@ -1011,43 +1011,36 @@ foreach ($aData as $sID => $aVariant) {
     // Do some cleaning up.
     if (is_array($aVariant['chromosome'])) {
         // Multiple variants have been merged, but much information is duplicated.
-        // We keep arrays only if needed.
 
         // Chromosome can't really be different.
         $aVariant['chromosome'] = current($aVariant['chromosome']);
 
         // Since we're grouping on variant, the gene doesn't have to be unique anymore.
         $aVariant['gene'] = array_unique($aVariant['gene']);
-        if (count($aVariant['gene']) == 1) {
-            $aVariant['gene'] = current($aVariant['gene']);
-        }
 
         // Then, transcript.
         $aVariant['transcript'] = array_unique($aVariant['transcript']);
-        if (count($aVariant['transcript']) == 1) {
-            $aVariant['transcript'] = current($aVariant['transcript']);
-        }
 
         // cDNA; we can have quite a few different values here.
         $aVariant['c_dna'] = array_unique($aVariant['c_dna']);
-        if (count($aVariant['c_dna']) == 1) {
-            $aVariant['c_dna'] = current($aVariant['c_dna']);
-        } else {
-            sort($aVariant['c_dna']);
-        }
+        sort($aVariant['c_dna']);
 
         // Protein; not sure how many centers provide this info.
         $aVariant['protein'] = array_unique($aVariant['protein']);
-        if (count($aVariant['protein']) == 1) {
-            $aVariant['protein'] = current($aVariant['protein']);
-        } else {
-            sort($aVariant['protein']);
-        }
+        sort($aVariant['protein']);
 
         // VariantOnGenome/DNA, we grouped on this, so just remove.
         $aVariant['VariantOnGenome/DNA'] = current($aVariant['VariantOnGenome/DNA']);
+
+    } else {
+        // Better always have arrays here, which makes the code simpler.
+        $aVariant['gene'] = array($aVariant['gene']);
+        $aVariant['transcript'] = array($aVariant['transcript']);
+        $aVariant['c_dna'] = array($aVariant['c_dna']);
+        $aVariant['protein'] = array($aVariant['protein']);
     }
 
+    $aData[$sID] = $aVariant;
     $nVariantsDone ++;
 }
 
@@ -1065,37 +1058,18 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
 
 
 
-// Now correct all cDNA variants, using the cache. Skip substitutions, and skip, if possible, sense transcripts.
-// Predict RNA and Protein. Keep old data as Published as.
+// Now correct all cDNA variants, using the cache, and predict RNA and protein.
 $nVariantsDone = 0;
 $nVariantsAddedToMappingCache = 0;
 $nVariantsAddedToNMCache = 0;
 $nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you can see the progress.
-$tProgressReported = microtime(true); // Don't report progress again within one second (interrupted runs).
+$tProgressReported = microtime(true); // Don't report progress again within a certain amount of time.
 
-// Store all of LOVD's transcripts, we need them.
-$aTranscripts = array(); // List of transcripts; array(id_ncbi_no_version => array(version => id)).
-$aGenesToTranscripts = array(); // List of genes with their transcripts; array(geneid => array(id_ncbi)).
-
-// This code assumes NCBI IDs have only one dot.
-$aTranscriptsRaw = $_DB->query('
-    SELECT SUBSTRING_INDEX(id_ncbi, ".", 1) AS id_ncbi_no_version, SUBSTRING_INDEX(id_ncbi, ".", -1) AS version, id, geneid
+// Store all of LOVD's transcripts, we need them; array(id_ncbi => array(data)).
+$aTranscripts = $_DB->query('
+    SELECT id_ncbi, id
     FROM ' . TABLE_TRANSCRIPTS . '
-    ORDER BY id_ncbi')->fetchAllAssoc();
-
-// Now build the arrays.
-foreach ($aTranscriptsRaw as $aTranscript) {
-    if (!isset($aTranscripts[$aTranscript['id_ncbi_no_version']])) {
-        $aTranscripts[$aTranscript['id_ncbi_no_version']] = array();
-    }
-    $aTranscripts[$aTranscript['id_ncbi_no_version']][$aTranscript['version']] = $aTranscript['id'];
-
-    if (!isset($aGenesToTranscripts[$aTranscript['geneid']])) {
-        $aGenesToTranscripts[$aTranscript['geneid']] = array();
-    }
-    $aGenesToTranscripts[$aTranscript['geneid']][] = $aTranscript['id_ncbi_no_version'] . '.' . $aTranscript['version'];
-}
-unset($aTranscriptsRaw); // Save memory.
+    ORDER BY id_ncbi')->fetchAllGroupAssoc();
 
 foreach ($aData as $sID => $aVariant) {
     $aVariant['mappings'] = array(); // What we'll store in LOVD.
@@ -1114,7 +1088,7 @@ foreach ($aData as $sID => $aVariant) {
                 ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                     floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                     5, ' ', STR_PAD_LEFT) . '%] Warning: Error parsing reply from Mutalyzer for variant ' . $sID . ".\n");
-            $bWarningsOcurred = true;
+            $nWarningsOccurred ++;
             $nVariantsDone ++;
             continue; // Next variant.
         }
@@ -1133,14 +1107,14 @@ foreach ($aData as $sID => $aVariant) {
 
     // Print update, for every percentage changed.
     $nVariantsDone ++;
-    if ((microtime(true) - $tProgressReported) > 1 && $nVariantsDone != $nVariants
+    if ((microtime(true) - $tProgressReported) > 5 && $nVariantsDone != $nVariants
         && floor($nVariantsDone * 1000 / $nVariants) != $nPercentageComplete) {
         $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
         lovd_printIfVerbose(VERBOSITY_MEDIUM,
             ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
                 5, ' ', STR_PAD_LEFT) . '%] ' .
             str_pad($nVariantsDone, strlen($nVariants), ' ', STR_PAD_LEFT) . ' variants verified...' . "\n");
-        $tProgressReported = microtime(true); // Don't report again for another second.
+        $tProgressReported = microtime(true); // Don't report again for a certain amount of time.
     }
 }
 
