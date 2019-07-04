@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-07-03
+ * Modified    : 2019-07-04
  * Version     : 0.0
  * For LOVD+   : 3.0-22
  *
@@ -77,8 +77,7 @@ $_CONFIG = array(
         'refseq_build' => 'hg19',
         'lovd_path' => '/www/databases.lovd.nl/shared/',
         'mutalyzer_cache_NC' => 'NC_cache.txt', // Stores NC g. descriptions and their corrected output.
-        'mutalyzer_cache_NM' => 'NM_cache.txt', // Stores NM c. descriptions and their corrected output.
-        'mutalyzer_cache_mapping' => 'mapping_cache.txt', // Stores NC to NM mappings.
+        'mutalyzer_cache_mapping' => 'mapping_cache.txt', // Stores NC to NM mappings and the protein predictions.
     ),
 );
 
@@ -565,7 +564,7 @@ if (!$_CONFIG['flags']['y']) {
         die(EXIT_ERROR_CONNECTION_PROBLEM);
     }
     lovd_verifySettings('mutalyzer_cache_NC', 'File containing the Mutalyzer cache for genomic (NC) variants', 'file', '');
-    lovd_verifySettings('mutalyzer_cache_NM', 'File containing the Mutalyzer cache for transcript (NM) variants', 'file', '');
+    lovd_verifySettings('mutalyzer_cache_mapping', 'File containing the Mutalyzer cache for mappings from genome to transcript', 'file', '');
 
     // Verify all centers.
     $aIDsUsed = array(); // Make sure IDs are unique.
@@ -681,7 +680,7 @@ if (!$bRefSeqBuildOK || !$bAccountsOK) {
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
     ' ' . date('H:i:s', time() - $tStart) . ' [      ] Loading Mutalyzer cache files...' . "\n");
 $_CACHE = array();
-foreach (array('mutalyzer_cache_NC', 'mutalyzer_cache_NM', 'mutalyzer_cache_mapping') as $sKeyName) {
+foreach (array('mutalyzer_cache_NC', 'mutalyzer_cache_mapping') as $sKeyName) {
     $_CACHE[$sKeyName] = array();
     if (!file_exists($_CONFIG['user'][$sKeyName])) {
         // It doesn't exist, create it.
@@ -708,7 +707,7 @@ foreach (array('mutalyzer_cache_NC', 'mutalyzer_cache_NM', 'mutalyzer_cache_mapp
             $aVariant = explode("\t", $sVariant);
             if (count($aVariant) == 2) {
                 if ($sKeyName == 'mutalyzer_cache_mapping') {
-                    // The mapping cache has a different structure.
+                    // The mapping cache has a JSON structure.
                     $_CACHE[$sKeyName][$aVariant[0]] = json_decode($aVariant[1], true);
                 } else {
                     $_CACHE[$sKeyName][$aVariant[0]] = $aVariant[1];
@@ -769,7 +768,7 @@ while ($sLine = fgets($fInput)) {
 $nVariants = count($aData);
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
     ' ' . date('H:i:s', time() - $tStart) . ' [100.0%] VKGL file successfully parsed, found ' . $nVariants . ' variants.' . "\n\n" .
-    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Verifying genomic variants...' . "\n");
+    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Verifying genomic variants and creating mappings...' . "\n");
 
 // We might be running for some time.
 set_time_limit(0);
@@ -793,46 +792,89 @@ foreach ($aData as $sID => $aVariant) {
     }
 
     // Use LOVD+'s lovd_getVariantDescription() to build the HGVS from the VCF fields.
-    // Also adjusts the positions when needed, and creates the 'type' field for us.
+    // Also adds fields that we currently won't use yet since we don't know yet if this HGVS is correct.
     $aVariant['position'] = $aVariant['start']; // The function needs this.
     lovd_getVariantDescription($aVariant, $aVariant['ref'], $aVariant['alt']);
 
-    // Don't check substitutions, we'll assume them to be OK. This saves a huge amount of time.
-    // Check everything else.
+    // Previously we were skipping substitutions for this step, but runMutalyzerLight provides us with
+    //  all mappings as well, as well as all protein predictions, and we still need those.
+    // So to make the code much simpler, just run *everything* through here.
     $sVariant =
         $_SETT['human_builds'][$_CONFIG['user']['refseq_build']]['ncbi_sequences'][$aVariant['chromosome']] .
         ':' . $aVariant['VariantOnGenome/DNA'];
 
-    if ($aVariant['type'] != 'subst') {
-        // Check cache. If not found there, add it.
-        if (isset($_CACHE['mutalyzer_cache_NC'][$sVariant])) {
-            $sVariantCorrected = $_CACHE['mutalyzer_cache_NC'][$sVariant];
-        } else {
-            $aResult = json_decode(file_get_contents($_CONFIG['mutalyzer_URL'] . '/json/runMutalyzerLight?variant=' . $sVariant), true);
-            if (!$aResult || !isset($aResult['genomicDescription'])) {
-                // Error? Just report. They must be new variants, anyway.
-                lovd_printIfVerbose(VERBOSITY_MEDIUM,
-                    ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
-                            floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
-                        5, ' ', STR_PAD_LEFT) . '%] Warning: Error parsing reply from Mutalyzer for variant ' . $sID . ".\n" .
-                    '                   It was sent as ' . $sVariant . ".\n");
-                $nWarningsOccurred ++;
-                $nVariantsDone ++;
-                continue; // Next variant.
-            }
+    // Check cache. If not found there, add it.
+    if (isset($_CACHE['mutalyzer_cache_NC'][$sVariant])) {
+        $sVariantCorrected = $_CACHE['mutalyzer_cache_NC'][$sVariant];
 
-            $sVariantCorrected = $aResult['genomicDescription'];
-            // Add to cache. We won't see it again here, to just add to the file.
-            file_put_contents($_CONFIG['user']['mutalyzer_cache_NC'], $sVariant . "\t" . $sVariantCorrected . "\n", FILE_APPEND);
-            $nVariantsAddedToCache ++;
+    } else {
+        $aResult = json_decode(file_get_contents($_CONFIG['mutalyzer_URL'] . '/json/runMutalyzerLight?variant=' . $sVariant), true);
+        if (!$aResult || !isset($aResult['genomicDescription'])) {
+            // Error? Just report. They must be new variants, anyway.
+            lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                        floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                    5, ' ', STR_PAD_LEFT) . '%] Warning: Error parsing reply from Mutalyzer for variant ' . $sID . ".\n" .
+                '                   It was sent as ' . $sVariant . ".\n");
+            $nWarningsOccurred ++;
+            $nVariantsDone ++;
+            continue; // Next variant.
         }
 
-        // Store corrected variant description.
-        $aVariant['VariantOnGenome/DNA'] = $sVariantCorrected;
-    } else {
-        // Add the NC also for substitutions.
-        $aVariant['VariantOnGenome/DNA'] = $sVariant;
+        $sVariantCorrected = $aResult['genomicDescription'];
+
+
+
+        // While we're here, let's not repeat this call later.
+        // The given mappings are already corrected, so let's use them.
+        $aMutalyzerTranscripts = array();
+        $aMutalyzerMappings = array();
+        foreach ($aResult['legend'] as $aLegend) {
+            // We'll store all mappings, since we don't know which ones we want.
+            $aMutalyzerTranscripts[$aLegend['name']] = $aLegend['id'];
+        }
+
+        // Loop mappings on the transcript, resolving the transcript IDs.
+        foreach ($aResult['transcriptDescriptions'] as $sMapping) {
+            list(,$sTranscript,, $sDNA) = preg_split('/[():]/', $sMapping);
+            if (isset($aMutalyzerTranscripts[$sTranscript])) {
+                // This should always be true, but I won't complain if this fails, whatever.
+                $aMutalyzerMappings[$aMutalyzerTranscripts[$sTranscript]] = array(
+                    'c' => $sDNA,
+                );
+            }
+        }
+
+        // Now get the protein descriptions, too.
+        foreach ($aResult['proteinDescriptions'] as $sMapping) {
+            list(,$sIsoform,, $sProtein) = preg_split('/[():]/', $sMapping, 4);
+            // Generate transcript name (v-number) from protein isoform name (i-number).
+            $sTranscript = str_replace('_i', '_v', $sIsoform);
+            if (isset($aMutalyzerMappings[$aMutalyzerTranscripts[$sTranscript]])) {
+                // This should always be true, but I won't complain if this fails, whatever.
+                $aMutalyzerMappings[$aMutalyzerTranscripts[$sTranscript]]['p'] = $sProtein;
+            }
+        }
+
+        // Add to caches; mapping cache and NC cache.
+        // There are multiple descriptions that can lead to the same corrected variant,
+        //  so we might know this mapping already from an uncached, different alternative description.
+        if (!isset($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected])) {
+            // We trust the cache more than the new data.
+            // This is actually mostly because we can't easily overwrite a previous line in the cache,
+            //  and the cache may be manually updated. Adding a line to the cache may be reversed when the cache
+            //  is resorted. All in all, to keep things consistent, let's stick to what we have.
+            // Add only to the cache when we don't know the mappings of the corrected variant yet.
+            file_put_contents($_CONFIG['user']['mutalyzer_cache_mapping'], $sVariantCorrected . "\t" . json_encode($aMutalyzerMappings) . "\n", FILE_APPEND);
+            $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected] = $aMutalyzerMappings;
+        }
+        // Add to NC cache.
+        file_put_contents($_CONFIG['user']['mutalyzer_cache_NC'], $sVariant . "\t" . $sVariantCorrected . "\n", FILE_APPEND);
+        $nVariantsAddedToCache ++;
     }
+
+    // Store corrected variant description.
+    $aVariant['VariantOnGenome/DNA'] = $sVariantCorrected;
 
     // Store new information, dropping some excess information.
     unset($aVariant['position']); // Never needed.
@@ -848,7 +890,7 @@ foreach ($aData as $sID => $aVariant) {
         lovd_printIfVerbose(VERBOSITY_MEDIUM,
             ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
                 5, ' ', STR_PAD_LEFT) . '%] ' .
-            str_pad($nVariantsDone, strlen($nVariants), ' ', STR_PAD_LEFT) . ' variants verified...' . "\n");
+            str_pad($nVariantsDone, strlen($nVariants), ' ', STR_PAD_LEFT) . ' genomic variants verified...' . "\n");
         $tProgressReported = microtime(true); // Don't report again for a certain amount of time.
     }
 }
@@ -858,7 +900,7 @@ $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
     ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
         5, ' ', STR_PAD_LEFT) . '%] ' .
-    $nVariantsDone . ' variants verified. Variants added to cache: ' . $nVariantsAddedToCache . ".\n\n" .
+    $nVariantsDone . ' genomic variants verified. Variants added to cache: ' . $nVariantsAddedToCache . ".\n\n" .
     ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Merging variants after corrections...' . "\n");
 
 
@@ -1052,7 +1094,7 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
                 global $lPadding;
                 return '                   ' . str_pad(ucfirst($sKey), $lPadding, ' ') . ' : ' . $nValue;
             }, array_keys($aStatusCounts), array_values($aStatusCounts))) . "\n\n" .
-    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Verifying transcript variants or creating mappings...' . "\n");
+    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Verifying transcript variants...' . "\n");
 
 
 
@@ -1075,36 +1117,6 @@ foreach ($aData as $sID => $aVariant) {
     $aVariant['mappings'] = array(); // What we'll store in LOVD.
     $aPossibleMappings = array(); // What we get from Mutalyzer.
 
-    // We'd prefer not to call Mutalyzer for every single variant, but we're just not sure if we can trust the database.
-    // So unfortunately, we have no choice. Keeping a cache of our work, so never do this more than needed.
-    // Check cache. If not found there, add it.
-    if (isset($_CACHE['mutalyzer_cache_mapping'][$sID])) {
-        $aPossibleMappings = $_CACHE['mutalyzer_cache_mapping'][$sID];
-    } else {
-        $aResult = json_decode(file_get_contents($_CONFIG['mutalyzer_URL'] . '/json/numberConversion?build=' . $_CONFIG['user']['refseq_build'] . '&variant=' . $sID), true);
-        if (!$aResult) {
-            // Error? Just report. They must be new variants, anyway.
-            lovd_printIfVerbose(VERBOSITY_MEDIUM,
-                ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
-                    floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
-                    5, ' ', STR_PAD_LEFT) . '%] Warning: Error parsing reply from Mutalyzer for variant ' . $sID . ".\n");
-            $nWarningsOccurred ++;
-            $nVariantsDone ++;
-            continue; // Next variant.
-        }
-
-        foreach ($aResult as $sVariant) {
-            list($sTranscript, $sVariant) = explode(':', $sVariant, 2);
-            $aPossibleMappings[$sTranscript] = $sVariant;
-        }
-
-        // Add to cache. We won't see it again here, to just add to the file.
-        file_put_contents($_CONFIG['user']['mutalyzer_cache_mapping'], $sID . "\t" . json_encode($aPossibleMappings) . "\n", FILE_APPEND);
-        $nVariantsAddedToMappingCache ++;
-    }
-
-
-
     // Print update, for every percentage changed.
     $nVariantsDone ++;
     if ((microtime(true) - $tProgressReported) > 5 && $nVariantsDone != $nVariants
@@ -1113,7 +1125,7 @@ foreach ($aData as $sID => $aVariant) {
         lovd_printIfVerbose(VERBOSITY_MEDIUM,
             ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
                 5, ' ', STR_PAD_LEFT) . '%] ' .
-            str_pad($nVariantsDone, strlen($nVariants), ' ', STR_PAD_LEFT) . ' variants verified...' . "\n");
+            str_pad($nVariantsDone, strlen($nVariants), ' ', STR_PAD_LEFT) . ' transcript variants verified...' . "\n");
         $tProgressReported = microtime(true); // Don't report again for a certain amount of time.
     }
 }
@@ -1123,7 +1135,5 @@ $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
     ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
         5, ' ', STR_PAD_LEFT) . '%] ' .
-    $nVariantsDone . ' variants verified.' . "\n" .
-    '                   Variants added to mapping cache: ' . $nVariantsAddedToMappingCache . ".\n" .
-    '                   Variants added to NM cache: ' . $nVariantsAddedToNMCache . ".\n\n");
+    $nVariantsDone . ' transcript variants verified.' . "\n\n");
 ?>
