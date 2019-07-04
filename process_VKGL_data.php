@@ -1268,7 +1268,8 @@ foreach ($aData as $sVariant => $aVariant) {
             // Just report. We still want the variant.
 
             // Perhaps we can work around it even more, but I want to see if that is necessary to build.
-            // If this is a problem, then use mappingInfo to enforce mapping on an available transcript?
+            // Perhaps there is an older version of the transcripts, but the mapping doesn't match? Then just run name checker.
+            // If this is not enough, then use mappingInfo to enforce mapping on an available transcript?
             // https://test.mutalyzer.nl/json/mappingInfo?LOVD_ver=3.0-21&build=hg19&accNo=NM_002225.3&variant=g.40680000C%3ET
             // This will work even if the transcript is too far away for Mutalyzer to annotate it.
             lovd_printIfVerbose(VERBOSITY_MEDIUM,
@@ -1294,6 +1295,86 @@ foreach ($aData as $sVariant => $aVariant) {
         file_put_contents($_CONFIG['user']['mutalyzer_cache_mapping'], $sVariant . "\t" . json_encode($aPossibleMappings) . "\n", FILE_APPEND);
         $nVariantsAddedToCache ++;
     }
+
+
+
+
+
+    // Now, generate some more data (position fields, RNA field) and check the predicted protein field.
+    foreach ($aVariant['mappings'] as $sTranscript => $aMapping) {
+        // First, get positions for variant.
+        $aMapping = array_merge(
+            $aMapping,
+            lovd_getVariantInfo($aMapping['DNA'], $sTranscript)
+        );
+
+        // We're not using lovd_getRNAProteinPrediction() because that's using SOAP and the normal runMutalyzer,
+        //  and we already did that stuff. Also, this code below is better in predicting good RNA values.
+        // We will be borrowing quite some logic though. It would be better if this was solved.
+        if (in_array($aMapping['protein'], array('', 'p.?', 'p.(=)'))) {
+            // We'd want to check this.
+            // Splicing.
+            if (($aMapping['position_start_intron'] && abs($aMapping['position_start_intron']) <= 5)
+                || ($aMapping['position_end_intron'] && abs($aMapping['position_end_intron']) <= 5)
+                || ($aMapping['position_start_intron'] && !$aMapping['position_end_intron'])
+                || (!$aMapping['position_start_intron'] && $aMapping['position_end_intron'])) {
+                $aMapping['RNA'] = 'r.spl?';
+                $aMapping['protein'] = 'p.?';
+
+            } elseif ($aMapping['position_start_intron'] && $aMapping['position_end_intron']
+                && abs($aMapping['position_start_intron']) > 5 && abs($aMapping['position_end_intron']) > 5
+                && ($aMapping['position_start'] == $aMapping['position_end'] || $aMapping['position_start'] == ($aMapping['position_end'] + 1))) {
+                // Deep intronic.
+                $aMapping['RNA'] = 'r.(=)';
+                $aMapping['protein'] = 'p.(=)';
+
+            } else {
+                // No introns involved.
+                if ($aMapping['position_start'] < 0 && $aMapping['position_end'] < 0) {
+                    // Variant is upstream.
+                    $aMapping['RNA'] = 'r.(?)';
+                    $aMapping['protein'] = 'p.(=)';
+
+                } elseif ($aMapping['position_start'] < 0 && strpos($aMapping['DNA'], '*') !== false) {
+                    // Start is upstream, end is downstream.
+                    if ($aMapping['type'] == 'del') {
+                        $aMapping['RNA'] = 'r.0?';
+                        $aMapping['protein'] = 'p.0?';
+                    } else {
+                        $aMapping['RNA'] = 'r.?';
+                        $aMapping['protein'] = 'p.?';
+                    }
+
+                } elseif (strpos($aMapping['DNA'], 'c.*') === 0 && ($aMapping['type'] == 'subst' || substr_count($aMapping['DNA'], '*') > 1)) {
+                    // Variant is downstream.
+                    $aMapping['RNA'] = 'r.(=)';
+                    $aMapping['protein'] = 'p.(=)';
+
+                } elseif ($aMapping['type'] != 'subst') {
+                    // Deletion/insertion partially in the transcript.
+                    $aMapping['RNA'] = 'r.?';
+                    $aMapping['protein'] = 'p.?';
+
+                } else {
+                    // Substitution on wobble base or so.
+                    $aMapping['RNA'] = 'r.(?)';
+                }
+            }
+        }
+
+        // Empty the protein prediction again for NR transcripts.
+        if (in_array(substr($sTranscript, 0, 2), array('NR', 'XR'))) {
+            $aMapping['protein'] = '-';
+        }
+
+        // We should have RNA and protein descriptions now. Store.
+        $aVariant['mappings'][$sTranscript] = $aMapping;
+    }
+
+
+
+    // Store the updates into the data array.
+    $aData[$sVariant] = $aVariant;
 
     // Print update, for every percentage changed.
     $nVariantsDone ++;
