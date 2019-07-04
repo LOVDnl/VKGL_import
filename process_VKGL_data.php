@@ -818,6 +818,7 @@ foreach ($aData as $sID => $aVariant) {
             $aError = json_decode($sVariantCorrected, true);
 
             // I'm not too happy duplicating this code.
+            // I would like to report the center(s) here, but I don't have the 'classifications' array here yet.
             lovd_printIfVerbose(VERBOSITY_MEDIUM,
                 ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                     floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
@@ -853,6 +854,7 @@ foreach ($aData as $sID => $aVariant) {
                 $nVariantsAddedToCache ++;
             }
 
+            // I would like to report the center(s) here, but I don't have the 'classifications' array here yet.
             lovd_printIfVerbose(VERBOSITY_MEDIUM,
                 ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                         floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
@@ -1001,7 +1003,7 @@ $aStatusCounts = array(
     'non-consensus' => 0,
     'opposite' => 0,
 );
-foreach ($aData as $sID => $aVariant) {
+foreach ($aData as $sVariant => $aVariant) {
     // Per center, first make sure we only have one classification left.
     $bInternalConflict = false;
     foreach ($aVariant['classifications'] as $sCenter => $Classification) {
@@ -1133,7 +1135,7 @@ foreach ($aData as $sID => $aVariant) {
         $aVariant['protein'] = array($aVariant['protein']);
     }
 
-    $aData[$sID] = $aVariant;
+    $aData[$sVariant] = $aVariant;
     $nVariantsDone ++;
 }
 
@@ -1153,6 +1155,7 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
 
 // Now correct all cDNA variants, using the cache, and predict RNA and protein.
 $nVariantsDone = 0;
+$nVariantsAddedToCache = 0;
 $nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you can see the progress.
 $tProgressReported = microtime(true); // Don't report progress again within a certain amount of time.
 
@@ -1162,9 +1165,135 @@ $aTranscripts = $_DB->query('
     FROM ' . TABLE_TRANSCRIPTS . '
     ORDER BY id_ncbi')->fetchAllGroupAssoc();
 
-foreach ($aData as $sID => $aVariant) {
+foreach ($aData as $sVariant => $aVariant) {
     $aVariant['mappings'] = array(); // What we'll store in LOVD.
-    $aPossibleMappings = array(); // What we get from Mutalyzer.
+
+    // Check cache. If not found there, something went wrong.
+    if (!isset($_CACHE['mutalyzer_cache_mapping'][$sVariant])) {
+        lovd_printIfVerbose(VERBOSITY_LOW,
+            'Error: Could not find mappings in the cache after checking for them.' . "\n\n");
+        die(EXIT_ERROR_CACHE_UNREADABLE);
+    }
+
+    $aPossibleMappings = $_CACHE['mutalyzer_cache_mapping'][$sVariant];
+
+    // Go through the possible mappings to see which ones we'll store, based on the transcripts we have in LOVD.
+    foreach ($aPossibleMappings as $sTranscript => $aMapping) {
+        if (isset($aTranscripts[$sTranscript])) {
+            // Match with LOVD's transcript.
+            $aVariant['mappings'][$sTranscript] = array(
+                'DNA' => $aMapping['c'],
+                'protein' => '', // Always set it.
+            );
+            if (isset($aMapping['p'])) {
+                // Coding transcript, we have received a protein prediction from Mutalyzer.
+                $aVariant['mappings'][$sTranscript]['protein'] = $aMapping['p'];
+            }
+        }
+    }
+
+    // Check if we have anything now.
+    if (!count($aVariant['mappings'])) {
+        // Mutalyzer came up with none of LOVD's transcripts.
+        // The problem with our method of using runMutalyzer for everything, is that you only use the NC,
+        //  and as such you only get the latest transcripts. Mappings on older transcripts are not provided,
+        //  even if that is the transcript that LOVD is using.
+        // We cannot assume the transcripts are the same, and just copy the mapping.
+        // Since we're using the NCs for the protein prediction, *if* the cDNA mapping of this variant on both the older
+        //  and the newer transcript are the same, then the protein predictions will also be the same.
+        // So the fastest thing to do is to do a numberConversion() and check.
+        $aResult = json_decode(file_get_contents($_CONFIG['mutalyzer_URL'] . '/json/numberConversion?build=' . $_CONFIG['user']['refseq_build'] . '&variant=' . $sVariant), true);
+        if (!$aResult) {
+            // Error? Just report. They must be new variants, anyway.
+            lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                    floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                    5, ' ', STR_PAD_LEFT) . '%] Warning: Error for variant ' . $sVariant . ".\n" .
+                '                   No LOVD transcript and Mutalyzer call failed.' . "\n");
+            $nWarningsOccurred ++;
+            $nVariantsDone ++;
+            continue; // Next variant.
+        }
+
+        // Parse results.
+        $aPositionConverterTranscripts = array();
+        foreach ($aResult as $sResult) {
+            list($sTranscript, $sDNA) = explode(':', $sResult, 2);
+            $aPositionConverterTranscripts[$sTranscript] = $sDNA;
+        }
+
+        // OK, now find a transcript that is in LOVD and match it to a transcript that is in the given mappings.
+        // The LOVD transcript can only be *older*.
+        foreach ($aPossibleMappings as $sTranscript => $aMapping) {
+            // Check if this transcript is in the numberConversion output, which is a requirement.
+            if (!isset($aPositionConverterTranscripts[$sTranscript])) {
+                // We can't match, then.
+                continue;
+            }
+
+            // Isolate version.
+            list($sTranscriptNoVersion, $nVersion) = explode('.', $sTranscript, 2);
+            for ($i = $nVersion; $i > 0; $i --) {
+                if (isset($aTranscripts[$sTranscriptNoVersion . '.' . $i])
+                    && isset($aPositionConverterTranscripts[$sTranscriptNoVersion . '.' . $i])) {
+                    // Match with LOVD's transcript, and Mutalyzer's numberConversion's results.
+                    // Now check if both transcripts have the same cDNA prediction.
+                    if ($aPositionConverterTranscripts[$sTranscript]
+                        == $aPositionConverterTranscripts[$sTranscriptNoVersion . '.' . $i]) {
+                        // NumberConversion has the same results for both transcripts.
+                        // That means the protein prediction based on the NC would be the same as well.
+                        // Accept the corrected mapping of the newest transcript for the lower version which is in LOVD.
+                        $_CACHE['mutalyzer_cache_mapping'][$sVariant][$sTranscriptNoVersion . '.' . $i] =
+                            $aPossibleMappings[$sTranscript];
+                        $aVariant['mappings'][$sTranscriptNoVersion . '.' . $i] = array(
+                            'DNA' => $aMapping['c'],
+                            'protein' => '', // Always set it.
+                        );
+                        if (isset($aPossibleMappings[$sTranscript]['p'])) {
+                            // Coding transcript, we have received a protein prediction from Mutalyzer.
+                            $aVariant['mappings'][$sTranscriptNoVersion . '.' . $i]['protein'] =
+                                $aPossibleMappings[$sTranscript]['p'];
+                        }
+                        break; // Next transcript!
+                    }
+                }
+            }
+        }
+
+
+
+        // See if we solved it now.
+        if (!count($aVariant['mappings'])) {
+            // Nope...
+            // Just report. We still want the variant.
+
+            // Perhaps we can work around it even more, but I want to see if that is necessary to build.
+            // If this is a problem, then use mappingInfo to enforce mapping on an available transcript?
+            // https://test.mutalyzer.nl/json/mappingInfo?LOVD_ver=3.0-21&build=hg19&accNo=NM_002225.3&variant=g.40680000C%3ET
+            // This will work even if the transcript is too far away for Mutalyzer to annotate it.
+            lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                    floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                    5, ' ', STR_PAD_LEFT) . '%] Warning: No LOVD transcript for variant ' . $sVariant . ".\n" .
+                '                   Given mappings: ' . implode(', ', array_keys($aPossibleMappings)) . ".\n" .
+                '                   Also found: ' . implode(', ', array_diff(array_keys($aPositionConverterTranscripts), array_keys($aPossibleMappings))) . ".\n" .
+                '                   VKGL data: ' . implode(', ', $aVariant['gene']) . '; ' . implode(', ', $aVariant['transcript']) . ".\n");
+            $nWarningsOccurred ++;
+            $nVariantsDone ++;
+            $tProgressReported = microtime(true); // Don't report progress for a certain amount of time.
+            continue; // Next variant.
+        }
+
+
+
+        // So using the numberConversion helped. Update cache!
+        // Yes, this will add an additional line to the cache for this variant. When reading the cache,
+        //  the second line will overwrite the first. Sorting the cache will not cause problems.
+        // However, we'll need to clean this cache in the future, and remove double mappings.
+        $aPossibleMappings = $_CACHE['mutalyzer_cache_mapping'][$sVariant];
+        file_put_contents($_CONFIG['user']['mutalyzer_cache_mapping'], $sVariant . "\t" . json_encode($aPossibleMappings) . "\n", FILE_APPEND);
+        $nVariantsAddedToCache ++;
+    }
 
     // Print update, for every percentage changed.
     $nVariantsDone ++;
@@ -1184,5 +1313,6 @@ $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
     ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
         5, ' ', STR_PAD_LEFT) . '%] ' .
-    $nVariantsDone . ' transcript variants verified.' . "\n\n");
+    $nVariantsDone . ' transcript variants verified.' . "\n" .
+    '                   Variants added to cache: ' . $nVariantsAddedToCache . ".\n\n");
 ?>
