@@ -779,6 +779,7 @@ set_time_limit(0);
 
 // Correct all genomic variants, using the cache. Skip substitutions.
 // And don't bother using the database, we'll assume the cache knows it all.
+$nVariantsLost = 0;
 $nVariantsDone = 0;
 $nVariantsAddedToCache = 0;
 $nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you can see the progress.
@@ -803,21 +804,65 @@ foreach ($aData as $sID => $aVariant) {
         $_SETT['human_builds'][$_CONFIG['user']['refseq_build']]['ncbi_sequences'][$aVariant['chromosome']] .
         ':' . $aVariant['VariantOnGenome/DNA'];
 
-    // Check cache. If not found there, add it.
-    if (isset($_CACHE['mutalyzer_cache_NC'][$sVariant])) {
+    // The variant may be in the NC cache, but not yet in the mapping cache.
+    // This happens when the NC cache is used by another application, which doesn't build the mapping cache as well.
+    // Check if we need this call, if the variant is missing in one of the two caches.
+    $bUpdateCache = !isset($_CACHE['mutalyzer_cache_NC'][$sVariant]);
+    if (!$bUpdateCache) {
+        // But check the mapping cache too!
         $sVariantCorrected = $_CACHE['mutalyzer_cache_NC'][$sVariant];
 
-    } else {
+        // Check if this is not a cached error message.
+        if ($sVariantCorrected{0} == '{') {
+            // This is a cached error message. Report, but don't cache.
+            $aError = json_decode($sVariantCorrected, true);
+
+            // I'm not too happy duplicating this code.
+            lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                    floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                    5, ' ', STR_PAD_LEFT) . '%] Warning: Error for variant ' . $sID . ".\n" .
+                '                   It was sent as ' . $sVariant . ".\n" .
+                (!$aError? '' : '                   Error: ' . implode("\n" . str_repeat(' ', 26), $aError) . "\n"));
+            $nWarningsOccurred ++;
+            $nVariantsLost ++;
+            $nVariantsDone ++;
+            unset($aData[$sID]); // We don't want to continue working with this variant.
+            continue; // Next variant.
+        }
+
+        $bUpdateCache = !isset($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected]);
+    }
+
+    // Update cache if needed.
+    if ($bUpdateCache) {
         $aResult = json_decode(file_get_contents($_CONFIG['mutalyzer_URL'] . '/json/runMutalyzerLight?variant=' . $sVariant), true);
         if (!$aResult || !isset($aResult['genomicDescription'])) {
             // Error? Just report. They must be new variants, anyway.
+            // If this is a recognized Mutalyzer error, we want to cache this as well, so we won't keep running into it.
+            $aError = array();
+            if (!empty($aResult['errors']) && isset($aResult['messages'])) {
+                foreach ($aResult['messages'] as $aMessage) {
+                    if (isset($aMessage['errorcode']) && $aMessage['errorcode'] == 'EREF') {
+                        // Cache this error.
+                        $aError['EREF'] = $aMessage['message'];
+                    }
+                }
+                // Save to cache.
+                file_put_contents($_CONFIG['user']['mutalyzer_cache_NC'], $sVariant . "\t" . json_encode($aError) . "\n", FILE_APPEND);
+                $nVariantsAddedToCache ++;
+            }
+
             lovd_printIfVerbose(VERBOSITY_MEDIUM,
                 ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                         floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
-                    5, ' ', STR_PAD_LEFT) . '%] Warning: Error parsing reply from Mutalyzer for variant ' . $sID . ".\n" .
-                '                   It was sent as ' . $sVariant . ".\n");
+                    5, ' ', STR_PAD_LEFT) . '%] Warning: Error for variant ' . $sID . ".\n" .
+                '                   It was sent as ' . $sVariant . ".\n" .
+                (!$aError? '' : '                   Error: ' . implode("\n" . str_repeat(' ', 26), $aError) . "\n"));
             $nWarningsOccurred ++;
+            $nVariantsLost ++;
             $nVariantsDone ++;
+            unset($aData[$sID]); // We don't want to continue working with this variant.
             continue; // Next variant.
         }
 
@@ -868,8 +913,12 @@ foreach ($aData as $sID => $aVariant) {
             file_put_contents($_CONFIG['user']['mutalyzer_cache_mapping'], $sVariantCorrected . "\t" . json_encode($aMutalyzerMappings) . "\n", FILE_APPEND);
             $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected] = $aMutalyzerMappings;
         }
-        // Add to NC cache.
-        file_put_contents($_CONFIG['user']['mutalyzer_cache_NC'], $sVariant . "\t" . $sVariantCorrected . "\n", FILE_APPEND);
+        // Add to NC cache, if we didn't have it already.
+        if (!isset($_CACHE['mutalyzer_cache_NC'][$sVariant])) {
+            // Only add it to the file, we won't see this variant anymore this run.
+            file_put_contents($_CONFIG['user']['mutalyzer_cache_NC'], $sVariant . "\t" . $sVariantCorrected . "\n", FILE_APPEND);
+        }
+        // Count as addition always, one of the caches should have been updated.
         $nVariantsAddedToCache ++;
     }
 
@@ -900,7 +949,9 @@ $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
     ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
         5, ' ', STR_PAD_LEFT) . '%] ' .
-    $nVariantsDone . ' genomic variants verified. Variants added to cache: ' . $nVariantsAddedToCache . ".\n\n" .
+    $nVariantsDone . ' genomic variants verified.' . "\n" .
+    '                   Variants added to cache: ' . $nVariantsAddedToCache . ".\n" .
+    '                   Variants lost: ' . $nVariantsLost . ".\n\n" .
     ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Merging variants after corrections...' . "\n");
 
 
@@ -1102,8 +1153,6 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
 
 // Now correct all cDNA variants, using the cache, and predict RNA and protein.
 $nVariantsDone = 0;
-$nVariantsAddedToMappingCache = 0;
-$nVariantsAddedToNMCache = 0;
 $nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you can see the progress.
 $tProgressReported = microtime(true); // Don't report progress again within a certain amount of time.
 
