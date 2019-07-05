@@ -553,6 +553,7 @@ if ($_CONFIG['flags']['y']) {
 
 
 // Verify all the settings, if needed.
+$aCenterIDs = array();
 if (!$_CONFIG['flags']['y']) {
     lovd_printIfVerbose(VERBOSITY_HIGH,
         $_CONFIG['name'] . ' v' . $_CONFIG['version'] . '.' . "\n");
@@ -567,16 +568,16 @@ if (!$_CONFIG['flags']['y']) {
     lovd_verifySettings('mutalyzer_cache_mapping', 'File containing the Mutalyzer cache for mappings from genome to transcript', 'file', '');
 
     // Verify all centers.
-    $aIDsUsed = array(); // Make sure IDs are unique.
+    $aCenterIDs = array(); // Make sure IDs are unique.
     foreach ($aCentersFound as $sCenter) {
         while (true) {
             lovd_verifySettings('center_' . $sCenter . '_id', 'The LOVD user ID for VKGL center ' . $sCenter, 'int', '1,99999');
-            if (in_array($_CONFIG['user']['center_' . $sCenter . '_id'], $aIDsUsed)) {
+            if (in_array($_CONFIG['user']['center_' . $sCenter . '_id'], $aCenterIDs)) {
                 lovd_printIfVerbose(VERBOSITY_MEDIUM,
                     '    This ID is already assigned to a different center.' . "\n");
                 $_CONFIG['user']['center_' . $sCenter . '_id'] = 0;
             } else {
-                $aIDsUsed[] = $_CONFIG['user']['center_' . $sCenter . '_id'];
+                $aCenterIDs[$sCenter] = $_CONFIG['user']['center_' . $sCenter . '_id'];
                 break;
             }
         }
@@ -657,6 +658,9 @@ foreach ($aCentersFound as $sCenter) {
     if (!$bFound) {
         $bAccountsOK = false;
         $_CONFIG['user']['center_' . $sCenter . '_id'] = 0;
+    } else {
+        // We need it for querying the database later; also str_pad() the ID, so we can match it with what's in the DB.
+        $aCenterIDs[$sCenter] = str_pad($_CONFIG['user']['center_' . $sCenter . '_id'], 5, '0', STR_PAD_LEFT);
     }
 }
 lovd_printIfVerbose(VERBOSITY_MEDIUM, "\n");
@@ -745,7 +749,7 @@ while ($sLine = fgets($fInput)) {
 
     $aDataLine = explode("\t", $sLine);
     // Trim quotes off of the data.
-    $aDataRow = array_map(function($sData) {
+    $aDataLine = array_map(function($sData) {
         return trim($sData, '"');
     }, $aDataLine);
     $nDataColumns = count($aDataLine);
@@ -792,6 +796,17 @@ foreach ($aData as $sID => $aVariant) {
         die(EXIT_ERROR_DATA_CONTENT_ERROR);
     }
 
+    // Translate all classification values to easier values.
+    // I need this cleaned up here already, so I can report which centers cause problems.
+    $aVariant['classifications'] = array();
+    foreach ($aCentersFound as $sCenter) {
+        if ($aVariant[$sCenter]) {
+            $aVariant['classifications'][$sCenter] = str_replace(array('likely ', 'benign', 'pathogenic', 'vus'),
+                array('L', 'B', 'P', 'VUS'), strtolower($aVariant[$sCenter]));
+        }
+        unset($aVariant[$sCenter]);
+    }
+
     // Use LOVD+'s lovd_getVariantDescription() to build the HGVS from the VCF fields.
     // Also adds fields that we currently won't use yet since we don't know yet if this HGVS is correct.
     $aVariant['position'] = $aVariant['start']; // The function needs this.
@@ -818,11 +833,10 @@ foreach ($aData as $sID => $aVariant) {
             $aError = json_decode($sVariantCorrected, true);
 
             // I'm not too happy duplicating this code.
-            // I would like to report the center(s) here, but I don't have the 'classifications' array here yet.
             lovd_printIfVerbose(VERBOSITY_MEDIUM,
                 ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                     floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
-                    5, ' ', STR_PAD_LEFT) . '%] Warning: Error for variant ' . $sID . ".\n" .
+                    5, ' ', STR_PAD_LEFT) . '%] Warning: Error for variant ' . $sID . ' (' . implode(', ', array_keys($aVariant['classifications'])) . ").\n" .
                 '                   It was sent as ' . $sVariant . ".\n" .
                 (!$aError? '' : '                   Error: ' . implode("\n" . str_repeat(' ', 26), $aError) . "\n"));
             $nWarningsOccurred ++;
@@ -854,11 +868,10 @@ foreach ($aData as $sID => $aVariant) {
                 $nVariantsAddedToCache ++;
             }
 
-            // I would like to report the center(s) here, but I don't have the 'classifications' array here yet.
             lovd_printIfVerbose(VERBOSITY_MEDIUM,
                 ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                         floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
-                    5, ' ', STR_PAD_LEFT) . '%] Warning: Error for variant ' . $sID . ".\n" .
+                    5, ' ', STR_PAD_LEFT) . '%] Warning: Error for variant ' . $sID . ' (' . implode(', ', array_keys($aVariant['classifications'])) . ").\n" .
                 '                   It was sent as ' . $sVariant . ".\n" .
                 (!$aError? '' : '                   Error: ' . implode("\n" . str_repeat(' ', 26), $aError) . "\n"));
             $nWarningsOccurred ++;
@@ -963,16 +976,7 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
 // Loop variants again, merging entries.
 $nVariantsMerged = 0;
 foreach ($aData as $sID => $aVariant) {
-    // Translate all classification values to easier values.
-    $aVariant['classifications'] = array();
-    foreach ($aCentersFound as $sCenter) {
-        if ($aVariant[$sCenter]) {
-            $aVariant['classifications'][$sCenter] = str_replace(array('likely ', 'benign', 'pathogenic', 'vus'),
-                array('L', 'B', 'P', 'VUS'), strtolower($aVariant[$sCenter]));
-        }
-        unset($aVariant[$sCenter]);
-    }
-
+    // Simple merge.
     if (!isset($aData[$aVariant['VariantOnGenome/DNA']])) {
         $aData[$aVariant['VariantOnGenome/DNA']] = $aVariant;
     } else {
@@ -1111,18 +1115,25 @@ foreach ($aData as $sVariant => $aVariant) {
         $aVariant['chromosome'] = current($aVariant['chromosome']);
 
         // Since we're grouping on variant, the gene doesn't have to be unique anymore.
-        $aVariant['gene'] = array_unique($aVariant['gene']);
+        // We can get case-differences here, and I don't like that. array_unique() however, is case-sensitive.
+        // This trick solves that problem.
+        // https://stackoverflow.com/questions/2276349/case-insensitive-array-unique
+        $aVariant['gene'] = array_intersect_key(
+            $aVariant['gene'],
+            array_unique(array_map('strtoupper', $aVariant['gene'])));
 
         // Then, transcript.
         $aVariant['transcript'] = array_unique($aVariant['transcript']);
 
         // cDNA; we can have quite a few different values here.
         $aVariant['c_dna'] = array_unique($aVariant['c_dna']);
-        sort($aVariant['c_dna']);
 
         // Protein; not sure how many centers provide this info.
         $aVariant['protein'] = array_unique($aVariant['protein']);
-        sort($aVariant['protein']);
+        // Remove empty values, don't resort.
+        if (($nKey = array_search('', $aVariant['protein'])) !== false) {
+            unset($aVariant['protein'][$nKey]);
+        }
 
         // VariantOnGenome/DNA, we grouped on this, so just remove.
         $aVariant['VariantOnGenome/DNA'] = current($aVariant['VariantOnGenome/DNA']);
@@ -1132,7 +1143,11 @@ foreach ($aData as $sVariant => $aVariant) {
         $aVariant['gene'] = array($aVariant['gene']);
         $aVariant['transcript'] = array($aVariant['transcript']);
         $aVariant['c_dna'] = array($aVariant['c_dna']);
-        $aVariant['protein'] = array($aVariant['protein']);
+        if ($aVariant['protein']) {
+            $aVariant['protein'] = array($aVariant['protein']);
+        } else {
+            $aVariant['protein'] = array();
+        }
     }
 
     $aData[$sVariant] = $aVariant;
