@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-07-04
+ * Modified    : 2019-07-05
  * Version     : 0.0
  * For LOVD+   : 3.0-22
  *
@@ -71,6 +71,20 @@ $_CONFIG = array(
         'history',
     ),
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
+    'effect_mapping_LOVD' => array(
+        'B' => 1,
+        'LB' => 3,
+        'VUS' => 5,
+        'LP' => 7,
+        'P' => 9,
+    ),
+    'effect_mapping_classification' => array(
+        'B' => 'benign',
+        'LB' => 'likely benign',
+        'VUS' => 'VUS',
+        'LP' => 'likely pathogenic',
+        'P' => 'pathogenic',
+    ),
     'mutalyzer_URL' => 'https://test.mutalyzer.nl/', // Test may be faster than www.mutalyzer.nl.
     'user' => array(
         // Variables we will be asking the user.
@@ -237,8 +251,7 @@ function lovd_printIfVerbose ($nVerbosity, $sMessage)
     }
 
     if (VERBOSITY >= $nVerbosity) {
-        // Write to STDERR, as this script dumps the resulting output file to STDOUT.
-        fwrite(STDERR, $sMessage);
+        print($sMessage);
     }
     return true;
 }
@@ -422,6 +435,9 @@ $bCron = (empty($_SERVER['REMOTE_ADDR']) && empty($_SERVER['TERM']));
 define('VERBOSITY', ($bCron? 5 : 7));
 $tStart = time() + date('Z', 0); // Correct for timezone, otherwise the start value is not 0.
 
+lovd_printIfVerbose(VERBOSITY_MEDIUM,
+    $_CONFIG['name'] . ' v' . $_CONFIG['version'] . '.' . "\n");
+
 
 
 
@@ -555,9 +571,6 @@ if ($_CONFIG['flags']['y']) {
 // Verify all the settings, if needed.
 $aCenterIDs = array();
 if (!$_CONFIG['flags']['y']) {
-    lovd_printIfVerbose(VERBOSITY_HIGH,
-        $_CONFIG['name'] . ' v' . $_CONFIG['version'] . '.' . "\n");
-
     lovd_verifySettings('refseq_build', 'The genome build that the data file uses (hg19/hg38)', 'array', array('hg19', 'hg38'));
     if (!lovd_verifySettings('lovd_path', 'Path of LOVD installation to load data into', 'lovd_path', '')) {
         lovd_printIfVerbose(VERBOSITY_LOW,
@@ -1297,6 +1310,7 @@ foreach ($aData as $sVariant => $aVariant) {
             $nWarningsOccurred ++;
             $nVariantsDone ++;
             $tProgressReported = microtime(true); // Don't report progress for a certain amount of time.
+            $aData[$sVariant] = $aVariant; // But store updates.
             continue; // Next variant.
         }
 
@@ -1326,6 +1340,7 @@ foreach ($aData as $sVariant => $aVariant) {
         // We're not using lovd_getRNAProteinPrediction() because that's using SOAP and the normal runMutalyzer,
         //  and we already did that stuff. Also, this code below is better in predicting good RNA values.
         // We will be borrowing quite some logic though. It would be better if this was solved.
+        $aMapping['RNA'] = 'r.(?)'; // Default.
         if (in_array($aMapping['protein'], array('', 'p.?', 'p.(=)'))) {
             // We'd want to check this.
             // Splicing.
@@ -1382,6 +1397,9 @@ foreach ($aData as $sVariant => $aVariant) {
             $aMapping['protein'] = '-';
         }
 
+        // We don't need type anymore, either.
+        unset($aMapping['type']);
+
         // We should have RNA and protein descriptions now. Store.
         $aVariant['mappings'][$sTranscript] = $aMapping;
     }
@@ -1410,5 +1428,329 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
     ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
         5, ' ', STR_PAD_LEFT) . '%] ' .
     $nVariantsDone . ' transcript variants verified.' . "\n" .
-    '                   Variants added to cache: ' . $nVariantsAddedToCache . ".\n\n");
+    '                   Variants added to cache: ' . $nVariantsAddedToCache . ".\n\n" .
+    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Downloading VKGL data from LOVD and processing update...' . "\n");
+
+
+
+
+
+// Process updates in the database.
+ksort($aData);
+$nVariantsDone = 0;
+$nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you can see the progress.
+$tProgressReported = microtime(true); // Don't report progress again within a certain amount of time.
+
+$aVariantsCreated = array(); // Counters per chromosome.
+$aVariantsUpdated = array(); // Counters per chromosome.
+$aVariantsDeleted = array(); // Counters per chromosome.
+$sNow = date('Y-m-d H:i:s');
+
+// Process updates per chromosome, but show progress over the total number of variants.
+$sRefSeq = ''; // The RefSeq (NC) we're currently working on.
+$sPrevRefSeq = ''; // The one (NC) we were working on before.
+$sChromosome = ''; // The chromosome we're currently working on, derived from $sRefSeq.
+
+foreach ($aData as $sVariant => $aVariant) {
+    // Check chromosome, is this different from the previous line?
+    list($sRefSeq, $sDNA) = explode(':', $sVariant, 2);
+    if (!$sRefSeq) {
+        // Eh, no chromosome?
+        lovd_printIfVerbose(VERBOSITY_LOW,
+            'Error: Cannot get chromosome from variant ' . $sVariant . ".\n\n");
+        die(EXIT_ERROR_DATA_CONTENT_ERROR);
+    }
+
+    if ($sRefSeq != $sPrevRefSeq) {
+        // New chromosome, report and load this new chromosome's data.
+        if ($sPrevRefSeq) {
+            // Report status of previous chromosome.
+            $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
+            lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
+                    5, ' ', STR_PAD_LEFT) . '%] Chromosome ' . $sChromosome . ' completed.' . "\n" .
+                '                   Variants created: ' . $aVariantsCreated[$sChromosome] . ".\n" .
+                '                   Variants updated: ' . $aVariantsUpdated[$sChromosome] . ".\n" .
+                '                   Variants deleted: ' . $aVariantsDeleted[$sChromosome] . ".\n");
+            $tProgressReported = microtime(true); // Don't report again for a certain amount of time.
+        }
+
+        $sChromosome = array_search($sRefSeq, $_SETT['human_builds'][$_CONFIG['user']['refseq_build']]['ncbi_sequences']);
+        if (!$sChromosome) {
+            // Eh? It did work the other way around before...
+            lovd_printIfVerbose(VERBOSITY_LOW,
+                'Error: Cannot find chromosome belonging to ' . $_CONFIG['user']['refseq_build'] . ':' . $sRefSeq . ".\n\n");
+            die(EXIT_ERROR_DATA_CONTENT_ERROR);
+        }
+
+        // Reset counters.
+        $aVariantsCreated[$sChromosome] = 0;
+        $aVariantsUpdated[$sChromosome] = 0;
+        $aVariantsDeleted[$sChromosome] = 0;
+
+        // Load the data currently in the database.
+        // Note, that if there are two entries of the same variant by the same center, we see only *one*.
+        $_DB->query('SET group_concat_max_len = 10000');
+        $aDataLOVD = $_DB->query('
+            SELECT CONCAT(vog.created_by, ":", ?, ":", vog.`VariantOnGenome/DNA`) AS ID,
+              vog.id, vog.allele, vog.effectid, vog.position_g_start, vog.position_g_end, vog.type,
+              vog.created_by, vog.owned_by, vog.statusid,
+              vog.`VariantOnGenome/DBID`, vog.`VariantOnGenome/Genetic_origin`, vog.`VariantOnGenome/Published_as`,
+              vog.`VariantOnGenome/Remarks`, vog.`VariantOnGenome/Remarks_Non_Public`,
+              GROUP_CONCAT(vot.transcriptid, ";", vot.effectid, ";",
+                IFNULL(NULLIF(vot.`VariantOnTranscript/Classification`, ""), "-"), ";",
+                IFNULL(NULLIF(vot.`VariantOnTranscript/DNA`, ""), "-"), ";",
+                IFNULL(NULLIF(vot.`VariantOnTranscript/RNA`, ""), "-"), ";",
+                IFNULL(NULLIF(vot.`VariantOnTranscript/Protein`, ""), "-") SEPARATOR ";;") AS vots
+            FROM ' . TABLE_VARIANTS . ' AS vog LEFT OUTER JOIN ' . TABLE_VARIANTS_ON_TRANSCRIPTS . ' AS vot USING (id)
+            WHERE vog.chromosome = ? AND vog.created_by IN (?' . str_repeat(', ?', $nCentersFound - 1) . ')
+            GROUP BY vog.id',
+            array_merge(
+                array($sRefSeq, $sChromosome),
+                array_values($aCenterIDs)))->fetchAllGroupAssoc();
+
+        $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
+        lovd_printIfVerbose(VERBOSITY_MEDIUM,
+            ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
+                5, ' ', STR_PAD_LEFT) . '%] Chromosome ' . $sChromosome . ' data loaded, running updates...' . "\n");
+        $tProgressReported = microtime(true); // Don't report again for a certain amount of time.
+
+        $sPrevRefSeq = $sRefSeq;
+    }
+
+
+
+    // Add some needed fields; (type, position_start, position_end).
+    $aVariant = array_merge(
+        $aVariant,
+        lovd_getVariantInfo($sDNA)
+    );
+
+    // Build "Published as" field.
+    // We uniqued the gene, transcript, c_dna and protein fields to make it easier for us,
+    //  but that also causes some unwanted side effects.
+    // Multiple genes, but only one transcript and cDNA descriptions. Probably the gene symbol changed.
+    while (count($aVariant['gene']) > count($aVariant['transcript'])
+        && count($aVariant['transcript']) == count($aVariant['c_dna'])) {
+        // We don't know which one is correct, we could check LOVD, but that's too much work for now.
+        // Just unset the last one.
+        unset($aVariant['gene'][count($aVariant['gene'])-1]);
+    }
+
+    $aVariant['published_as'] = '';
+    if (count($aVariant['gene']) == 1) {
+        if (count($aVariant['transcript']) == 1 || count($aVariant['c_dna']) == 1) {
+            // Simple, we just have one gene, and one transcript or one cDNA description.
+            foreach ($aVariant['transcript'] as $sTranscript) {
+                foreach ($aVariant['c_dna'] as $scDNA) {
+                    $aVariant['published_as'] .= (!$aVariant['published_as']? '' : ', ') .
+                        $aVariant['gene'][0] . '(' . $sTranscript . '):' . $scDNA;
+                }
+            }
+        } elseif (count($aVariant['transcript']) == count($aVariant['c_dna'])) {
+            // Same number of transcripts and DNA. Just match them.
+            for ($i = 0; $i < count($aVariant['transcript']); $i ++) {
+                $aVariant['published_as'] .= (!$aVariant['published_as']? '' : ', ') .
+                    $aVariant['gene'][0] . '(' . $aVariant['transcript'][$i] . '):' . $aVariant['c_dna'][$i];
+            }
+        }
+    } elseif (count($aVariant['gene']) == count($aVariant['transcript'])
+        && count($aVariant['transcript']) == count($aVariant['c_dna'])) {
+        // Multiple genes, but at least the same number of transcripts and DNA descriptions, too.
+        for ($i = 0; $i < count($aVariant['transcript']); $i ++) {
+            $aVariant['published_as'] .= (!$aVariant['published_as']? '' : ', ') .
+                $aVariant['gene'][$i] . '(' . $aVariant['transcript'][$i] . '):' . $aVariant['c_dna'][$i];
+        }
+    } else {
+        // Currently, we fail hard. We do so to see if we can optimize this code. Once we don't think
+        //  we can do anything useful anymore, remove this else. An empty field would then be acceptable.
+        lovd_printIfVerbose(VERBOSITY_LOW,
+            'Error: Cannot construct Published As field for ' . $sVariant . ".\n" .
+            '                   IDs: ' . implode("\n                        ", $aVariant['id']) . "\n\n");
+        die(EXIT_ERROR_DATA_CONTENT_ERROR);
+    }
+
+    // Add protein. Don't care about how many genes etc, it's too much work to
+    //  handle all the exceptions and the column is not *that* important.
+    if ($aVariant['protein']) {
+        $aVariant['published_as'] .= ' (';
+        foreach ($aVariant['protein'] as $nKey => $sProtein) {
+            // We sometimes get multiple protein descriptions in one field.
+            $sProtein = implode(', ', array_unique(array_map(function ($sValue) {
+                if (strpos($sValue, ':') !== false) {
+                    list(, $sValue) = explode(':', $sValue);
+                }
+                return trim($sValue);
+            }, explode(',', $sProtein))));
+            $aVariant['published_as'] .= (!$nKey? '' : ', ') . $sProtein;
+        }
+        $aVariant['published_as'] .= ')';
+    }
+
+    // Loop through centers who found this variant.
+    foreach ($aVariant['classifications'] as $sCenter => $sClassification) {
+        // Build variant entry.
+        $sLOVDKey = $aCenterIDs[$sCenter] . ':' . $sVariant;
+        $aVOGEntry = array(
+            'id' => null,
+            'allele' => '0', // Unknown.
+            'effectid' => $_CONFIG['effect_mapping_LOVD'][$sClassification] .
+                // Default to "Not curated", unless a user filled something in already.
+                (!isset($aDataLOVD[$sLOVDKey])? '0' : substr($aDataLOVD[$sLOVDKey]['effectid'], -1)),
+            'position_g_start' => $aVariant['position_start'],
+            'position_g_end' => $aVariant['position_end'],
+            'type' => $aVariant['type'],
+            'created_by' => $aCenterIDs[$sCenter],
+            // Created_date will be added later, right now we don't have it to prevent unneeded differences.
+            'owned_by' => $aCenterIDs[$sCenter], // FIXME: Should be common VKGL account when this is a single lab submission.
+            'statusid' => (string) ($aVariant['status'] == 'opposite'? STATUS_HIDDEN : STATUS_OK), // FIXME: Set to Marked if a warning occurred within this variant? Or like, when not having a mapping?
+            'VariantOnGenome/DBID' => '', // FIXME: Will be filled in later for records to be created!
+            'VariantOnGenome/Genetic_origin' => 'CLASSIFICATION record',
+            'VariantOnGenome/Published_as' => $aVariant['published_as'],
+            'VariantOnGenome/Remarks' => 'VKGL data sharing initiative Nederland',
+            'VariantOnGenome/Remarks_Non_Public' => '',
+            'vots' => array(),
+        );
+
+        // Fill VOTs.
+        foreach ($aVariant['mappings'] as $nTranscriptID => $aMapping) {
+            $aVOGEntry['vots'][] = array(
+                $aTranscripts[$nTranscriptID]['id'],
+                $aVOGEntry['effectid'],
+                $_CONFIG['effect_mapping_classification'][$sClassification],
+                $aMapping['DNA'],
+                $aMapping['RNA'],
+                $aMapping['protein'],
+            );
+        }
+        // For comparison reasons.
+        sort($aVOGEntry['vots']);
+
+        // If this entry already exists, simply update the record when needed.
+        if (isset($aDataLOVD[$sLOVDKey])) {
+            // Variant has been seen already by this center.
+
+            // Make my life easier, just copy some values.
+            $aVOGEntry['id'] = $aDataLOVD[$sLOVDKey]['id'];
+            $aVOGEntry['VariantOnGenome/DBID'] = $aDataLOVD[$sLOVDKey]['VariantOnGenome/DBID'];
+
+            // Make it easier to compare with our array.
+            if (!$aDataLOVD[$sLOVDKey]['vots']) {
+                $aDataLOVD[$sLOVDKey]['vots'] = array();
+            } else {
+                $aDataLOVD[$sLOVDKey]['vots'] = array_map(
+                    function ($aVOT) {
+                        return explode(';', $aVOT);
+                    }, explode(';;', $aDataLOVD[$sLOVDKey]['vots']));
+                sort($aDataLOVD[$sLOVDKey]['vots']);
+            }
+
+            // NOTE: This is debugging code. It checks the differences, and reports them, instead of running the update.
+            $bDebug = false;
+            if ($bDebug) {
+                // Reduce the differences, by adapting the LOVD record a bit already.
+                if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks'] == 'VKGL data sharing initiative Nederland; correct HGVS to be checked') {
+                    $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks'] = $aVOGEntry['VariantOnGenome/Remarks'];
+                }
+                // Don't mention ins to dups, that's the logical result of our checking.
+                if ($aDataLOVD[$sLOVDKey]['type'] == 'ins' && $aVOGEntry['type'] == 'dup') {
+                    $aDataLOVD[$sLOVDKey]['type'] = $aVOGEntry['type'];
+                }
+                // My "Published as" is often better. Calculate how much of the original I have.
+                // Differences that we found where mostly c.* variants now mapped to CDS variants. Otherwise, gene symbol changes but keeping the same transcripts.
+                // So if we have some kind of percentage, I'm happy already.
+                if (!$aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']
+                    || ($nPercentageMatch = similar_text($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'], $aVOGEntry['VariantOnGenome/Published_as']) / strlen($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']) * 100) > 20) {
+                    $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'] = $aVOGEntry['VariantOnGenome/Published_as'];
+                } else {
+                    $aVOGEntry['VariantOnGenome/Published_as'] .= ' (' . round($nPercentageMatch, 2) . ')';
+                }
+            }
+
+            // Determine if there are any differences.
+            $aDiff = array();
+            foreach ($aDataLOVD[$sLOVDKey] as $sKey => $Value) {
+                if (!isset($aVOGEntry[$sKey]) || $Value != $aVOGEntry[$sKey]) {
+                    $aDiff[$sKey] = array(
+                        $Value,
+                        (!isset($aVOGEntry[$sKey])? 'NULL' : $aVOGEntry[$sKey]),
+                    );
+                }
+            }
+
+            if ($bDebug) {
+                // If diff is only the left of the classification, it's fine.
+                if (count($aDiff) == 1 && isset($aDiff['effectid']) && substr($aDiff['effectid'][0], -1) == substr($aDiff['effectid'][1], -1)) {
+                    unset($aDiff['effectid']);
+                }
+                // If diff is only the status change, it's fine.
+                if (count($aDiff) == 1 && isset($aDiff['statusid'])) {
+                    unset($aDiff['statusid']);
+                }
+                // Clean VOT changes, by removing VOTs from the diff array that are also in the new data.
+                if (isset($aDiff['vots'])) {
+                    foreach ($aDiff['vots'][0] as $nKey => $aLOVDVot) {
+                        // Often the problem is that our RNA is better.
+                        if (isset($aDiff['vots'][1][$nKey])
+                            && $aDiff['vots'][0][$nKey][0] == $aDiff['vots'][1][$nKey][0]
+                            && $aDiff['vots'][0][$nKey][4] == 'r.(=)' && $aDiff['vots'][1][$nKey][4] == 'r.(?)') {
+                            $aLOVDVot[4] = $aDiff['vots'][1][$nKey][4];
+                        }
+                        // If the same, toss.
+                        if (in_array($aLOVDVot, $aDiff['vots'][1])) {
+                            // We have this one also in the new data. It's unchanged.
+                            unset($aDiff['vots'][0][$nKey]);
+                            unset($aDiff['vots'][1][$nKey]);
+                        }
+                    }
+                    if (!count($aDiff['vots'][0])) {
+                        // No real diff. Just additions by us.
+                        unset($aDiff['vots']);
+                    }
+                }
+
+                if ($aDiff) {
+                    var_dump($sVariant, $aDiff);
+                }
+                $aVariantsUpdated[$sChromosome] ++;
+                continue;
+            }
+
+
+
+            // STUB; This is where the update will run.
+
+
+
+
+
+
+
+            $aVariantsUpdated[$sChromosome] ++;
+            continue;
+        }
+    }
+
+
+
+
+    // STUB: This is where to handle insertions and deletions.
+
+
+
+
+    $nVariantsDone ++;
+}
+
+// Final message.
+$nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
+lovd_printIfVerbose(VERBOSITY_MEDIUM,
+    ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
+        5, ' ', STR_PAD_LEFT) . '%] Chromosome ' . $sChromosome . ' completed.' . "\n" .
+    '                   Variants created: ' . $aVariantsCreated[$sChromosome] . ".\n" .
+    '                   Variants updated: ' . $aVariantsUpdated[$sChromosome] . ".\n" .
+    '                   Variants deleted: ' . $aVariantsDeleted[$sChromosome] . ".\n\n" .
+    ' ' . date('H:i:s', time() - $tStart) . ' [Totals] Variants created: ' . array_sum($aVariantsCreated) . ".\n" .
+    '                   Variants updated: ' . array_sum($aVariantsUpdated) . ".\n" .
+    '                   Variants deleted: ' . array_sum($aVariantsDeleted) . ".\n\n");
 ?>
