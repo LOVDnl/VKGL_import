@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-07-05
+ * Modified    : 2019-07-09
  * Version     : 0.0
  * For LOVD+   : 3.0-22
  *
@@ -802,6 +802,11 @@ $nVariantsAddedToCache = 0;
 $nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you can see the progress.
 $tProgressReported = microtime(true); // Don't report progress again within a certain amount of time.
 foreach ($aData as $sID => $aVariant) {
+    // VKGL stores chrM data as "MT".
+    if ($aVariant['chromosome'] == 'MT') {
+        $aVariant['chromosome'] = 'M';
+    }
+
     if (!isset($_SETT['human_builds'][$_CONFIG['user']['refseq_build']]['ncbi_sequences'][$aVariant['chromosome']])) {
         // Can't get chromosome's NC refseq?
         lovd_printIfVerbose(VERBOSITY_LOW,
@@ -904,6 +909,10 @@ foreach ($aData as $sID => $aVariant) {
         $aMutalyzerMappings = array();
         foreach ($aResult['legend'] as $aLegend) {
             // We'll store all mappings, since we don't know which ones we want.
+            if ($aVariant['chromosome'] == 'M' && empty($aLegend['id'])) {
+                $aLegend['id'] = $_SETT['human_builds'][$_CONFIG['user']['refseq_build']]['ncbi_sequences'][$aVariant['chromosome']] .
+                    '(' . $aLegend['name'] . ')';
+            }
             $aMutalyzerTranscripts[$aLegend['name']] = $aLegend['id'];
         }
 
