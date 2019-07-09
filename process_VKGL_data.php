@@ -966,6 +966,8 @@ foreach ($aData as $sID => $aVariant) {
             //  and the cache may be manually updated. Adding a line to the cache may be reversed when the cache
             //  is resorted. All in all, to keep things consistent, let's stick to what we have.
             // Add only to the cache when we don't know the mappings of the corrected variant yet.
+            // Indicate which method we used.
+            $aMutalyzerMappings['methods'] = array('runMutalyzerLight');
             file_put_contents($_CONFIG['user']['mutalyzer_cache_mapping'], $sVariantCorrected . "\t" . json_encode($aMutalyzerMappings) . "\n", FILE_APPEND);
             $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected] = $aMutalyzerMappings;
         }
@@ -1239,6 +1241,9 @@ foreach ($aData as $sVariant => $aVariant) {
 
     // Go through the possible mappings to see which ones we'll store, based on the transcripts we have in LOVD.
     foreach ($aPossibleMappings as $sTranscript => $aMapping) {
+        if ($sTranscript == 'methods') {
+            continue;
+        }
         if (isset($aTranscripts[$sTranscript])) {
             // Match with LOVD's transcript.
             $aVariant['mappings'][$sTranscript] = array(
@@ -1253,7 +1258,7 @@ foreach ($aData as $sVariant => $aVariant) {
     }
 
     // Check if we have anything now.
-    if (!count($aVariant['mappings'])) {
+    if (!count($aVariant['mappings']) && (empty($aPossibleMappings['methods']) || !in_array('numberConversion', $aPossibleMappings['methods']))) {
         // Mutalyzer came up with none of LOVD's transcripts.
         // The problem with our method of using runMutalyzer for everything, is that you only use the NC,
         //  and as such you only get the latest transcripts. Mappings on older transcripts are not provided,
@@ -1286,7 +1291,7 @@ foreach ($aData as $sVariant => $aVariant) {
         // The LOVD transcript can only be *older*.
         foreach ($aPossibleMappings as $sTranscript => $aMapping) {
             // Check if this transcript is in the numberConversion output, which is a requirement.
-            if (!isset($aPositionConverterTranscripts[$sTranscript])) {
+            if ($sTranscript == 'methods' || !isset($aPositionConverterTranscripts[$sTranscript])) {
                 // We can't match, then.
                 continue;
             }
@@ -1294,17 +1299,18 @@ foreach ($aData as $sVariant => $aVariant) {
             // Isolate version.
             list($sTranscriptNoVersion, $nVersion) = explode('.', $sTranscript, 2);
             for ($i = $nVersion; $i > 0; $i --) {
-                if (isset($aTranscripts[$sTranscriptNoVersion . '.' . $i])
-                    && isset($aPositionConverterTranscripts[$sTranscriptNoVersion . '.' . $i])) {
-                    // Match with LOVD's transcript, and Mutalyzer's numberConversion's results.
-                    // Now check if both transcripts have the same cDNA prediction.
-                    if ($aPositionConverterTranscripts[$sTranscript]
-                        == $aPositionConverterTranscripts[$sTranscriptNoVersion . '.' . $i]) {
-                        // NumberConversion has the same results for both transcripts.
-                        // That means the protein prediction based on the NC would be the same as well.
+                // First, check if both transcripts have the same cDNA prediction.
+                if (isset($aPositionConverterTranscripts[$sTranscriptNoVersion . '.' . $i])
+                    && $aPositionConverterTranscripts[$sTranscript] == $aPositionConverterTranscripts[$sTranscriptNoVersion . '.' . $i]) {
+                    // NumberConversion has the same results for both transcripts.
+                    // That means the protein prediction based on the NC would be the same as well.
+                    // Store this useful transcript in the cache.
+                    $_CACHE['mutalyzer_cache_mapping'][$sVariant][$sTranscriptNoVersion . '.' . $i] =
+                        $aPossibleMappings[$sTranscript];
+                    // Now check if LOVD has this transcript, perhaps.
+                    if (isset($aTranscripts[$sTranscriptNoVersion . '.' . $i])) {
+                        // Match with LOVD's transcript, and Mutalyzer's numberConversion's results.
                         // Accept the corrected mapping of the newest transcript for the lower version which is in LOVD.
-                        $_CACHE['mutalyzer_cache_mapping'][$sVariant][$sTranscriptNoVersion . '.' . $i] =
-                            $aPossibleMappings[$sTranscript];
                         $aVariant['mappings'][$sTranscriptNoVersion . '.' . $i] = array(
                             'DNA' => $aMapping['c'],
                             'protein' => '', // Always set it.
@@ -1322,39 +1328,45 @@ foreach ($aData as $sVariant => $aVariant) {
 
 
 
-        // See if we solved it now.
-        if (!count($aVariant['mappings'])) {
-            // Nope...
-            // Just report. We still want the variant.
-
-            // Perhaps we can work around it even more, but I want to see if that is necessary to build.
-            // Perhaps there is an older version of the transcripts, but the mapping doesn't match? Then just run name checker.
-            // If this is not enough, then use mappingInfo to enforce mapping on an available transcript?
-            // https://test.mutalyzer.nl/json/mappingInfo?LOVD_ver=3.0-21&build=hg19&accNo=NM_002225.3&variant=g.40680000C%3ET
-            // This will work even if the transcript is too far away for Mutalyzer to annotate it.
-            lovd_printIfVerbose(VERBOSITY_MEDIUM,
-                ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
-                    floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
-                    5, ' ', STR_PAD_LEFT) . '%] Warning: No LOVD transcript for variant ' . $sVariant . ".\n" .
-                '                   Given mappings: ' . implode(', ', array_keys($aPossibleMappings)) . ".\n" .
-                '                   Also found: ' . implode(', ', array_diff(array_keys($aPositionConverterTranscripts), array_keys($aPossibleMappings))) . ".\n" .
-                '                   VKGL data: ' . implode(', ', $aVariant['gene']) . '; ' . implode(', ', $aVariant['transcript']) . ".\n");
-            $nWarningsOccurred ++;
-            $nVariantsDone ++;
-            $tProgressReported = microtime(true); // Don't report progress for a certain amount of time.
-            $aData[$sVariant] = $aVariant; // But store updates.
-            continue; // Next variant.
-        }
-
-
-
-        // So using the numberConversion helped. Update cache!
+        // Update cache, whether this was useful or not. We don't want to keep repeating this call.
         // Yes, this will add an additional line to the cache for this variant. When reading the cache,
         //  the second line will overwrite the first. Sorting the cache will not cause problems.
         // However, we'll need to clean this cache in the future, and remove double mappings.
         $aPossibleMappings = $_CACHE['mutalyzer_cache_mapping'][$sVariant];
+        if (empty($aPossibleMappings['methods'])) {
+            // Older mappings don't have this value yet, but surely we have the data from there.
+            $aPossibleMappings['methods'] = array('runMutalyzerLight');
+        }
+        $aPossibleMappings['methods'][] = 'numberConversion'; // This stops calling this method again.
         file_put_contents($_CONFIG['user']['mutalyzer_cache_mapping'], $sVariant . "\t" . json_encode($aPossibleMappings) . "\n", FILE_APPEND);
         $nVariantsAddedToCache ++;
+    }
+
+
+
+    // See if we solved it now.
+    if (!count($aVariant['mappings'])) {
+        // Nope...
+        // Just report. We still want the variant.
+
+        // Perhaps we can work around it even more, but I want to see if that is necessary to build.
+        // Perhaps there is an older version of the transcripts, but the mapping doesn't match? Then just run name checker.
+        // If this is not enough, then use mappingInfo to enforce mapping on an available transcript?
+        // https://test.mutalyzer.nl/json/mappingInfo?LOVD_ver=3.0-21&build=hg19&accNo=NM_002225.3&variant=g.40680000C%3ET
+        // This will work even if the transcript is too far away for Mutalyzer to annotate it.
+        lovd_printIfVerbose(VERBOSITY_MEDIUM,
+            ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                5, ' ', STR_PAD_LEFT) . '%] Warning: No LOVD transcript for variant ' . $sVariant . ".\n" .
+            '                   Given mappings: ' . implode(', ', array_diff(array_keys($aPossibleMappings), array('methods'))) . ".\n" .
+            (empty($aPositionConverterTranscripts)? '' :
+                '                   Also found: ' . implode(', ', array_diff(array_keys($aPositionConverterTranscripts), array_keys($aPossibleMappings))) . ".\n") .
+            '                   VKGL data: ' . implode(', ', $aVariant['gene']) . '; ' . implode(', ', $aVariant['transcript']) . ".\n");
+        $nWarningsOccurred ++;
+        $nVariantsDone ++;
+        $tProgressReported = microtime(true); // Don't report progress for a certain amount of time.
+        $aData[$sVariant] = $aVariant; // But store updates.
+        continue; // Next variant.
     }
 
 
