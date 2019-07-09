@@ -1022,6 +1022,22 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
 // Loop variants again, merging entries.
 $nVariantsMerged = 0;
 foreach ($aData as $sID => $aVariant) {
+    // Merging makes reconstructing some fields much harder, so link them now.
+    $aVariant['published_as'] = '';
+    if ($aVariant['c_dna']) {
+        $aVariant['published_as'] = $aVariant['gene'] . '(' . $aVariant['transcript'] . '):' . $aVariant['c_dna'];
+    }
+    if ($aVariant['protein']) {
+        // We sometimes get multiple protein descriptions in one field.
+        $sProtein = implode(', ', array_unique(array_map(function ($sValue) {
+            if (strpos($sValue, ':') !== false) {
+                list(, $sValue) = explode(':', $sValue);
+            }
+            return trim($sValue);
+        }, explode(',', $aVariant['protein']))));
+        $aVariant['published_as'] .= (!$aVariant['published_as']? '' : ' ') . '(' . $sProtein . ')';
+    }
+
     // Simple merge.
     if (!isset($aData[$aVariant['VariantOnGenome/DNA']])) {
         $aData[$aVariant['VariantOnGenome/DNA']] = $aVariant;
@@ -1181,6 +1197,9 @@ foreach ($aData as $sVariant => $aVariant) {
             unset($aVariant['protein'][$nKey]);
         }
 
+        // Published as.
+        $aVariant['published_as'] = array_unique($aVariant['published_as']);
+
         // VariantOnGenome/DNA, we grouped on this, so just remove.
         $aVariant['VariantOnGenome/DNA'] = current($aVariant['VariantOnGenome/DNA']);
 
@@ -1195,6 +1214,7 @@ foreach ($aData as $sVariant => $aVariant) {
         } else {
             $aVariant['protein'] = array();
         }
+        $aVariant['published_as'] = array($aVariant['published_as']);
     }
 
     $aData[$sVariant] = $aVariant;
@@ -1570,66 +1590,11 @@ foreach ($aData as $sVariant => $aVariant) {
         lovd_getVariantInfo($sDNA)
     );
 
-    // Build "Published as" field.
-    // We uniqued the gene, transcript, c_dna and protein fields to make it easier for us,
-    //  but that also causes some unwanted side effects.
-    // Multiple genes, but only one transcript and cDNA descriptions. Probably the gene symbol changed.
-    while (count($aVariant['gene']) > count($aVariant['transcript'])
-        && count($aVariant['transcript']) == count($aVariant['c_dna'])) {
-        // We don't know which one is correct, we could check LOVD, but that's too much work for now.
-        // Just unset the last one.
-        unset($aVariant['gene'][count($aVariant['gene'])-1]);
-    }
-
-    $aVariant['published_as'] = '';
-    if (count($aVariant['gene']) == 1) {
-        if (count($aVariant['transcript']) == 1 || count($aVariant['c_dna']) == 1) {
-            // Simple, we just have one gene, and one transcript or one cDNA description.
-            foreach ($aVariant['transcript'] as $sTranscript) {
-                foreach ($aVariant['c_dna'] as $scDNA) {
-                    $aVariant['published_as'] .= (!$aVariant['published_as']? '' : ', ') .
-                        $aVariant['gene'][0] . '(' . $sTranscript . '):' . $scDNA;
-                }
-            }
-        } elseif (count($aVariant['transcript']) == count($aVariant['c_dna'])) {
-            // Same number of transcripts and DNA. Just match them.
-            for ($i = 0; $i < count($aVariant['transcript']); $i ++) {
-                $aVariant['published_as'] .= (!$aVariant['published_as']? '' : ', ') .
-                    $aVariant['gene'][0] . '(' . $aVariant['transcript'][$i] . '):' . $aVariant['c_dna'][$i];
-            }
-        }
-    } elseif (count($aVariant['gene']) == count($aVariant['transcript'])
-        && count($aVariant['transcript']) == count($aVariant['c_dna'])) {
-        // Multiple genes, but at least the same number of transcripts and DNA descriptions, too.
-        for ($i = 0; $i < count($aVariant['transcript']); $i ++) {
-            $aVariant['published_as'] .= (!$aVariant['published_as']? '' : ', ') .
-                $aVariant['gene'][$i] . '(' . $aVariant['transcript'][$i] . '):' . $aVariant['c_dna'][$i];
-        }
-    } else {
-        // Currently, we fail hard. We do so to see if we can optimize this code. Once we don't think
-        //  we can do anything useful anymore, remove this else. An empty field would then be acceptable.
-        lovd_printIfVerbose(VERBOSITY_LOW,
-            'Error: Cannot construct Published As field for ' . $sVariant . ".\n" .
-            '                   IDs: ' . implode("\n                        ", $aVariant['id']) . "\n\n");
-        die(EXIT_ERROR_DATA_CONTENT_ERROR);
-    }
-
-    // Add protein. Don't care about how many genes etc, it's too much work to
-    //  handle all the exceptions and the column is not *that* important.
-    if ($aVariant['protein']) {
-        $aVariant['published_as'] .= ' (';
-        foreach ($aVariant['protein'] as $nKey => $sProtein) {
-            // We sometimes get multiple protein descriptions in one field.
-            $sProtein = implode(', ', array_unique(array_map(function ($sValue) {
-                if (strpos($sValue, ':') !== false) {
-                    list(, $sValue) = explode(':', $sValue);
-                }
-                return trim($sValue);
-            }, explode(',', $sProtein))));
-            $aVariant['published_as'] .= (!$nKey? '' : ', ') . $sProtein;
-        }
-        $aVariant['published_as'] .= ')';
-    }
+    // We've built the "Published as" field before merging the entries, which made it much easier.
+    sort($aVariant['published_as']);
+    $aVariant['published_as'] = implode(', ', $aVariant['published_as']);
+    // Do limit the input a bit, 150 should be enough.
+    $aVariant['published_as'] = lovd_shortenString($aVariant['published_as'], 150);
 
     // Loop through centers who found this variant.
     foreach ($aVariant['classifications'] as $sCenter => $sClassification) {
