@@ -154,6 +154,11 @@ function lovd_getVariantDescription (&$aVariant, $sRef, $sAlt)
         }
     }
 
+    // No variant?
+    if ($sRef == $sAlt) {
+        return false;
+    }
+
     // Use the right prefix for the numbering scheme.
     $sHGVSPrefix = 'g.';
     if ($aVariant['chromosome'] == 'M') {
@@ -235,6 +240,8 @@ function lovd_getVariantDescription (&$aVariant, $sRef, $sAlt)
             }
         }
     }
+
+    return true;
 }
 
 
@@ -828,7 +835,19 @@ foreach ($aData as $sID => $aVariant) {
     // Use LOVD+'s lovd_getVariantDescription() to build the HGVS from the VCF fields.
     // Also adds fields that we currently won't use yet since we don't know yet if this HGVS is correct.
     $aVariant['position'] = $aVariant['start']; // The function needs this.
-    lovd_getVariantDescription($aVariant, $aVariant['ref'], $aVariant['alt']);
+    if (!lovd_getVariantDescription($aVariant, $aVariant['ref'], $aVariant['alt'])) {
+        // Returns false if Ref and Alt are equal (or both empty).
+        lovd_printIfVerbose(VERBOSITY_MEDIUM,
+            ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                5, ' ', STR_PAD_LEFT) . '%] Warning: Error for variant ' . $sID . ' (' . implode(', ', array_keys($aVariant['classifications'])) . ").\n" .
+            '                   Could not construct DNA field.' . "\n");
+        $nWarningsOccurred ++;
+        $nVariantsLost ++;
+        $nVariantsDone ++;
+        unset($aData[$sID]); // We don't want to continue working with this variant.
+        continue; // Next variant.
+    }
 
     // Previously we were skipping substitutions for this step, but runMutalyzerLight provides us with
     //  all mappings as well, as well as all protein predictions, and we still need those.
@@ -961,6 +980,9 @@ foreach ($aData as $sID => $aVariant) {
 
     // Store corrected variant description.
     $aVariant['VariantOnGenome/DNA'] = $sVariantCorrected;
+
+    // Clean transcript, it sometimes ends in colon or comma.
+    $aVariant['transcript'] = rtrim($aVariant['transcript'], ' ,:');
 
     // Store new information, dropping some excess information.
     unset($aVariant['position']); // Never needed.
@@ -1162,6 +1184,7 @@ foreach ($aData as $sVariant => $aVariant) {
 
     } else {
         // Better always have arrays here, which makes the code simpler.
+        $aVariant['id'] = array($aVariant['id']);
         $aVariant['gene'] = array($aVariant['gene']);
         $aVariant['transcript'] = array($aVariant['transcript']);
         $aVariant['c_dna'] = array($aVariant['c_dna']);
@@ -1240,7 +1263,7 @@ foreach ($aData as $sVariant => $aVariant) {
         //  and the newer transcript are the same, then the protein predictions will also be the same.
         // So the fastest thing to do is to do a numberConversion() and check.
         $aResult = json_decode(file_get_contents($_CONFIG['mutalyzer_URL'] . '/json/numberConversion?build=' . $_CONFIG['user']['refseq_build'] . '&variant=' . $sVariant), true);
-        if (!$aResult) {
+        if ($aResult === false) {
             // Error? Just report. They must be new variants, anyway.
             lovd_printIfVerbose(VERBOSITY_MEDIUM,
                 ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
@@ -1603,8 +1626,10 @@ foreach ($aData as $sVariant => $aVariant) {
         $aVOGEntry = array(
             'id' => null,
             'allele' => '0', // Unknown.
-            'effectid' => $_CONFIG['effect_mapping_LOVD'][$sClassification] .
-                // Default to "Not curated", unless a user filled something in already.
+            // Don't let internal conflicts cause notices here.
+            'effectid' => (!isset($_CONFIG['effect_mapping_LOVD'][$sClassification])? 0 :
+                $_CONFIG['effect_mapping_LOVD'][$sClassification]) .
+                // Default to "Not curated" for concluded effect, unless a user filled something in already.
                 (!isset($aDataLOVD[$sLOVDKey])? '0' : substr($aDataLOVD[$sLOVDKey]['effectid'], -1)),
             'position_g_start' => $aVariant['position_start'],
             'position_g_end' => $aVariant['position_end'],
@@ -1626,7 +1651,9 @@ foreach ($aData as $sVariant => $aVariant) {
             $aVOGEntry['vots'][] = array(
                 $aTranscripts[$nTranscriptID]['id'],
                 $aVOGEntry['effectid'],
-                $_CONFIG['effect_mapping_classification'][$sClassification],
+                // Don't let internal conflicts cause notices here.
+                (!isset($_CONFIG['effect_mapping_classification'][$sClassification])? '' :
+                    $_CONFIG['effect_mapping_classification'][$sClassification]),
                 $aMapping['DNA'],
                 $aMapping['RNA'],
                 $aMapping['protein'],
