@@ -1508,6 +1508,7 @@ $tProgressReported = microtime(true); // Don't report progress again within a ce
 $aVariantsCreated = array(); // Counters per chromosome.
 $aVariantsUpdated = array(); // Counters per chromosome.
 $aVariantsDeleted = array(); // Counters per chromosome.
+$aVariantsSkipped = array(); // Counters per chromosome.
 $sNow = date('Y-m-d H:i:s');
 
 // Process updates per chromosome, but show progress over the total number of variants.
@@ -1535,7 +1536,8 @@ foreach ($aData as $sVariant => $aVariant) {
                     5, ' ', STR_PAD_LEFT) . '%] Chromosome ' . $sChromosome . ' completed.' . "\n" .
                 '                   Variants created: ' . $aVariantsCreated[$sChromosome] . ".\n" .
                 '                   Variants updated: ' . $aVariantsUpdated[$sChromosome] . ".\n" .
-                '                   Variants deleted: ' . $aVariantsDeleted[$sChromosome] . ".\n");
+                '                   Variants deleted: ' . $aVariantsDeleted[$sChromosome] . ".\n" .
+                '                   Variants skipped: ' . $aVariantsSkipped[$sChromosome] . ".\n");
             $tProgressReported = microtime(true); // Don't report again for a certain amount of time.
         }
 
@@ -1551,6 +1553,7 @@ foreach ($aData as $sVariant => $aVariant) {
         $aVariantsCreated[$sChromosome] = 0;
         $aVariantsUpdated[$sChromosome] = 0;
         $aVariantsDeleted[$sChromosome] = 0;
+        $aVariantsSkipped[$sChromosome] = 0;
 
         // Load the data currently in the database.
         // Note, that if there are two entries of the same variant by the same center, we see only *one*.
@@ -1630,7 +1633,7 @@ foreach ($aData as $sVariant => $aVariant) {
         // Fill VOTs.
         foreach ($aVariant['mappings'] as $sTranscript => $aMapping) {
             $aVOGEntry['vots'][$aTranscripts[$sTranscript]] = array(
-                'id' => $aTranscripts[$sTranscript],
+                'transcriptid' => $aTranscripts[$sTranscript],
                 'effectid' => $aVOGEntry['effectid'],
                 // Don't let internal conflicts cause notices here.
                 'VariantOnTranscript/Classification' => (!isset($_CONFIG['effect_mapping_classification'][$sClassification])? '' :
@@ -1650,7 +1653,7 @@ foreach ($aData as $sVariant => $aVariant) {
             // Make it easier to compare with our array.
             // Build array from JSON object, if we have it.
             if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public']) {
-                $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] = json_decode($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public']);
+                $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] = json_decode($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'], true);
                 if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] === false) {
                     // Somebody malformed this field...
                     lovd_printIfVerbose(VERBOSITY_LOW,
@@ -1669,7 +1672,7 @@ foreach ($aData as $sVariant => $aVariant) {
                 foreach ($aVOTs as $sVOT) {
                     $aVOT = explode(';', $sVOT);
                     $aDataLOVD[$sLOVDKey]['vots'][$aVOT[0]] = array(
-                        'id' => $aVOT[0],
+                        'transcriptid' => $aVOT[0],
                         'effectid' => $aVOT[1],
                         'VariantOnTranscript/Classification' => $aVOT[2],
                         'VariantOnTranscript/DNA' => $aVOT[3],
@@ -1816,15 +1819,70 @@ foreach ($aData as $sVariant => $aVariant) {
 
 
 
-            // STUB; This is where the update will run.
+            // Run update, if needed.
+            if ($aDiff && !$bDebug) {
+                // Update atomically, we don't want half updates.
+                $_DB->beginTransaction();
 
+                // Start with the VOTs.
+                if (isset($aDiff['vots'])) {
+                    foreach (array_unique(array_merge(array_keys($aDiff['vots'][0]), array_keys($aDiff['vots'][1]))) as $nTranscriptID) {
+                        if (!isset($aDiff['vots'][0][$nTranscriptID])) {
+                            // Add the transcript.
+                            $aVOT = $aDiff['vots'][1][$nTranscriptID];
+                            $_DB->query('INSERT INTO ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
+                              (id, ' . implode(', ', array_map(function ($sField) {
+                                  return '`' . $sField . '`';
+                              }, array_keys($aVOT))) . ')
+                              VALUES (?' . str_repeat(', ?', count($aVOT)) . ')', array_merge(array($aVOGEntry['id']), array_values($aVOT)));
 
+                        } elseif (!isset($aDiff['vots'][1][$nTranscriptID])) {
+                            // Remove the transcript.
+                            $_DB->query('DELETE FROM ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
+                              WHERE id = ? AND transcriptid = ?', array($aVOGEntry['id'], $nTranscriptID));
 
+                        } elseif ($aDiff['vots'][0][$nTranscriptID] != $aDiff['vots'][1][$nTranscriptID]) {
+                            // Update the transcript, remove 'transcriptid' as an updateable field (it shouldn't be there, but still).
+                            $aFieldsToUpdate = array_diff_key($aDiff['vots'][1][$nTranscriptID], array('transcriptid' => 0));
+                            $_DB->query('UPDATE ' . TABLE_VARIANTS_ON_TRANSCRIPTS . ' SET ' .
+                                implode(', ', array_map(function ($sField) {
+                                    return '`' . $sField . '` = ?';
+                                }, array_keys($aFieldsToUpdate))) . '
+                              WHERE id = ? AND transcriptid = ?', array_merge(array_values($aFieldsToUpdate), array($aVOGEntry['id'], $nTranscriptID)));
+                        }
+                    }
+                    unset($aDiff['vots']); // So we don't run into it anymore.
+                }
 
+                // Update the VOG, remove 'id' as an updateable field (it shouldn't be there, but still).
+                $aFieldsToUpdate = array();
+                foreach ($aDiff as $sKey => $aColDiff) {
+                    if ($sKey != 'id') {
+                        if ($sKey == 'VariantOnGenome/Remarks_Non_Public') {
+                            $aFieldsToUpdate[$sKey] = json_encode($aColDiff[1]);
+                        } else {
+                            $aFieldsToUpdate[$sKey] = $aColDiff[1];
+                        }
+                    }
+                }
+                $aFieldsToUpdate['edited_by'] = 0;
+                $aFieldsToUpdate['edited_date'] = $sNow;
 
+                $_DB->query('UPDATE ' . TABLE_VARIANTS . ' SET ' .
+                    implode(', ', array_map(function ($sField) {
+                        return '`' . $sField . '` = ?';
+                    }, array_keys($aFieldsToUpdate))) . '
+                              WHERE id = ?', array_merge(array_values($aFieldsToUpdate), array($aVOGEntry['id'])));
 
+                // If we get here, everything went well.
+                $_DB->commit();
 
-            $aVariantsUpdated[$sChromosome] ++;
+                $aVariantsUpdated[$sChromosome] ++;
+                continue;
+            }
+
+            // If we get here, there was nothing to update, data is still the same.
+            $aVariantsSkipped[$sChromosome] ++;
             continue;
         }
     }
@@ -1847,8 +1905,10 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
         5, ' ', STR_PAD_LEFT) . '%] Chromosome ' . $sChromosome . ' completed.' . "\n" .
     '                   Variants created: ' . $aVariantsCreated[$sChromosome] . ".\n" .
     '                   Variants updated: ' . $aVariantsUpdated[$sChromosome] . ".\n" .
-    '                   Variants deleted: ' . $aVariantsDeleted[$sChromosome] . ".\n\n" .
+    '                   Variants deleted: ' . $aVariantsDeleted[$sChromosome] . ".\n" .
+    '                   Variants skipped: ' . $aVariantsSkipped[$sChromosome] . ".\n\n" .
     ' ' . date('H:i:s', time() - $tStart) . ' [Totals] Variants created: ' . array_sum($aVariantsCreated) . ".\n" .
     '                   Variants updated: ' . array_sum($aVariantsUpdated) . ".\n" .
-    '                   Variants deleted: ' . array_sum($aVariantsDeleted) . ".\n\n");
+    '                   Variants deleted: ' . array_sum($aVariantsDeleted) . ".\n" .
+    '                   Variants skipped: ' . array_sum($aVariantsSkipped) . ".\n\n");
 ?>
