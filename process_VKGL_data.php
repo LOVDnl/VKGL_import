@@ -1241,11 +1241,11 @@ $nVariantsAddedToCache = 0;
 $nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you can see the progress.
 $tProgressReported = microtime(true); // Don't report progress again within a certain amount of time.
 
-// Store all of LOVD's transcripts, we need them; array(id_ncbi => array(data)).
+// Store all of LOVD's transcripts, we need them; array(id_ncbi => id).
 $aTranscripts = $_DB->query('
     SELECT id_ncbi, id
     FROM ' . TABLE_TRANSCRIPTS . '
-    ORDER BY id_ncbi')->fetchAllGroupAssoc();
+    ORDER BY id_ncbi')->fetchAllCombine();
 
 foreach ($aData as $sVariant => $aVariant) {
     $aVariant['mappings'] = array(); // What we'll store in LOVD.
@@ -1619,14 +1619,18 @@ foreach ($aData as $sVariant => $aVariant) {
             'VariantOnGenome/Genetic_origin' => 'CLASSIFICATION record',
             'VariantOnGenome/Published_as' => $aVariant['published_as'],
             'VariantOnGenome/Remarks' => 'VKGL data sharing initiative Nederland',
-            'VariantOnGenome/Remarks_Non_Public' => '',
+            'VariantOnGenome/Remarks_Non_Public' => array(
+                'warning' => 'Do not remove or edit this field!',
+                'ids' => $aVariant['id'],
+                'updates' => array(),
+            ),
             'vots' => array(),
         );
 
         // Fill VOTs.
         foreach ($aVariant['mappings'] as $sTranscript => $aMapping) {
-            $aVOGEntry['vots'][$aTranscripts[$sTranscript]['id']] = array(
-                'id' => $aTranscripts[$sTranscript]['id'],
+            $aVOGEntry['vots'][$aTranscripts[$sTranscript]] = array(
+                'id' => $aTranscripts[$sTranscript],
                 'effectid' => $aVOGEntry['effectid'],
                 // Don't let internal conflicts cause notices here.
                 'VariantOnTranscript/Classification' => (!isset($_CONFIG['effect_mapping_classification'][$sClassification])? '' :
@@ -1643,11 +1647,20 @@ foreach ($aData as $sVariant => $aVariant) {
         if (isset($aDataLOVD[$sLOVDKey])) {
             // Variant has been seen already by this center.
 
-            // Make my life easier, just copy some values.
-            $aVOGEntry['id'] = $aDataLOVD[$sLOVDKey]['id'];
-            $aVOGEntry['VariantOnGenome/DBID'] = $aDataLOVD[$sLOVDKey]['VariantOnGenome/DBID'];
-
             // Make it easier to compare with our array.
+            // Build array from JSON object, if we have it.
+            if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public']) {
+                $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] = json_decode($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public']);
+                if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] === false) {
+                    // Somebody malformed this field...
+                    lovd_printIfVerbose(VERBOSITY_LOW,
+                        'Error: Variant ID ' . $sID . ' has an unparsable JSON object.' . "\n\n");
+                    die(EXIT_ERROR_DATA_CONTENT_ERROR);
+                }
+            } else {
+                $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] = array();
+            }
+            // Rebuild VOTs.
             if (!$aDataLOVD[$sLOVDKey]['vots']) {
                 $aDataLOVD[$sLOVDKey]['vots'] = array();
             } else {
@@ -1666,6 +1679,14 @@ foreach ($aData as $sVariant => $aVariant) {
                 }
                 ksort($aDataLOVD[$sLOVDKey]['vots']);
             }
+
+            // Make my life easier, just copy some values.
+            $aVOGEntry['id'] = $aDataLOVD[$sLOVDKey]['id'];
+            $aVOGEntry['VariantOnGenome/DBID'] = $aDataLOVD[$sLOVDKey]['VariantOnGenome/DBID'];
+            $aVOGEntry['VariantOnGenome/Remarks_Non_Public'] = array_merge(
+                $aVOGEntry['VariantOnGenome/Remarks_Non_Public'],
+                $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public']
+            );
 
             // NOTE: This is debugging code. It checks the differences, and reports them, instead of running the update.
             $bDebug = false;
@@ -1703,7 +1724,27 @@ foreach ($aData as $sVariant => $aVariant) {
                         $Value,
                         (!isset($aVOGEntry[$sKey])? 'NULL' : $aVOGEntry[$sKey]),
                     );
+                    // Also report differences.
+                    if ($sKey == 'vots') {
+                        // We won't report changes per field here, just per transcript.
+                        foreach (array_unique(array_merge(array_keys($aDiff['vots'][0]), array_keys($aDiff['vots'][1]))) as $nTranscriptID) {
+                            if (!isset($aDiff['vots'][0][$nTranscriptID])) {
+                                $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Added mapping to transcript ' . array_search($nTranscriptID, $aTranscripts) . '.';
+                            } elseif (!isset($aDiff['vots'][1][$nTranscriptID])) {
+                                $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Removed mapping to transcript ' . array_search($nTranscriptID, $aTranscripts) . '.';
+                            } elseif ($aDiff['vots'][0][$nTranscriptID] != $aDiff['vots'][1][$nTranscriptID]) {
+                                $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Updated mapping to transcript ' . array_search($nTranscriptID, $aTranscripts) . '.';
+                            }
+                        }
+                    } elseif ($sKey != 'VariantOnGenome/Remarks_Non_Public') {
+                        // Don't self-report, of course.
+                        $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey] = array($Value, $aVOGEntry[$sKey]);
+                    }
                 }
+            }
+            // Because we were building this while building up the diff array:
+            if ($aDiff && !$bDebug) {
+                $aDiff['VariantOnGenome/Remarks_Non_Public'][1] = $aVOGEntry['VariantOnGenome/Remarks_Non_Public'];
             }
 
             if ($bDebug) {
@@ -1732,6 +1773,8 @@ foreach ($aData as $sVariant => $aVariant) {
                 if (count($aDiff) == 1 && isset($aDiff['statusid'])) {
                     unset($aDiff['statusid']);
                 }
+                // Hide the JSON object, we know it works.
+                unset($aDiff['VariantOnGenome/Remarks_Non_Public']);
                 // Clean VOT changes, by removing VOTs from the diff array that are also in the new data.
                 if (isset($aDiff['vots'])) {
                     // Loop the original data's VOTs and see if we can find them in the new data.
