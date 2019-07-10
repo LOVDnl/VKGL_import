@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-07-09
+ * Modified    : 2019-07-10
  * Version     : 0.0
  * For LOVD+   : 3.0-22
  *
@@ -1444,8 +1444,8 @@ foreach ($aData as $sVariant => $aVariant) {
                     $aMapping['RNA'] = 'r.(=)';
                     $aMapping['protein'] = 'p.(=)';
 
-                } elseif ($aMapping['type'] != 'subst') {
-                    // Deletion/insertion partially in the transcript.
+                } elseif ($aMapping['type'] != 'subst' && $aMapping['protein'] != 'p.(=)') {
+                    // Deletion/insertion partially in the transcript, not predicted to do nothing.
                     $aMapping['RNA'] = 'r.?';
                     $aMapping['protein'] = 'p.?';
 
@@ -1624,20 +1624,20 @@ foreach ($aData as $sVariant => $aVariant) {
         );
 
         // Fill VOTs.
-        foreach ($aVariant['mappings'] as $nTranscriptID => $aMapping) {
-            $aVOGEntry['vots'][] = array(
-                $aTranscripts[$nTranscriptID]['id'],
-                $aVOGEntry['effectid'],
+        foreach ($aVariant['mappings'] as $sTranscript => $aMapping) {
+            $aVOGEntry['vots'][$aTranscripts[$sTranscript]['id']] = array(
+                'id' => $aTranscripts[$sTranscript]['id'],
+                'effectid' => $aVOGEntry['effectid'],
                 // Don't let internal conflicts cause notices here.
-                (!isset($_CONFIG['effect_mapping_classification'][$sClassification])? '' :
+                'VariantOnTranscript/Classification' => (!isset($_CONFIG['effect_mapping_classification'][$sClassification])? '' :
                     $_CONFIG['effect_mapping_classification'][$sClassification]),
-                $aMapping['DNA'],
-                $aMapping['RNA'],
-                $aMapping['protein'],
+                'VariantOnTranscript/DNA' => $aMapping['DNA'],
+                'VariantOnTranscript/RNA' => $aMapping['RNA'],
+                'VariantOnTranscript/Protein' => $aMapping['protein'],
             );
         }
         // For comparison reasons.
-        sort($aVOGEntry['vots']);
+        ksort($aVOGEntry['vots']);
 
         // If this entry already exists, simply update the record when needed.
         if (isset($aDataLOVD[$sLOVDKey])) {
@@ -1651,11 +1651,20 @@ foreach ($aData as $sVariant => $aVariant) {
             if (!$aDataLOVD[$sLOVDKey]['vots']) {
                 $aDataLOVD[$sLOVDKey]['vots'] = array();
             } else {
-                $aDataLOVD[$sLOVDKey]['vots'] = array_map(
-                    function ($aVOT) {
-                        return explode(';', $aVOT);
-                    }, explode(';;', $aDataLOVD[$sLOVDKey]['vots']));
-                sort($aDataLOVD[$sLOVDKey]['vots']);
+                $aVOTs = explode(';;', $aDataLOVD[$sLOVDKey]['vots']);
+                $aDataLOVD[$sLOVDKey]['vots'] = array();
+                foreach ($aVOTs as $sVOT) {
+                    $aVOT = explode(';', $sVOT);
+                    $aDataLOVD[$sLOVDKey]['vots'][$aVOT[0]] = array(
+                        'id' => $aVOT[0],
+                        'effectid' => $aVOT[1],
+                        'VariantOnTranscript/Classification' => $aVOT[2],
+                        'VariantOnTranscript/DNA' => $aVOT[3],
+                        'VariantOnTranscript/RNA' => $aVOT[4],
+                        'VariantOnTranscript/Protein' => $aVOT[5],
+                    );
+                }
+                ksort($aDataLOVD[$sLOVDKey]['vots']);
             }
 
             // NOTE: This is debugging code. It checks the differences, and reports them, instead of running the update.
@@ -1673,9 +1682,15 @@ foreach ($aData as $sVariant => $aVariant) {
                 // Differences that we found where mostly c.* variants now mapped to CDS variants. Otherwise, gene symbol changes but keeping the same transcripts.
                 // So if we have some kind of percentage, I'm happy already.
                 if (!$aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']
-                    || ($nPercentageMatch = similar_text($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'], $aVOGEntry['VariantOnGenome/Published_as']) / strlen($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']) * 100) > 20) {
+                    || ($nPercentageMatch = similar_text(
+                            $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'],
+                            $aVOGEntry['VariantOnGenome/Published_as'])
+                        / strlen($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']) * 100) >= 40) {
+                    // Good enough.
                     $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'] = $aVOGEntry['VariantOnGenome/Published_as'];
                 } else {
+                    // Not sure about this one. Keep the difference to report, but add the matching percentage,
+                    //  so we can see if we need to lower the threshold.
                     $aVOGEntry['VariantOnGenome/Published_as'] .= ' (' . round($nPercentageMatch, 2) . ')';
                 }
             }
@@ -1692,9 +1707,26 @@ foreach ($aData as $sVariant => $aVariant) {
             }
 
             if ($bDebug) {
-                // If diff is only the left of the classification, it's fine.
-                if (count($aDiff) == 1 && isset($aDiff['effectid']) && substr($aDiff['effectid'][0], -1) == substr($aDiff['effectid'][1], -1)) {
-                    unset($aDiff['effectid']);
+                // When the classification changes and becomes just a bit more or less sure, it's fine.
+                // Do check if the concluded effect doesn't change.
+                if (isset($aDiff['effectid']) && substr($aDiff['effectid'][0], -1) == substr($aDiff['effectid'][1], -1)) {
+                    $aEffects = array(
+                        substr($aDiff['effectid'][0], 0, 1),
+                        substr($aDiff['effectid'][1], 0, 1),
+                    );
+                    sort($aEffects);
+                    if (in_array(implode('', $aEffects), array('13', '35', '57', '79'))) {
+                        unset($aDiff['effectid']);
+                        // And do the same in the vots.
+                        if (isset($aDiff['vots'])) {
+                            foreach (array(0, 1) as $nKey) {
+                                $aDiff['vots'][$nKey] = array_map(function ($aVOT) {
+                                    unset($aVOT['effectid'], $aVOT['VariantOnTranscript/Classification']);
+                                    return $aVOT;
+                                }, $aDiff['vots'][$nKey]);
+                            }
+                        }
+                    }
                 }
                 // If diff is only the status change, it's fine.
                 if (count($aDiff) == 1 && isset($aDiff['statusid'])) {
@@ -1702,18 +1734,28 @@ foreach ($aData as $sVariant => $aVariant) {
                 }
                 // Clean VOT changes, by removing VOTs from the diff array that are also in the new data.
                 if (isset($aDiff['vots'])) {
-                    foreach ($aDiff['vots'][0] as $nKey => $aLOVDVot) {
-                        // Often the problem is that our RNA is better.
-                        if (isset($aDiff['vots'][1][$nKey])
-                            && $aDiff['vots'][0][$nKey][0] == $aDiff['vots'][1][$nKey][0]
-                            && $aDiff['vots'][0][$nKey][4] == 'r.(=)' && $aDiff['vots'][1][$nKey][4] == 'r.(?)') {
-                            $aLOVDVot[4] = $aDiff['vots'][1][$nKey][4];
+                    // Loop the original data's VOTs and see if we can find them in the new data.
+                    foreach ($aDiff['vots'][0] as $nTranscriptID => $aLOVDVot) {
+                        // Often the problem is that our RNA is better (and sometimes our Protein as well).
+                        if (isset($aDiff['vots'][1][$nTranscriptID])
+                            && in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', '-'))
+                            && in_array($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', 'r.(?)', 'r.spl?'))) {
+                            $aLOVDVot['VariantOnTranscript/RNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'];
+                            if (in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/Protein'], array('p.(=)', '-'))) {
+                                $aLOVDVot['VariantOnTranscript/Protein'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'];
+                            }
+                        }
+                        // Or, the DNA changed because we fixed it, but the protein change is the same.
+                        if (isset($aDiff['vots'][1][$nTranscriptID])
+                            && $aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/DNA'] != $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA']
+                            && $aLOVDVot['VariantOnTranscript/Protein'] == $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein']) {
+                            $aLOVDVot['VariantOnTranscript/DNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA'];
                         }
                         // If the same, toss.
-                        if (in_array($aLOVDVot, $aDiff['vots'][1])) {
+                        if (isset($aDiff['vots'][1][$nTranscriptID]) && $aLOVDVot == $aDiff['vots'][1][$nTranscriptID]) {
                             // We have this one also in the new data. It's unchanged.
-                            unset($aDiff['vots'][0][$nKey]);
-                            unset($aDiff['vots'][1][$nKey]);
+                            unset($aDiff['vots'][0][$nTranscriptID]);
+                            unset($aDiff['vots'][1][$nTranscriptID]);
                         }
                     }
                     if (!count($aDiff['vots'][0])) {
@@ -1723,7 +1765,7 @@ foreach ($aData as $sVariant => $aVariant) {
                 }
 
                 if ($aDiff) {
-                    var_dump($sVariant, $aDiff);
+                    var_dump($sVariant . ' (' . count($aVOGEntry['vots']) . ' VOTs)', $aDiff);
                 }
                 $aVariantsUpdated[$sChromosome] ++;
                 continue;
