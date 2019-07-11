@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-07-10
+ * Modified    : 2019-07-11
  * Version     : 0.0
  * For LOVD+   : 3.0-22
  *
@@ -1127,14 +1127,14 @@ foreach ($aData as $sVariant => $aVariant) {
 
     // Determine consensus (opposite, non-consensus, consensus, single-lab).
     $aVariant['status'] = '';
-    if (count($aVariant['classifications']) == 1) {
-        $aVariant['status'] = 'single-lab';
-        $aStatusCounts['single-lab'] ++;
-
-    } elseif ($bInternalConflict) {
+    if ($bInternalConflict) {
         // One center had a conflict, so we all have a conflict.
         $aVariant['status'] = 'opposite';
         $aStatusCounts['opposite'] ++;
+
+    } elseif (count($aVariant['classifications']) == 1) {
+        $aVariant['status'] = 'single-lab';
+        $aStatusCounts['single-lab'] ++;
 
     } else {
         // We should have clean, one-classification values.
@@ -1268,7 +1268,7 @@ foreach ($aData as $sVariant => $aVariant) {
             // Match with LOVD's transcript.
             $aVariant['mappings'][$sTranscript] = array(
                 'DNA' => $aMapping['c'],
-                'protein' => '', // Always set it.
+                'protein' => '-', // Always set it.
             );
             if (isset($aMapping['p'])) {
                 // Coding transcript, we have received a protein prediction from Mutalyzer.
@@ -1493,7 +1493,7 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
         5, ' ', STR_PAD_LEFT) . '%] ' .
     $nVariantsDone . ' transcript variants verified.' . "\n" .
     '                   Variants added to cache: ' . $nVariantsAddedToCache . ".\n\n" .
-    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Downloading VKGL data from LOVD and processing update...' . "\n");
+    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Downloading VKGL data from LOVD and preparing update...' . "\n");
 
 
 
@@ -1504,6 +1504,7 @@ ksort($aData);
 $nVariantsDone = 0;
 $nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you can see the progress.
 $tProgressReported = microtime(true); // Don't report progress again within a certain amount of time.
+$aAddToCache = array(); // LOVD variants that we don't know from the cache. Could help to add it.
 
 $aVariantsCreated = array(); // Counters per chromosome.
 $aVariantsUpdated = array(); // Counters per chromosome.
@@ -1561,7 +1562,7 @@ foreach ($aData as $sVariant => $aVariant) {
         $aDataLOVD = $_DB->query('
             SELECT CONCAT(vog.created_by, ":", ?, ":", vog.`VariantOnGenome/DNA`) AS ID,
               vog.id, vog.allele, vog.effectid, vog.position_g_start, vog.position_g_end, vog.type,
-              vog.created_by, vog.owned_by, vog.statusid,
+              vog.created_by, vog.owned_by, vog.statusid, vog.`VariantOnGenome/DNA`,
               vog.`VariantOnGenome/DBID`, vog.`VariantOnGenome/Genetic_origin`, vog.`VariantOnGenome/Published_as`,
               vog.`VariantOnGenome/Remarks`, vog.`VariantOnGenome/Remarks_Non_Public`,
               GROUP_CONCAT(vot.transcriptid, ";", vot.effectid, ";",
@@ -1576,6 +1577,39 @@ foreach ($aData as $sVariant => $aVariant) {
                 array($sRefSeq, $sChromosome),
                 array_values($aCenterIDs)))->fetchAllGroupAssoc();
 
+        // This code block will be useless later, but we want to check all LOVD data as well.
+        // Older data may not have been fully normalized, and we will find new records even though we already had them.
+        foreach ($aDataLOVD as $sLOVDKey => $aLOVDVariant) {
+            list($nCenter, $sVariant) = explode(':', $sLOVDKey, 2);
+            // Check if it exists in the NC cache as a different name. This assumes the variant has been cached before.
+            if (isset($_CACHE['mutalyzer_cache_NC'][$sVariant])) {
+                $sVariantCorrected = $_CACHE['mutalyzer_cache_NC'][$sVariant];
+                if ($sVariant != $sVariantCorrected) {
+                    // Check if this is not a cached error message.
+                    if ($sVariantCorrected{0} == '{') {
+                        // Variant is actually in error. These are OK to be removed, since we don't want them.
+                    } else {
+                        // Whoops. From a previous release, we have uncorrected data in LOVD. It won't match this way.
+                        // Correct the key; this will make a match possible. The update will then fix the entry's DNA field.
+                        $sLOVDNewKey = $nCenter . ':' . $sVariantCorrected;
+                        if (!isset($aDataLOVD[$sLOVDNewKey])) {
+                            // Let's not overwrite data...
+                            $aDataLOVD[$sLOVDNewKey] = $aLOVDVariant;
+                            unset($aDataLOVD[$sLOVDKey]);
+                        }
+                        // Else, hard delete the entry? We have an old notation for this center, but also the corrected.
+                    }
+                }
+                // If not, the variant was known, checked and OK, but well... I guess it disappeared?
+
+            } elseif (!in_array($sVariant, $_CACHE['mutalyzer_cache_NC'])) {
+                // We haven't seen this variant before. Not as an input to the cache, not as a result of the cache.
+                // Maybe it helps if we add it. We won't implement that here.
+                $aAddToCache[] = $sVariant;
+            }
+        }
+
+        // Report data loaded, and get to work.
         $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
         lovd_printIfVerbose(VERBOSITY_MEDIUM,
             ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
@@ -1618,6 +1652,7 @@ foreach ($aData as $sVariant => $aVariant) {
             // Created_date will be added later, right now we don't have it to prevent unneeded differences.
             'owned_by' => $aCenterIDs[$sCenter], // FIXME: Should be common VKGL account when this is a single lab submission.
             'statusid' => (string) ($aVariant['status'] == 'opposite'? STATUS_HIDDEN : STATUS_OK), // FIXME: Set to Marked if a warning occurred within this variant? Or like, when not having a mapping?
+            'VariantOnGenome/DNA' => $sDNA, // Can actually also update, if the LOVD data is not correct.
             'VariantOnGenome/DBID' => '', // FIXME: Will be filled in later for records to be created!
             'VariantOnGenome/Genetic_origin' => 'CLASSIFICATION record',
             'VariantOnGenome/Published_as' => $aVariant['published_as'],
@@ -1636,7 +1671,7 @@ foreach ($aData as $sVariant => $aVariant) {
                 'transcriptid' => $aTranscripts[$sTranscript],
                 'effectid' => $aVOGEntry['effectid'],
                 // Don't let internal conflicts cause notices here.
-                'VariantOnTranscript/Classification' => (!isset($_CONFIG['effect_mapping_classification'][$sClassification])? '' :
+                'VariantOnTranscript/Classification' => (!isset($_CONFIG['effect_mapping_classification'][$sClassification])? '-' :
                     $_CONFIG['effect_mapping_classification'][$sClassification]),
                 'VariantOnTranscript/DNA' => $aMapping['DNA'],
                 'VariantOnTranscript/RNA' => $aMapping['RNA'],
@@ -1654,10 +1689,11 @@ foreach ($aData as $sVariant => $aVariant) {
             // Build array from JSON object, if we have it.
             if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public']) {
                 $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] = json_decode($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'], true);
-                if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] === false) {
+                if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] === false
+                    || !is_array($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'])) {
                     // Somebody malformed this field...
                     lovd_printIfVerbose(VERBOSITY_LOW,
-                        'Error: Variant ID ' . $sID . ' has an unparsable JSON object.' . "\n\n");
+                        'Error: Variant ID ' . $sVariant . ' has an unparsable JSON object for center ' . $sCenter . '(' . $aCenterIDs[$sCenter] . ').' . "\n\n");
                     die(EXIT_ERROR_DATA_CONTENT_ERROR);
                 }
             } else {
@@ -1813,6 +1849,7 @@ foreach ($aData as $sVariant => $aVariant) {
                 if ($aDiff) {
                     var_dump($sVariant . ' (' . count($aVOGEntry['vots']) . ' VOTs)', $aDiff);
                 }
+                unset($aDataLOVD[$sLOVDKey]); // Unset center's variant so we can see if variants got deleted.
                 $aVariantsUpdated[$sChromosome] ++;
                 continue;
             }
@@ -1877,11 +1914,13 @@ foreach ($aData as $sVariant => $aVariant) {
                 // If we get here, everything went well.
                 $_DB->commit();
 
+                unset($aDataLOVD[$sLOVDKey]); // Unset center's variant so we can see if variants got deleted.
                 $aVariantsUpdated[$sChromosome] ++;
                 continue;
             }
 
             // If we get here, there was nothing to update, data is still the same.
+            unset($aDataLOVD[$sLOVDKey]); // Unset center's variant so we can see if variants got deleted.
             $aVariantsSkipped[$sChromosome] ++;
             continue;
         }
@@ -1890,12 +1929,27 @@ foreach ($aData as $sVariant => $aVariant) {
 
 
 
+    // FIXME: Laat lijst niet-gecachte varianten checken op HGVS. Als niet HGVS, verwijder hard. Als subst, negeer. Dan zou lijst schoon moeten zijn, en kunnen we verder.
+    // FIXME: Ga dan door de transcripten die niet gevonden zijn, en probeer die toe te voegen (zowel lokaal als online). Doe 'm dan opnieuw, hopelijk is dan de lijst errors kleiner.
+    // FIXME: NEXT: Regel dan nieuw VKGL account, pas settings aan zodat het gevraagd wordt, pas code aan om die owner te wijzigen, update weer.
+    // FIXME: NEXT: Schrijf code voor INSERTs.
+    // FIXME: Don't do inserts if $aAddToCache is filled?
     // STUB: This is where to handle insertions and deletions.
 
 
 
 
+    // Print update, for every percentage changed.
     $nVariantsDone ++;
+    if ((microtime(true) - $tProgressReported) > 5 && $nVariantsDone != $nVariants
+        && floor($nVariantsDone * 1000 / $nVariants) != $nPercentageComplete) {
+        $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
+        lovd_printIfVerbose(VERBOSITY_MEDIUM,
+            ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
+                5, ' ', STR_PAD_LEFT) . '%] ' .
+            str_pad($nVariantsDone, strlen($nVariants), ' ', STR_PAD_LEFT) . ' variants processed...' . "\n");
+        $tProgressReported = microtime(true); // Don't report again for a certain amount of time.
+    }
 }
 
 // Final message.
@@ -1911,4 +1965,14 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
     '                   Variants updated: ' . array_sum($aVariantsUpdated) . ".\n" .
     '                   Variants deleted: ' . array_sum($aVariantsDeleted) . ".\n" .
     '                   Variants skipped: ' . array_sum($aVariantsSkipped) . ".\n\n");
+
+if ($aAddToCache) {
+    $nAddToCache = count($aAddToCache);
+    lovd_printIfVerbose(VERBOSITY_LOW,
+    'Notice: ' . $nAddToCache . ' LOVD variant' . ($nAddToCache == 1? ' was' : 's were') . ' not found in the VKGL dataset, and also not found in the cache.' . "\n" .
+    'This may mean that LOVD contains non-normalized variants, which may not match to the VKGL data' . "\n" .
+    ' simply because a different description was used. To be safe, no inserts were done because of this reason.' . "\n" .
+    'Please check the list below, and add these variants to the NC cache. After that, run this script again.' . "\n" .
+    implode("\n", $aAddToCache) . "\n\n");
+}
 ?>
