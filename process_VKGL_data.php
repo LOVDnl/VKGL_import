@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-07-11
+ * Modified    : 2019-07-16
  * Version     : 0.0
  * For LOVD+   : 3.0-22
  *
@@ -973,8 +973,8 @@ foreach ($aData as $sID => $aVariant) {
         }
         // Add to NC cache, if we didn't have it already.
         if (!isset($_CACHE['mutalyzer_cache_NC'][$sVariant])) {
-            // Only add it to the file, we won't see this variant anymore this run.
             file_put_contents($_CONFIG['user']['mutalyzer_cache_NC'], $sVariant . "\t" . $sVariantCorrected . "\n", FILE_APPEND);
+            $_CACHE['mutalyzer_cache_NC'][$sVariant] = $sVariantCorrected;
         }
         // Count as addition always, one of the caches should have been updated.
         $nVariantsAddedToCache ++;
@@ -1581,13 +1581,22 @@ foreach ($aData as $sVariant => $aVariant) {
         // Older data may not have been fully normalized, and we will find new records even though we already had them.
         foreach ($aDataLOVD as $sLOVDKey => $aLOVDVariant) {
             list($nCenter, $sVariant) = explode(':', $sLOVDKey, 2);
+            // Perhaps we find that we want to remove this variant.
+            $bRemoveVariant = false;
+            $sRemoveMessage = '';
             // Check if it exists in the NC cache as a different name. This assumes the variant has been cached before.
             if (isset($_CACHE['mutalyzer_cache_NC'][$sVariant])) {
                 $sVariantCorrected = $_CACHE['mutalyzer_cache_NC'][$sVariant];
                 if ($sVariant != $sVariantCorrected) {
+                    // LOVD variant is in the cache, and has a different name or is in error.
                     // Check if this is not a cached error message.
                     if ($sVariantCorrected{0} == '{') {
                         // Variant is actually in error. These are OK to be removed, since we don't want them.
+                        // If the variant is still in the source, that's OK, because he will be skipped there, too.
+                        $bRemoveVariant = true;
+                        $aErrorMessages = json_decode($sVariantCorrected, true);
+                        array_walk($aErrorMessages, function (&$sValue, $sError) { $sValue = $sError . ': ' . $sValue; });
+                        $sRemoveMessage = 'Variant is in error: ' . implode('; ', $aErrorMessages);
                     } else {
                         // Whoops. From a previous release, we have uncorrected data in LOVD. It won't match this way.
                         // Correct the key; this will make a match possible. The update will then fix the entry's DNA field.
@@ -1596,16 +1605,43 @@ foreach ($aData as $sVariant => $aVariant) {
                             // Let's not overwrite data...
                             $aDataLOVD[$sLOVDNewKey] = $aLOVDVariant;
                             unset($aDataLOVD[$sLOVDKey]);
+                            continue;
+                        } else {
+                            // We have an old notation for this center, but also the corrected.
+                            // Let the corrected match with the variant in case we still have it, remove this old one.
+                            $bRemoveVariant = true;
+                            $sRemoveMessage = 'Variant notation is not normalized, and the correct notation (' . $sVariantCorrected . ') is already in the database for this center.';
                         }
-                        // Else, hard delete the entry? We have an old notation for this center, but also the corrected.
                     }
                 }
-                // If not, the variant was known, checked and OK, but well... I guess it disappeared?
+                // Variant is all OK; cached, and normalized. Let it pass.
 
             } elseif (!in_array($sVariant, $_CACHE['mutalyzer_cache_NC'])) {
                 // We haven't seen this variant before. Not as an input to the cache, not as a result of the cache.
+                // The variant seems to be lost, but we can't be sure because it's maybe described incorrectly.
                 // Maybe it helps if we add it. We won't implement that here.
-                $aAddToCache[] = $sVariant;
+
+                // Before we recommend adding it to the cache, check its nomenclature. If not HGVS, ignore it.
+                $bHGVS = (bool) lovd_getVariantInfo($sVariant);
+                if ($bHGVS) {
+                    $aAddToCache[] = $sVariant;
+                    continue;
+                } else {
+                    // We're not recommending to cache it. Get rid of it.
+                    $bRemoveVariant = true;
+                    $sRemoveMessage = 'Variant is in error, not using correct HGVS.';
+                }
+            }
+
+            // Remove variant if needed. Don't touch the Remarks_Non_Public, we don't want to complicate things.
+            if ($bRemoveVariant) {
+                $_DB->query('UPDATE ' . TABLE_VARIANTS . ' SET `VariantOnGenome/Remarks` = ?, statusid = ?, edited_by = 0, edited_date = NOW() WHERE id = ?',
+                    array(
+                        'VKGL data sharing initiative Nederland' . (!$sRemoveMessage? '' : '; ' . $sRemoveMessage),
+                        STATUS_HIDDEN,
+                        $aLOVDVariant['id'],
+                    ));
+                unset($aDataLOVD[$sLOVDKey]);
             }
         }
 
@@ -1929,7 +1965,8 @@ foreach ($aData as $sVariant => $aVariant) {
 
 
 
-    // FIXME: Laat lijst niet-gecachte varianten checken op HGVS. Als niet HGVS, verwijder hard. Als subst, negeer. Dan zou lijst schoon moeten zijn, en kunnen we verder.
+    // FIXME: VOTs don't have correct position fields.
+    // FIXME: Repeated submissions of the same variant by the same center may be a problem. I see the same variants a few times. These need to be taken care of, no? Can we detect these?
     // FIXME: Ga dan door de transcripten die niet gevonden zijn, en probeer die toe te voegen (zowel lokaal als online). Doe 'm dan opnieuw, hopelijk is dan de lijst errors kleiner.
     // FIXME: NEXT: Regel dan nieuw VKGL account, pas settings aan zodat het gevraagd wordt, pas code aan om die owner te wijzigen, update weer.
     // FIXME: NEXT: Schrijf code voor INSERTs.
