@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-07-16
+ * Modified    : 2019-07-17
  * Version     : 0.0
  * For LOVD+   : 3.0-22
  *
@@ -1364,6 +1364,16 @@ foreach ($aData as $sVariant => $aVariant) {
 
 
 
+    // But, we don't support all mappings.
+    foreach ($aVariant['mappings'] as $sTranscript => $aMapping) {
+        if (in_array(substr($aMapping['DNA'], 0, 3), array('n.-', 'n.*'))) {
+            // n.-123 or n.*123 positions aren't supported by LOVD, and it's unclear if this is correct HGVS.
+            unset($aVariant['mappings'][$sTranscript]);
+        }
+    }
+
+
+
     // See if we solved it now.
     if (!count($aVariant['mappings'])) {
         // Nope...
@@ -1566,6 +1576,10 @@ foreach ($aData as $sVariant => $aVariant) {
               vog.`VariantOnGenome/DBID`, vog.`VariantOnGenome/Genetic_origin`, vog.`VariantOnGenome/Published_as`,
               vog.`VariantOnGenome/Remarks`, vog.`VariantOnGenome/Remarks_Non_Public`,
               GROUP_CONCAT(vot.transcriptid, ";", vot.effectid, ";",
+                IFNULL(vot.position_c_start, "0"), ";",
+                IFNULL(vot.position_c_start_intron, "0"), ";",
+                IFNULL(vot.position_c_end, "0"), ";",
+                IFNULL(vot.position_c_end_intron, "0"), ";",
                 IFNULL(NULLIF(vot.`VariantOnTranscript/Classification`, ""), "-"), ";",
                 IFNULL(NULLIF(vot.`VariantOnTranscript/DNA`, ""), "-"), ";",
                 IFNULL(NULLIF(vot.`VariantOnTranscript/RNA`, ""), "-"), ";",
@@ -1634,12 +1648,19 @@ foreach ($aData as $sVariant => $aVariant) {
             }
 
             // Remove variant if needed. Don't touch the Remarks_Non_Public, we don't want to complicate things.
+            // Also, don't run this if we don't have to. Check status and current remarks.
             if ($bRemoveVariant) {
-                $_DB->query('UPDATE ' . TABLE_VARIANTS . ' SET `VariantOnGenome/Remarks` = ?, statusid = ?, edited_by = 0, edited_date = NOW() WHERE id = ?',
+                $sRemoveMessage = 'VKGL data sharing initiative Nederland' .
+                    (!$sRemoveMessage? '' : '; ' . $sRemoveMessage);
+                $_DB->query('UPDATE ' . TABLE_VARIANTS . '
+                             SET `VariantOnGenome/Remarks` = ?, statusid = ?, edited_by = 0, edited_date = NOW()
+                             WHERE id = ? AND !(`VariantOnGenome/Remarks` LIKE ? AND statusid <= ?)',
                     array(
-                        'VKGL data sharing initiative Nederland' . (!$sRemoveMessage? '' : '; ' . $sRemoveMessage),
+                        $sRemoveMessage,
                         STATUS_HIDDEN,
                         $aLOVDVariant['id'],
+                        $sRemoveMessage . '%',
+                        STATUS_HIDDEN,
                     ));
                 unset($aDataLOVD[$sLOVDKey]);
             }
@@ -1706,6 +1727,10 @@ foreach ($aData as $sVariant => $aVariant) {
             $aVOGEntry['vots'][$aTranscripts[$sTranscript]] = array(
                 'transcriptid' => $aTranscripts[$sTranscript],
                 'effectid' => $aVOGEntry['effectid'],
+                'position_c_start' => $aMapping['position_start'],
+                'position_c_start_intron' => $aMapping['position_start_intron'],
+                'position_c_end' => $aMapping['position_end'],
+                'position_c_end_intron' => $aMapping['position_end_intron'],
                 // Don't let internal conflicts cause notices here.
                 'VariantOnTranscript/Classification' => (!isset($_CONFIG['effect_mapping_classification'][$sClassification])? '-' :
                     $_CONFIG['effect_mapping_classification'][$sClassification]),
@@ -1746,10 +1771,14 @@ foreach ($aData as $sVariant => $aVariant) {
                     $aDataLOVD[$sLOVDKey]['vots'][$aVOT[0]] = array(
                         'transcriptid' => $aVOT[0],
                         'effectid' => $aVOT[1],
-                        'VariantOnTranscript/Classification' => $aVOT[2],
-                        'VariantOnTranscript/DNA' => $aVOT[3],
-                        'VariantOnTranscript/RNA' => $aVOT[4],
-                        'VariantOnTranscript/Protein' => $aVOT[5],
+                        'position_c_start' => $aVOT[2],
+                        'position_c_start_intron' => $aVOT[3],
+                        'position_c_end' => $aVOT[4],
+                        'position_c_end_intron' => $aVOT[5],
+                        'VariantOnTranscript/Classification' => $aVOT[6],
+                        'VariantOnTranscript/DNA' => $aVOT[7],
+                        'VariantOnTranscript/RNA' => $aVOT[8],
+                        'VariantOnTranscript/Protein' => $aVOT[9],
                     );
                 }
                 ksort($aDataLOVD[$sLOVDKey]['vots']);
@@ -1965,8 +1994,6 @@ foreach ($aData as $sVariant => $aVariant) {
 
 
 
-    // FIXME: VOTs don't have correct position fields.
-    // FIXME: Repeated submissions of the same variant by the same center may be a problem. I see the same variants a few times. These need to be taken care of, no? Can we detect these?
     // FIXME: Ga dan door de transcripten die niet gevonden zijn, en probeer die toe te voegen (zowel lokaal als online). Doe 'm dan opnieuw, hopelijk is dan de lijst errors kleiner.
     // FIXME: NEXT: Regel dan nieuw VKGL account, pas settings aan zodat het gevraagd wordt, pas code aan om die owner te wijzigen, update weer.
     // FIXME: NEXT: Schrijf code voor INSERTs.
