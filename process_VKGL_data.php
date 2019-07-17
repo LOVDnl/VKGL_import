@@ -92,6 +92,7 @@ $_CONFIG = array(
         'lovd_path' => '/www/databases.lovd.nl/shared/',
         'mutalyzer_cache_NC' => 'NC_cache.txt', // Stores NC g. descriptions and their corrected output.
         'mutalyzer_cache_mapping' => 'mapping_cache.txt', // Stores NC to NM mappings and the protein predictions.
+        'vkgl_generic_id' => 0, // The LOVD ID of the generic VKGL account, needed for single lab submissions.
     ),
 );
 
@@ -586,6 +587,7 @@ if (!$_CONFIG['flags']['y']) {
     }
     lovd_verifySettings('mutalyzer_cache_NC', 'File containing the Mutalyzer cache for genomic (NC) variants', 'file', '');
     lovd_verifySettings('mutalyzer_cache_mapping', 'File containing the Mutalyzer cache for mappings from genome to transcript', 'file', '');
+    lovd_verifySettings('vkgl_generic_id', 'The LOVD user ID for the generic VKGL account', 'int', '1,99999');
 
     // Verify all centers.
     $aCenterIDs = array(); // Make sure IDs are unique.
@@ -665,6 +667,22 @@ $aUsers = $_DB->query('SELECT CAST(id AS UNSIGNED) AS id, name FROM ' . TABLE_US
 
 $bAccountsOK = true;
 $lCenters = max(array_map('strlen', $aCentersFound));
+
+// The generic VKGL account.
+// If not found, reset the ID so it doesn't get saved.
+$bFound = (isset($aUsers[$_CONFIG['user']['vkgl_generic_id']]));
+
+lovd_printIfVerbose(VERBOSITY_MEDIUM,
+    'Generic' . str_pad(' VKGL ID', $lCenters, '.') . '... LOVD account #' .
+    str_pad($_CONFIG['user']['vkgl_generic_id'], 5, '0', STR_PAD_LEFT) .
+    (!$bFound? ' --- not found!!!' : ' "' . $aUsers[$_CONFIG['user']['vkgl_generic_id']] . '"') . "\n");
+
+if (!$bFound) {
+    $bAccountsOK = false;
+    $_CONFIG['user']['vkgl_generic_id'] = 0;
+}
+
+// The other centers that we have collected from the input file.
 foreach ($aCentersFound as $sCenter) {
     // If the user was changing settings, then print the center's name, and user name from LOVD.
     // If not found, reset the ID so it doesn't get saved.
@@ -1707,7 +1725,8 @@ foreach ($aData as $sVariant => $aVariant) {
             'type' => $aVariant['type'],
             'created_by' => $aCenterIDs[$sCenter],
             // Created_date will be added later, right now we don't have it to prevent unneeded differences.
-            'owned_by' => $aCenterIDs[$sCenter], // FIXME: Should be common VKGL account when this is a single lab submission.
+            'owned_by' => ($aVariant['status'] == 'single-lab'? // Single lab gets the generic VKGL account as owner.
+                $_CONFIG['user']['vkgl_generic_id'] : $aCenterIDs[$sCenter]),
             'statusid' => (string) ($aVariant['status'] == 'opposite'? STATUS_HIDDEN : STATUS_OK), // FIXME: Set to Marked if a warning occurred within this variant? Or like, when not having a mapping?
             'VariantOnGenome/DNA' => $sDNA, // Can actually also update, if the LOVD data is not correct.
             'VariantOnGenome/DBID' => '', // FIXME: Will be filled in later for records to be created!
@@ -1995,7 +2014,6 @@ foreach ($aData as $sVariant => $aVariant) {
 
 
     // FIXME: Ga dan door de transcripten die niet gevonden zijn, en probeer die toe te voegen (zowel lokaal als online). Doe 'm dan opnieuw, hopelijk is dan de lijst errors kleiner.
-    // FIXME: NEXT: Regel dan nieuw VKGL account, pas settings aan zodat het gevraagd wordt, pas code aan om die owner te wijzigen, update weer.
     // FIXME: NEXT: Schrijf code voor INSERTs.
     // FIXME: Don't do inserts if $aAddToCache is filled?
     // STUB: This is where to handle insertions and deletions.
