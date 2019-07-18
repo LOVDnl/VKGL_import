@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-07-17
+ * Modified    : 2019-07-18
  * Version     : 0.0
  * For LOVD+   : 3.0-22
  *
@@ -2089,7 +2089,10 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
     ' ' . date('H:i:s', time() - $tStart) . ' [Totals] Variants created: ' . array_sum($aVariantsCreated) . ".\n" .
     '                   Variants updated: ' . array_sum($aVariantsUpdated) . ".\n" .
     '                   Variants deleted: ' . array_sum($aVariantsDeleted) . ".\n" .
-    '                   Variants skipped: ' . array_sum($aVariantsSkipped) . ".\n\n");
+    '                   Variants skipped: ' . array_sum($aVariantsSkipped) . ".\n" .
+    (!$nWarningsOccurred? '' :
+        '                   Warning(s) count: ' . $nWarningsOccurred . ".\n")
+      . "\n");
 
 if ($aAddToCache) {
     $nAddToCache = count($aAddToCache);
@@ -2099,5 +2102,9 @@ if ($aAddToCache) {
     ' simply because a different description was used. To be safe, no inserts were done because of this reason.' . "\n" .
     'Please check the list below, and add these variants to the NC cache. After that, run this script again.' . "\n" .
     implode("\n", $aAddToCache) . "\n\n");
+}
+
+if ($nWarningsOccurred) {
+    die(EXIT_WARNINGS_OCCURRED);
 }
 ?>
