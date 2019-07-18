@@ -6,13 +6,13 @@
  *
  * Created     : 2019-06-27
  * Modified    : 2019-07-18
- * Version     : 0.0
+ * Version     : 0.1
  * For LOVD+   : 3.0-22
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.1    2019-07-??
+ * Changelog   : 0.1    2019-07-18
  *               Initial release.
  *
  * Copyright   : 2004-2019 Leiden University Medical Center; http://www.LUMC.nl/
@@ -44,7 +44,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 // Default settings. Everything in 'user' will be verified with the user, and stored in settings.json.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '0.0',
+    'version' => '0.1',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
