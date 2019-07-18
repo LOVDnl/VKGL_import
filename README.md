@@ -41,7 +41,7 @@ Note that both values may be the same, in the case the variant can not be normal
 This script will build this cache if you do not have it, but since building the cache may take a long time,
  it is recommended to use the NC cache from the [caches](https://github.com/LOVDnl/caches) project.
 
-The script will store errors like so:
+The script will store errors using JSON, like so:
 
 ```
 NC_000001.10:g.150771703C>T     {"EREF":"C not found at position 150771703, found T instead."}
@@ -52,7 +52,8 @@ NC_000001.10:g.150771703C>T     {"EREF":"C not found at position 150771703, foun
 The mapping cache contains mapping data from two Mutalyzer webservices, both the `runMutalyzerLight` and
  the `numberConversion` methods.
 Because both methods provide partially overlapping data, the results are stored together.
-The cache stores the method(s) used; if the runMutalyzerLight webservice didn't provide enough transcripts, the numberConversion service can be used and the additional data is added to the cache in a new line.
+The cache stores the method(s) used; if the runMutalyzerLight webservice didn't provide enough transcripts,
+ the numberConversion service can be used and the additional data is added to the cache in a new line.
 
 The file does not need to be sorted, but sorting may help in finding duplicate variants.
 An example line looks like:

@@ -1640,7 +1640,6 @@ foreach ($aData as $sVariant => $aVariant) {
                     //  but mark it only as removed. Later we can always decide to actually remove these entries.
                     $bRemoveVariant = true;
                     $sRemoveMessage = 'Variant no longer found in the VKGL dataset for this center.';
-                    $aVariantsDeleted[$sChromosome]++;
 
                 } elseif ($sLOVDVariant != $sVariantCorrected) {
                     // LOVD variant is in the cache, and has a different name or is in error.
@@ -1694,9 +1693,9 @@ foreach ($aData as $sVariant => $aVariant) {
             if ($bRemoveVariant) {
                 $sRemoveMessage = 'VKGL data sharing initiative Nederland' .
                     (!$sRemoveMessage? '' : '; ' . $sRemoveMessage);
-                $_DB->query('UPDATE ' . TABLE_VARIANTS . '
-                             SET `VariantOnGenome/Remarks` = ?, statusid = ?, edited_by = 0, edited_date = NOW()
-                             WHERE id = ? AND !(`VariantOnGenome/Remarks` LIKE ? AND statusid <= ?)',
+                $q = $_DB->query('UPDATE ' . TABLE_VARIANTS . '
+                                  SET `VariantOnGenome/Remarks` = ?, statusid = ?, edited_by = 0, edited_date = NOW()
+                                  WHERE id = ? AND !(`VariantOnGenome/Remarks` LIKE ? AND statusid <= ?)',
                     array(
                         $sRemoveMessage,
                         STATUS_HIDDEN,
@@ -1704,6 +1703,9 @@ foreach ($aData as $sVariant => $aVariant) {
                         $sRemoveMessage . '%',
                         STATUS_HIDDEN,
                     ));
+                if ($q->rowCount()) {
+                    $aVariantsDeleted[$sChromosome]++;
+                }
                 unset($aDataLOVD[$sLOVDKey]);
             }
         }
