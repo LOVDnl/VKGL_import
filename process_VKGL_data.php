@@ -93,6 +93,7 @@ $_CONFIG = array(
         'mutalyzer_cache_NC' => 'NC_cache.txt', // Stores NC g. descriptions and their corrected output.
         'mutalyzer_cache_mapping' => 'mapping_cache.txt', // Stores NC to NM mappings and the protein predictions.
         'vkgl_generic_id' => 0, // The LOVD ID of the generic VKGL account, needed for single lab submissions.
+        'delete_redundant_variants' => 'n', // Should we remove variants in LOVD no longer in the dataset?
     ),
 );
 
@@ -604,6 +605,11 @@ if (!$_CONFIG['flags']['y']) {
             }
         }
     }
+
+    // Delete LOVD variants no longer in the VKGL dataset? Should be left to "n" for all tests,
+    //  otherwise incomplete VKGL files will result in lots of data marked for removal.
+    // Note that this doesn't actually really remove these variants, it will hide them and mark them as removed.
+    lovd_verifySettings('delete_redundant_variants', 'Do you want data no longer found in this input file removed from LOVD? (y/n)', 'array', array('y', 'n'));
 }
 
 // Save settings already, in case the connection breaks just below. Settings may be incorrect.
@@ -714,6 +720,10 @@ if (!$bRefSeqBuildOK || !$bAccountsOK) {
         ($bAccountsOK? '' : 'Error: Failed to get all LOVD user accounts.' . "\n") . "\n");
     die(EXIT_ERROR_SETTINGS_INCORRECT);
 }
+
+lovd_printIfVerbose(VERBOSITY_MEDIUM,
+    'Delete data from LOVD if no longer found in the input file: ' .
+    ($_CONFIG['user']['delete_redundant_variants'] == 'y'? 'Yes' : 'No') . "\n\n");
 
 
 
@@ -1610,17 +1620,29 @@ foreach ($aData as $sVariant => $aVariant) {
                 array($sRefSeq, $sChromosome),
                 array_values($aCenterIDs)))->fetchAllGroupAssoc();
 
-        // This code block will be useless later, but we want to check all LOVD data as well.
+        // Check all LOVD data; normalize everything and mark removed data.
         // Older data may not have been fully normalized, and we will find new records even though we already had them.
         foreach ($aDataLOVD as $sLOVDKey => $aLOVDVariant) {
             list($nCenter, $sLOVDVariant) = explode(':', $sLOVDKey, 2);
+            $sCenter = array_search($nCenter, $aCenterIDs);
             // Perhaps we find that we want to remove this variant.
             $bRemoveVariant = false;
             $sRemoveMessage = '';
             // Check if it exists in the NC cache as a different name. This assumes the variant has been cached before.
             if (isset($_CACHE['mutalyzer_cache_NC'][$sLOVDVariant])) {
                 $sVariantCorrected = $_CACHE['mutalyzer_cache_NC'][$sLOVDVariant];
-                if ($sLOVDVariant != $sVariantCorrected) {
+
+                // Do we actually still have this variant in the VKGL dataset?
+                if ($sVariantCorrected{0} != '{' && $_CONFIG['user']['delete_redundant_variants'] == 'y'
+                    && (!isset($aData[$sVariantCorrected]) || !isset($aData[$sVariantCorrected]['classifications'][$sCenter]))) {
+                    // We've seen this variant before; it's in the cache, but the corrected variant is not in the data.
+                    // The variant is lost, there's nothing to do about it. If the user has indicated so, remove it,
+                    //  but mark it only as removed. Later we can always decide to actually remove these entries.
+                    $bRemoveVariant = true;
+                    $sRemoveMessage = 'Variant no longer found in the VKGL dataset for this center.';
+                    $aVariantsDeleted[$sChromosome]++;
+
+                } elseif ($sLOVDVariant != $sVariantCorrected) {
                     // LOVD variant is in the cache, and has a different name or is in error.
                     // Check if this is not a cached error message.
                     if ($sVariantCorrected{0} == '{') {
@@ -1655,6 +1677,7 @@ foreach ($aData as $sVariant => $aVariant) {
                 // Maybe it helps if we add it. We won't implement that here.
 
                 // Before we recommend adding it to the cache, check its nomenclature. If not HGVS, ignore it.
+                // This is not a great HGVS check; this function does allow some non-HGVS descriptions.
                 $bHGVS = (bool) lovd_getVariantInfo($sLOVDVariant);
                 if ($bHGVS) {
                     $aAddToCache[] = $sLOVDVariant;
@@ -1935,7 +1958,6 @@ foreach ($aData as $sVariant => $aVariant) {
                 if ($aDiff) {
                     var_dump($sVariant . ' (' . count($aVOGEntry['vots']) . ' VOTs)', $aDiff);
                 }
-                unset($aDataLOVD[$sLOVDKey]); // Unset center's variant so we can see if variants got deleted.
                 $aVariantsUpdated[$sChromosome] ++;
                 continue;
             }
@@ -2000,13 +2022,11 @@ foreach ($aData as $sVariant => $aVariant) {
                 // If we get here, everything went well.
                 $_DB->commit();
 
-                unset($aDataLOVD[$sLOVDKey]); // Unset center's variant so we can see if variants got deleted.
                 $aVariantsUpdated[$sChromosome] ++;
                 continue;
             }
 
             // If we get here, there was nothing to update, data is still the same.
-            unset($aDataLOVD[$sLOVDKey]); // Unset center's variant so we can see if variants got deleted.
             $aVariantsSkipped[$sChromosome] ++;
             continue;
 
@@ -2056,10 +2076,6 @@ foreach ($aData as $sVariant => $aVariant) {
         }
     }
 
-
-
-
-    // STUB: This is where to handle deletions.
 
 
 
