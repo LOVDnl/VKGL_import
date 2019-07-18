@@ -637,6 +637,7 @@ ini_set('log_errors', '0'); // CLI logs errors to the screen, apparently.
 // We have error messages surpressed anyway, as the LOVD in question will complain when it tries to define "SSL" as well.
 define('SSL', true);
 require ROOT_PATH . 'inc-init.php';
+require ROOT_PATH . 'inc-lib-form.php';
 ini_set('display_errors', '1'); // We do want to see errors from here on.
 
 lovd_printIfVerbose(VERBOSITY_HIGH,
@@ -1589,7 +1590,7 @@ foreach ($aData as $sVariant => $aVariant) {
         $_DB->query('SET group_concat_max_len = 10000');
         $aDataLOVD = $_DB->query('
             SELECT CONCAT(vog.created_by, ":", ?, ":", vog.`VariantOnGenome/DNA`) AS ID,
-              vog.id, vog.allele, vog.effectid, vog.position_g_start, vog.position_g_end, vog.type,
+              vog.id, vog.allele, vog.effectid, vog.chromosome, vog.position_g_start, vog.position_g_end, vog.type,
               vog.created_by, vog.owned_by, vog.statusid, vog.`VariantOnGenome/DNA`,
               vog.`VariantOnGenome/DBID`, vog.`VariantOnGenome/Genetic_origin`, vog.`VariantOnGenome/Published_as`,
               vog.`VariantOnGenome/Remarks`, vog.`VariantOnGenome/Remarks_Non_Public`,
@@ -1612,14 +1613,14 @@ foreach ($aData as $sVariant => $aVariant) {
         // This code block will be useless later, but we want to check all LOVD data as well.
         // Older data may not have been fully normalized, and we will find new records even though we already had them.
         foreach ($aDataLOVD as $sLOVDKey => $aLOVDVariant) {
-            list($nCenter, $sVariant) = explode(':', $sLOVDKey, 2);
+            list($nCenter, $sLOVDVariant) = explode(':', $sLOVDKey, 2);
             // Perhaps we find that we want to remove this variant.
             $bRemoveVariant = false;
             $sRemoveMessage = '';
             // Check if it exists in the NC cache as a different name. This assumes the variant has been cached before.
-            if (isset($_CACHE['mutalyzer_cache_NC'][$sVariant])) {
-                $sVariantCorrected = $_CACHE['mutalyzer_cache_NC'][$sVariant];
-                if ($sVariant != $sVariantCorrected) {
+            if (isset($_CACHE['mutalyzer_cache_NC'][$sLOVDVariant])) {
+                $sVariantCorrected = $_CACHE['mutalyzer_cache_NC'][$sLOVDVariant];
+                if ($sLOVDVariant != $sVariantCorrected) {
                     // LOVD variant is in the cache, and has a different name or is in error.
                     // Check if this is not a cached error message.
                     if ($sVariantCorrected{0} == '{') {
@@ -1648,15 +1649,15 @@ foreach ($aData as $sVariant => $aVariant) {
                 }
                 // Variant is all OK; cached, and normalized. Let it pass.
 
-            } elseif (!in_array($sVariant, $_CACHE['mutalyzer_cache_NC'])) {
+            } elseif (!in_array($sLOVDVariant, $_CACHE['mutalyzer_cache_NC'])) {
                 // We haven't seen this variant before. Not as an input to the cache, not as a result of the cache.
                 // The variant seems to be lost, but we can't be sure because it's maybe described incorrectly.
                 // Maybe it helps if we add it. We won't implement that here.
 
                 // Before we recommend adding it to the cache, check its nomenclature. If not HGVS, ignore it.
-                $bHGVS = (bool) lovd_getVariantInfo($sVariant);
+                $bHGVS = (bool) lovd_getVariantInfo($sLOVDVariant);
                 if ($bHGVS) {
-                    $aAddToCache[] = $sVariant;
+                    $aAddToCache[] = $sLOVDVariant;
                     continue;
                 } else {
                     // We're not recommending to cache it. Get rid of it.
@@ -1720,6 +1721,7 @@ foreach ($aData as $sVariant => $aVariant) {
                 $_CONFIG['effect_mapping_LOVD'][$sClassification]) .
                 // Default to "Not curated" for concluded effect, unless a user filled something in already.
                 (!isset($aDataLOVD[$sLOVDKey])? '0' : substr($aDataLOVD[$sLOVDKey]['effectid'], -1)),
+            'chromosome' => $sChromosome,
             'position_g_start' => $aVariant['position_start'],
             'position_g_end' => $aVariant['position_end'],
             'type' => $aVariant['type'],
@@ -2007,16 +2009,57 @@ foreach ($aData as $sVariant => $aVariant) {
             unset($aDataLOVD[$sLOVDKey]); // Unset center's variant so we can see if variants got deleted.
             $aVariantsSkipped[$sChromosome] ++;
             continue;
+
+
+
+
+
+        } elseif (!$aAddToCache) {
+            // Variant has not been seen yet by this center. Create it in the database.
+            // Do this only, if we don't have LOVD variants that need to be cached.
+
+            // Prepare additional data.
+            $aVOGEntry['created_date'] = $sNow;
+            $aVOGEntry['VariantOnGenome/Remarks_Non_Public'] = json_encode($aVOGEntry['VariantOnGenome/Remarks_Non_Public']);
+            // We can be more correct here by adding VOT data, but this function expects that in quite a complex manner.
+            $aVOGEntry['VariantOnGenome/DBID'] = lovd_fetchDBID($aVOGEntry);
+
+            // Run atomically, we don't want half inserts.
+            $_DB->beginTransaction();
+
+            // Insert the VOG first.
+            $aVOTs = $aVOGEntry['vots'];
+            unset($aVOGEntry['vots']);
+            $aFields = array_keys($aVOGEntry);
+            $_DB->query('INSERT INTO ' . TABLE_VARIANTS . '
+                             (' . implode(', ', array_map(function ($sField) {
+                    return '`' . $sField . '`';
+                }, $aFields)) . ')
+                         VALUES (?' . str_repeat(', ?', count($aFields) - 1) . ')', array_values($aVOGEntry));
+            $aVOGEntry['id'] = $_DB->lastInsertId();
+
+            // Then the VOTs.
+            foreach ($aVOTs as $nTranscriptID => $aVOT) {
+                // Add the transcript.
+                $_DB->query('INSERT INTO ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
+                                 (id, ' . implode(', ', array_map(function ($sField) {
+                        return '`' . $sField . '`';
+                    }, array_keys($aVOT))) . ')
+                             VALUES (?' . str_repeat(', ?', count($aVOT)) . ')', array_merge(array($aVOGEntry['id']), array_values($aVOT)));
+            }
+
+            // If we get here, everything went well.
+            $_DB->commit();
+
+            $aVariantsCreated[$sChromosome] ++;
+            continue;
         }
     }
 
 
 
 
-    // FIXME: Ga dan door de transcripten die niet gevonden zijn, en probeer die toe te voegen (zowel lokaal als online). Doe 'm dan opnieuw, hopelijk is dan de lijst errors kleiner.
-    // FIXME: NEXT: Schrijf code voor INSERTs.
-    // FIXME: Don't do inserts if $aAddToCache is filled?
-    // STUB: This is where to handle insertions and deletions.
+    // STUB: This is where to handle deletions.
 
 
 
