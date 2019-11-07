@@ -694,6 +694,9 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
 if (!$bFound) {
     $bAccountsOK = false;
     $_CONFIG['user']['vkgl_generic_id'] = 0;
+} else {
+    // str_pad() the ID, so we can match it with what's in the DB.
+    $_CONFIG['user']['vkgl_generic_id'] = str_pad($_CONFIG['user']['vkgl_generic_id'], 5, '0', STR_PAD_LEFT);
 }
 
 // The other centers that we have collected from the input file.
