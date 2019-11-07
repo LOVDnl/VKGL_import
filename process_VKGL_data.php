@@ -36,12 +36,19 @@
  *
  *************/
 
+// FIXME: When the position converter returns mappings that Mutalyzer cannot generate a protein change for because the
+//  transcript or later versions of it is not found in the NC, we skip the transcript, and we don't store it, either.
+//  This can be improved on, by taking in mappings that map into locations that we can generate the protein change for.
+//  Notes: Position converter descriptions are *not* normalized. For variants on the reverse strand, this is a problem.
+//         If you fix this, remove "numberConversion" as a method from the cache, so all variants will be repeated.
+
 // Command line only.
 if (isset($_SERVER['HTTP_HOST'])) {
     die('Please run this script through the command line.' . "\n");
 }
 
 // Default settings. Everything in 'user' will be verified with the user, and stored in settings.json.
+$bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
     'version' => '0.1.1',
@@ -1688,7 +1695,7 @@ foreach ($aData as $sVariant => $aVariant) {
 
             // Remove variant if needed. Don't touch the Remarks_Non_Public, we don't want to complicate things.
             // Also, don't run this if we don't have to. Check status and current remarks.
-            if ($bRemoveVariant) {
+            if ($bRemoveVariant && !$bDebug) {
                 $sRemoveMessage = 'VKGL data sharing initiative Nederland' .
                     (!$sRemoveMessage? '' : '; ' . $sRemoveMessage);
                 $q = $_DB->query('UPDATE ' . TABLE_VARIANTS . '
@@ -1837,7 +1844,6 @@ foreach ($aData as $sVariant => $aVariant) {
             );
 
             // NOTE: This is debugging code. It checks the differences, and reports them, instead of running the update.
-            $bDebug = false;
             if ($bDebug) {
                 // Reduce the differences, by adapting the LOVD record a bit already.
                 if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks'] == 'VKGL data sharing initiative Nederland; correct HGVS to be checked') {
@@ -2034,7 +2040,7 @@ foreach ($aData as $sVariant => $aVariant) {
 
 
 
-        } elseif (!$aAddToCache) {
+        } elseif (!$aAddToCache && !$bDebug) {
             // Variant has not been seen yet by this center. Create it in the database.
             // Do this only, if we don't have LOVD variants that need to be cached.
 
