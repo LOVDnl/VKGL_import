@@ -1842,6 +1842,12 @@ foreach ($aData as $sVariant => $aVariant) {
                 $aVOGEntry['VariantOnGenome/Remarks_Non_Public'],
                 $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public']
             );
+            // But still store the new ID, if not yet included.
+            foreach ($aVariant['id'] as $sNewID) {
+                if (!in_array($sNewID, $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'])) {
+                    $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'][] = $sNewID;
+                }
+            }
 
             // NOTE: This is debugging code. It checks the differences, and reports them, instead of running the update.
             if ($bDebug) {
