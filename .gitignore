@@ -2,3 +2,5 @@
 mapping_cache.txt
 NC_cache.txt
 settings.json
+vkgl_conflicts_*
+vkgl_consensus_*

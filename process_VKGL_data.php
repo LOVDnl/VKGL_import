@@ -5,14 +5,18 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-07-18
- * Version     : 0.1
- * For LOVD+   : 3.0-22
+ * Modified    : 2019-11-07
+ * Version     : 0.2.0
+ * For LOVD    : 3.0-22
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.1    2019-07-18
+ * Changelog   : 0.2    2019-11-07
+ *               Better debugging, store the new VKGL IDs, improved diff
+ *               formatting, better annotation of double submissions so we can
+ *               remove them in the future, and now ignoring the HGVS column.
+ *               0.1    2019-07-18
  *               Initial release.
  *
  * Copyright   : 2004-2019 Leiden University Medical Center; http://www.LUMC.nl/
@@ -36,15 +40,22 @@
  *
  *************/
 
+// FIXME: When the position converter returns mappings that Mutalyzer cannot generate a protein change for because the
+//  transcript or later versions of it is not found in the NC, we skip the transcript, and we don't store it, either.
+//  This can be improved on, by taking in mappings that map into locations that we can generate the protein change for.
+//  Notes: Position converter descriptions are *not* normalized. For variants on the reverse strand, this is a problem.
+//         If you fix this, remove "numberConversion" as a method from the cache, so all variants will be repeated.
+
 // Command line only.
 if (isset($_SERVER['HTTP_HOST'])) {
     die('Please run this script through the command line.' . "\n");
 }
 
 // Default settings. Everything in 'user' will be verified with the user, and stored in settings.json.
+$bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '0.1',
+    'version' => '0.2.0',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -64,6 +75,7 @@ $_CONFIG = array(
     'columns_ignore' => array(
         // These are the columns that we'll ignore. If we find any others, we'll complain.
         'stop',
+        'hgvs',
         'consensus_classification',
         'matches',
         'disease',
@@ -687,6 +699,9 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
 if (!$bFound) {
     $bAccountsOK = false;
     $_CONFIG['user']['vkgl_generic_id'] = 0;
+} else {
+    // str_pad() the ID, so we can match it with what's in the DB.
+    $_CONFIG['user']['vkgl_generic_id'] = str_pad($_CONFIG['user']['vkgl_generic_id'], 5, '0', STR_PAD_LEFT);
 }
 
 // The other centers that we have collected from the input file.
@@ -1297,12 +1312,8 @@ foreach ($aData as $sVariant => $aVariant) {
             // Match with LOVD's transcript.
             $aVariant['mappings'][$sTranscript] = array(
                 'DNA' => $aMapping['c'],
-                'protein' => '-', // Always set it.
+                'protein' => (!isset($aMapping['p'])? '-' : $aMapping['p']), // Always set it.
             );
-            if (isset($aMapping['p'])) {
-                // Coding transcript, we have received a protein prediction from Mutalyzer.
-                $aVariant['mappings'][$sTranscript]['protein'] = $aMapping['p'];
-            }
         }
     }
 
@@ -1336,8 +1347,15 @@ foreach ($aData as $sVariant => $aVariant) {
             $aPositionConverterTranscripts[$sTranscript] = $sDNA;
         }
 
-        // OK, now find a transcript that is in LOVD and match it to a transcript that is in the given mappings.
-        // The LOVD transcript can only be *older*.
+        // OK, now loop the NC mappings again to compare to the position converter's output.
+        // The NC mapping's DNA field may be different from the position converter's output. So we're not comparing DNA
+        //  between those mappings, and only require the NC transcript version to also be in the position converter
+        //  results. We could still try to get more transcripts by removing this requirement, and by also looking at DNA
+        //  description matches between the NC data and the position converter. (FIXME)
+        // For now, we're looking for NC given transcripts that are found in the position converter's output, with
+        //  additional versions as well, that match each other's DNA field. Then it is assumed that the protein change
+        //  will also match, and we add this new version to our mappings list. We then hope to have more chance
+        //   comparing to transcripts in LOVD. The LOVD transcript can only be *older*.
         foreach ($aPossibleMappings as $sTranscript => $aMapping) {
             // Check if this transcript is in the numberConversion output, which is a requirement.
             if ($sTranscript == 'methods' || !isset($aPositionConverterTranscripts[$sTranscript])) {
@@ -1354,21 +1372,15 @@ foreach ($aData as $sVariant => $aVariant) {
                     // NumberConversion has the same results for both transcripts.
                     // That means the protein prediction based on the NC would be the same as well.
                     // Store this useful transcript in the cache.
-                    $_CACHE['mutalyzer_cache_mapping'][$sVariant][$sTranscriptNoVersion . '.' . $i] =
-                        $aPossibleMappings[$sTranscript];
+                    $_CACHE['mutalyzer_cache_mapping'][$sVariant][$sTranscriptNoVersion . '.' . $i] = $aMapping;
                     // Now check if LOVD has this transcript, perhaps.
                     if (isset($aTranscripts[$sTranscriptNoVersion . '.' . $i])) {
                         // Match with LOVD's transcript, and Mutalyzer's numberConversion's results.
                         // Accept the corrected mapping of the newest transcript for the lower version which is in LOVD.
                         $aVariant['mappings'][$sTranscriptNoVersion . '.' . $i] = array(
                             'DNA' => $aMapping['c'],
-                            'protein' => '', // Always set it.
+                            'protein' => (!isset($aMapping['p'])? '' : $aMapping['p']), // Always set it.
                         );
-                        if (isset($aPossibleMappings[$sTranscript]['p'])) {
-                            // Coding transcript, we have received a protein prediction from Mutalyzer.
-                            $aVariant['mappings'][$sTranscriptNoVersion . '.' . $i]['protein'] =
-                                $aPossibleMappings[$sTranscript]['p'];
-                        }
                         break; // Next transcript!
                     }
                 }
@@ -1388,6 +1400,7 @@ foreach ($aData as $sVariant => $aVariant) {
         }
         $aPossibleMappings['methods'][] = 'numberConversion'; // This stops calling this method again.
         file_put_contents($_CONFIG['user']['mutalyzer_cache_mapping'], $sVariant . "\t" . json_encode($aPossibleMappings) . "\n", FILE_APPEND);
+        // This doesn't actually always lead to a new variant mapping. It might as well just be the method "numberConversion" being added.
         $nVariantsAddedToCache ++;
     }
 
@@ -1632,43 +1645,42 @@ foreach ($aData as $sVariant => $aVariant) {
             if (isset($_CACHE['mutalyzer_cache_NC'][$sLOVDVariant])) {
                 $sVariantCorrected = $_CACHE['mutalyzer_cache_NC'][$sLOVDVariant];
 
-                // Do we actually still have this variant in the VKGL dataset?
-                if ($sVariantCorrected{0} != '{' && $_CONFIG['user']['delete_redundant_variants'] == 'y'
+                // Check if this is a cached error message.
+                if ($sVariantCorrected{0} == '{') {
+                    // Variant is actually in error. These are OK to be removed, since we don't want them.
+                    // If the variant is still in the source, that's OK, because he will be skipped there, too.
+                    $bRemoveVariant = true;
+                    $aErrorMessages = json_decode($sVariantCorrected, true);
+                    array_walk($aErrorMessages, function (&$sValue, $sError) { $sValue = $sError . ': ' . $sValue; });
+                    $sRemoveMessage = 'Variant is in error: ' . implode('; ', $aErrorMessages);
+
+                } elseif ($sLOVDVariant != $sVariantCorrected) {
+                    // LOVD variant is in the cache, and has a different name.
+
+                    // Whoops. From a previous release, we have uncorrected data in LOVD. It won't match this way.
+                    // Correct the key; this will make a match possible. The update will then fix the entry's DNA field.
+                    $sLOVDNewKey = $nCenter . ':' . $sVariantCorrected;
+                    if (!isset($aDataLOVD[$sLOVDNewKey])) {
+                        // Copy data, correct variant doesn't exist in LOVD yet.
+                        $aDataLOVD[$sLOVDNewKey] = $aLOVDVariant;
+                        unset($aDataLOVD[$sLOVDKey]);
+                        continue;
+                    } else {
+                        // We have an old notation for this center, but also the corrected.
+                        // Let the corrected match with the variant in case we still have it, remove this old one.
+                        $bRemoveVariant = true;
+                        $sRemoveMessage = 'Variant notation is not normalized, and the correct notation (' . $sVariantCorrected . ') is already in the database for this center.';
+                    }
+                }
+
+                if (!$bRemoveVariant && $_CONFIG['user']['delete_redundant_variants'] == 'y'
                     && (!isset($aData[$sVariantCorrected]) || !isset($aData[$sVariantCorrected]['classifications'][$sCenter]))) {
-                    // We've seen this variant before; it's in the cache, but the corrected variant is not in the data.
+                    // We aren't already removing this variant, but we don't actually see this variant anymore.
                     // The variant is lost, there's nothing to do about it. If the user has indicated so, remove it,
                     //  but mark it only as removed. Later we can always decide to actually remove these entries.
                     $bRemoveVariant = true;
                     $sRemoveMessage = 'Variant no longer found in the VKGL dataset for this center.';
-
-                } elseif ($sLOVDVariant != $sVariantCorrected) {
-                    // LOVD variant is in the cache, and has a different name or is in error.
-                    // Check if this is not a cached error message.
-                    if ($sVariantCorrected{0} == '{') {
-                        // Variant is actually in error. These are OK to be removed, since we don't want them.
-                        // If the variant is still in the source, that's OK, because he will be skipped there, too.
-                        $bRemoveVariant = true;
-                        $aErrorMessages = json_decode($sVariantCorrected, true);
-                        array_walk($aErrorMessages, function (&$sValue, $sError) { $sValue = $sError . ': ' . $sValue; });
-                        $sRemoveMessage = 'Variant is in error: ' . implode('; ', $aErrorMessages);
-                    } else {
-                        // Whoops. From a previous release, we have uncorrected data in LOVD. It won't match this way.
-                        // Correct the key; this will make a match possible. The update will then fix the entry's DNA field.
-                        $sLOVDNewKey = $nCenter . ':' . $sVariantCorrected;
-                        if (!isset($aDataLOVD[$sLOVDNewKey])) {
-                            // Let's not overwrite data...
-                            $aDataLOVD[$sLOVDNewKey] = $aLOVDVariant;
-                            unset($aDataLOVD[$sLOVDKey]);
-                            continue;
-                        } else {
-                            // We have an old notation for this center, but also the corrected.
-                            // Let the corrected match with the variant in case we still have it, remove this old one.
-                            $bRemoveVariant = true;
-                            $sRemoveMessage = 'Variant notation is not normalized, and the correct notation (' . $sVariantCorrected . ') is already in the database for this center.';
-                        }
-                    }
                 }
-                // Variant is all OK; cached, and normalized. Let it pass.
 
             } elseif (!in_array($sLOVDVariant, $_CACHE['mutalyzer_cache_NC'])) {
                 // We haven't seen this variant before. Not as an input to the cache, not as a result of the cache.
@@ -1690,7 +1702,7 @@ foreach ($aData as $sVariant => $aVariant) {
 
             // Remove variant if needed. Don't touch the Remarks_Non_Public, we don't want to complicate things.
             // Also, don't run this if we don't have to. Check status and current remarks.
-            if ($bRemoveVariant) {
+            if ($bRemoveVariant && !$bDebug) {
                 $sRemoveMessage = 'VKGL data sharing initiative Nederland' .
                     (!$sRemoveMessage? '' : '; ' . $sRemoveMessage);
                 $q = $_DB->query('UPDATE ' . TABLE_VARIANTS . '
@@ -1837,9 +1849,14 @@ foreach ($aData as $sVariant => $aVariant) {
                 $aVOGEntry['VariantOnGenome/Remarks_Non_Public'],
                 $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public']
             );
+            // But still store the new ID, if not yet included.
+            foreach ($aVariant['id'] as $sNewID) {
+                if (!in_array($sNewID, $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'])) {
+                    $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'][] = $sNewID;
+                }
+            }
 
             // NOTE: This is debugging code. It checks the differences, and reports them, instead of running the update.
-            $bDebug = false;
             if ($bDebug) {
                 // Reduce the differences, by adapting the LOVD record a bit already.
                 if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks'] == 'VKGL data sharing initiative Nederland; correct HGVS to be checked') {
@@ -2036,7 +2053,7 @@ foreach ($aData as $sVariant => $aVariant) {
 
 
 
-        } elseif (!$aAddToCache) {
+        } elseif (!$aAddToCache && !$bDebug) {
             // Variant has not been seen yet by this center. Create it in the database.
             // Do this only, if we don't have LOVD variants that need to be cached.
 
