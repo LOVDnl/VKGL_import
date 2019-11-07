@@ -15,7 +15,7 @@
  * Changelog   : 0.2    2019-11-07
  *               Better debugging, store the new VKGL IDs, improved diff
  *               formatting, better annotation of double submissions so we can
- *               remove them in the future.
+ *               remove them in the future, and now ignoring the HGVS column.
  *               0.1    2019-07-18
  *               Initial release.
  *
@@ -75,6 +75,7 @@ $_CONFIG = array(
     'columns_ignore' => array(
         // These are the columns that we'll ignore. If we find any others, we'll complain.
         'stop',
+        'hgvs',
         'consensus_classification',
         'matches',
         'disease',
