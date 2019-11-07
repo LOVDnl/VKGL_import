@@ -5,9 +5,9 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-07-18
- * Version     : 0.1
- * For LOVD+   : 3.0-22
+ * Modified    : 2019-11-07
+ * Version     : 0.1.1
+ * For LOVD    : 3.0-22
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
@@ -44,7 +44,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 // Default settings. Everything in 'user' will be verified with the user, and stored in settings.json.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '0.1',
+    'version' => '0.1.1',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -1297,12 +1297,8 @@ foreach ($aData as $sVariant => $aVariant) {
             // Match with LOVD's transcript.
             $aVariant['mappings'][$sTranscript] = array(
                 'DNA' => $aMapping['c'],
-                'protein' => '-', // Always set it.
+                'protein' => (!isset($aMapping['p'])? '-' : $aMapping['p']), // Always set it.
             );
-            if (isset($aMapping['p'])) {
-                // Coding transcript, we have received a protein prediction from Mutalyzer.
-                $aVariant['mappings'][$sTranscript]['protein'] = $aMapping['p'];
-            }
         }
     }
 
@@ -1336,8 +1332,15 @@ foreach ($aData as $sVariant => $aVariant) {
             $aPositionConverterTranscripts[$sTranscript] = $sDNA;
         }
 
-        // OK, now find a transcript that is in LOVD and match it to a transcript that is in the given mappings.
-        // The LOVD transcript can only be *older*.
+        // OK, now loop the NC mappings again to compare to the position converter's output.
+        // The NC mapping's DNA field may be different from the position converter's output. So we're not comparing DNA
+        //  between those mappings, and only require the NC transcript version to also be in the position converter
+        //  results. We could still try to get more transcripts by removing this requirement, and by also looking at DNA
+        //  description matches between the NC data and the position converter. (FIXME)
+        // For now, we're looking for NC given transcripts that are found in the position converter's output, with
+        //  additional versions as well, that match each other's DNA field. Then it is assumed that the protein change
+        //  will also match, and we add this new version to our mappings list. We then hope to have more chance
+        //   comparing to transcripts in LOVD. The LOVD transcript can only be *older*.
         foreach ($aPossibleMappings as $sTranscript => $aMapping) {
             // Check if this transcript is in the numberConversion output, which is a requirement.
             if ($sTranscript == 'methods' || !isset($aPositionConverterTranscripts[$sTranscript])) {
@@ -1354,21 +1357,15 @@ foreach ($aData as $sVariant => $aVariant) {
                     // NumberConversion has the same results for both transcripts.
                     // That means the protein prediction based on the NC would be the same as well.
                     // Store this useful transcript in the cache.
-                    $_CACHE['mutalyzer_cache_mapping'][$sVariant][$sTranscriptNoVersion . '.' . $i] =
-                        $aPossibleMappings[$sTranscript];
+                    $_CACHE['mutalyzer_cache_mapping'][$sVariant][$sTranscriptNoVersion . '.' . $i] = $aMapping;
                     // Now check if LOVD has this transcript, perhaps.
                     if (isset($aTranscripts[$sTranscriptNoVersion . '.' . $i])) {
                         // Match with LOVD's transcript, and Mutalyzer's numberConversion's results.
                         // Accept the corrected mapping of the newest transcript for the lower version which is in LOVD.
                         $aVariant['mappings'][$sTranscriptNoVersion . '.' . $i] = array(
                             'DNA' => $aMapping['c'],
-                            'protein' => '', // Always set it.
+                            'protein' => (!isset($aMapping['p'])? '' : $aMapping['p']), // Always set it.
                         );
-                        if (isset($aPossibleMappings[$sTranscript]['p'])) {
-                            // Coding transcript, we have received a protein prediction from Mutalyzer.
-                            $aVariant['mappings'][$sTranscriptNoVersion . '.' . $i]['protein'] =
-                                $aPossibleMappings[$sTranscript]['p'];
-                        }
                         break; // Next transcript!
                     }
                 }
@@ -1388,6 +1385,7 @@ foreach ($aData as $sVariant => $aVariant) {
         }
         $aPossibleMappings['methods'][] = 'numberConversion'; // This stops calling this method again.
         file_put_contents($_CONFIG['user']['mutalyzer_cache_mapping'], $sVariant . "\t" . json_encode($aPossibleMappings) . "\n", FILE_APPEND);
+        // This doesn't actually always lead to a new variant mapping. It might as well just be the method "numberConversion" being added.
         $nVariantsAddedToCache ++;
     }
 
