@@ -6,13 +6,17 @@
  *
  * Created     : 2019-06-27
  * Modified    : 2019-11-07
- * Version     : 0.1.1
+ * Version     : 0.2.0
  * For LOVD    : 3.0-22
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.1    2019-07-18
+ * Changelog   : 0.2    2019-11-07
+ *               Better debugging, store the new VKGL IDs, improved diff
+ *               formatting, better annotation of double submissions so we can
+ *               remove them in the future.
+ *               0.1    2019-07-18
  *               Initial release.
  *
  * Copyright   : 2004-2019 Leiden University Medical Center; http://www.LUMC.nl/
@@ -51,7 +55,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '0.1.1',
+    'version' => '0.2.0',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -1640,43 +1644,42 @@ foreach ($aData as $sVariant => $aVariant) {
             if (isset($_CACHE['mutalyzer_cache_NC'][$sLOVDVariant])) {
                 $sVariantCorrected = $_CACHE['mutalyzer_cache_NC'][$sLOVDVariant];
 
-                // Do we actually still have this variant in the VKGL dataset?
-                if ($sVariantCorrected{0} != '{' && $_CONFIG['user']['delete_redundant_variants'] == 'y'
+                // Check if this is a cached error message.
+                if ($sVariantCorrected{0} == '{') {
+                    // Variant is actually in error. These are OK to be removed, since we don't want them.
+                    // If the variant is still in the source, that's OK, because he will be skipped there, too.
+                    $bRemoveVariant = true;
+                    $aErrorMessages = json_decode($sVariantCorrected, true);
+                    array_walk($aErrorMessages, function (&$sValue, $sError) { $sValue = $sError . ': ' . $sValue; });
+                    $sRemoveMessage = 'Variant is in error: ' . implode('; ', $aErrorMessages);
+
+                } elseif ($sLOVDVariant != $sVariantCorrected) {
+                    // LOVD variant is in the cache, and has a different name.
+
+                    // Whoops. From a previous release, we have uncorrected data in LOVD. It won't match this way.
+                    // Correct the key; this will make a match possible. The update will then fix the entry's DNA field.
+                    $sLOVDNewKey = $nCenter . ':' . $sVariantCorrected;
+                    if (!isset($aDataLOVD[$sLOVDNewKey])) {
+                        // Copy data, correct variant doesn't exist in LOVD yet.
+                        $aDataLOVD[$sLOVDNewKey] = $aLOVDVariant;
+                        unset($aDataLOVD[$sLOVDKey]);
+                        continue;
+                    } else {
+                        // We have an old notation for this center, but also the corrected.
+                        // Let the corrected match with the variant in case we still have it, remove this old one.
+                        $bRemoveVariant = true;
+                        $sRemoveMessage = 'Variant notation is not normalized, and the correct notation (' . $sVariantCorrected . ') is already in the database for this center.';
+                    }
+                }
+
+                if (!$bRemoveVariant && $_CONFIG['user']['delete_redundant_variants'] == 'y'
                     && (!isset($aData[$sVariantCorrected]) || !isset($aData[$sVariantCorrected]['classifications'][$sCenter]))) {
-                    // We've seen this variant before; it's in the cache, but the corrected variant is not in the data.
+                    // We aren't already removing this variant, but we don't actually see this variant anymore.
                     // The variant is lost, there's nothing to do about it. If the user has indicated so, remove it,
                     //  but mark it only as removed. Later we can always decide to actually remove these entries.
                     $bRemoveVariant = true;
                     $sRemoveMessage = 'Variant no longer found in the VKGL dataset for this center.';
-
-                } elseif ($sLOVDVariant != $sVariantCorrected) {
-                    // LOVD variant is in the cache, and has a different name or is in error.
-                    // Check if this is not a cached error message.
-                    if ($sVariantCorrected{0} == '{') {
-                        // Variant is actually in error. These are OK to be removed, since we don't want them.
-                        // If the variant is still in the source, that's OK, because he will be skipped there, too.
-                        $bRemoveVariant = true;
-                        $aErrorMessages = json_decode($sVariantCorrected, true);
-                        array_walk($aErrorMessages, function (&$sValue, $sError) { $sValue = $sError . ': ' . $sValue; });
-                        $sRemoveMessage = 'Variant is in error: ' . implode('; ', $aErrorMessages);
-                    } else {
-                        // Whoops. From a previous release, we have uncorrected data in LOVD. It won't match this way.
-                        // Correct the key; this will make a match possible. The update will then fix the entry's DNA field.
-                        $sLOVDNewKey = $nCenter . ':' . $sVariantCorrected;
-                        if (!isset($aDataLOVD[$sLOVDNewKey])) {
-                            // Let's not overwrite data...
-                            $aDataLOVD[$sLOVDNewKey] = $aLOVDVariant;
-                            unset($aDataLOVD[$sLOVDKey]);
-                            continue;
-                        } else {
-                            // We have an old notation for this center, but also the corrected.
-                            // Let the corrected match with the variant in case we still have it, remove this old one.
-                            $bRemoveVariant = true;
-                            $sRemoveMessage = 'Variant notation is not normalized, and the correct notation (' . $sVariantCorrected . ') is already in the database for this center.';
-                        }
-                    }
                 }
-                // Variant is all OK; cached, and normalized. Let it pass.
 
             } elseif (!in_array($sLOVDVariant, $_CACHE['mutalyzer_cache_NC'])) {
                 // We haven't seen this variant before. Not as an input to the cache, not as a result of the cache.
