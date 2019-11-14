@@ -570,7 +570,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                 ));
                 $aValues = array(
                     'protein' => $aDataLine['p_nomen'],
-                    $sCenter => str_replace(array('_', 'vous'), array(' ', 'vus'), strtolower($aDataLine['classification'])),
+                    $sCenter => str_replace(array('_', 'vous'), array(' ', 'VUS'), strtolower($aDataLine['classification'])),
                     $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['last_updated_by'],
                 );
                 break;
@@ -606,17 +606,17 @@ foreach ($aFiles as $sFile => $sCenter) {
                     'protein' => $aDataLine['protein'],
                     $sCenter => str_replace(
                         array(
-                            '-',
                             '-?',
-                            '?',
+                            '-',
                             '+?',
                             '+',
+                            '?',
                         ), array(
-                            'B',
-                            'LB',
+                            'likely benign',
+                            'benign',
+                            'likely pathogenic',
+                            'pathogenic',
                             'VUS',
-                            'LP',
-                            'P',
                         ), strtolower($aDataLine['variant_effect'])),
                     $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['refseq_build'],
                 );
@@ -650,7 +650,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                 }
 
                 $sVariantKey = implode('|', array(
-                    $aDataLine['chromosome'],
+                    preg_replace('/^chr/', '', $aDataLine['chromosome']),
                     $aDataLine['start'],
                     $aDataLine['ref'],
                     $aDataLine['alt'],
@@ -668,11 +668,11 @@ foreach ($aFiles as $sFile => $sCenter) {
                             'class 4',
                             'class 5',
                         ), array(
-                            'B',
-                            'LB',
+                            'benign',
+                            'likely benign',
                             'VUS',
-                            'LP',
-                            'P',
+                            'likely pathogenic',
+                            'pathogenic',
                         ), strtolower($aDataLine['classification'])),
                     $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['classification'],
                 );
@@ -751,7 +751,7 @@ foreach ($aData as $sVariantKey => $aVariant) {
         $aVariantKey[4], // Gene.
         $aVariantKey[5], // Transcript.
         $aVariantKey[6], // cDNA.
-        implode(', ', $aVariant['protein']),
+        implode(', ', array_unique($aVariant['protein'])),
     );
 
     // Loop centers.
