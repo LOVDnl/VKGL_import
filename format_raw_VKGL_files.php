@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2019-11-13
+ * Modified    : 2019-11-14
  * Version     : 0.1.0
  * For LOVD    : 3.0-22
  *
@@ -13,7 +13,7 @@
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.1.0  2019-11-13
+ * Changelog   : 0.1.0  2019-11-14
  *               Initial release.
  *
  * Copyright   : 2004-2019 Leiden University Medical Center; http://www.LUMC.nl/
@@ -56,6 +56,7 @@ $_CONFIG = array(
         'alt;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;' .
             'ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
         'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc',
+        'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud',
     ),
     'user' => array(
         // Variables we will be asking the user.
@@ -376,17 +377,13 @@ foreach ($aFiles as $nKey => $sFile) {
 
 // Get settings file, if it exists.
 $_SETT = array();
-if (!file_exists($_CONFIG['settings_file'])) {
-    if (!touch($_CONFIG['settings_file'])) {
+if (file_exists($_CONFIG['settings_file']) && is_file($_CONFIG['settings_file'])
+    && is_readable($_CONFIG['settings_file'])) {
+    if (!($_SETT = json_decode(file_get_contents($_CONFIG['settings_file']), true))) {
         lovd_printIfVerbose(VERBOSITY_LOW,
-            'Error: Could not create settings file.' . "\n\n");
-        die(EXIT_ERROR_SETTINGS_CANT_CREATE);
+            'Error: Unreadable settings file.' . "\n\n");
+        die(EXIT_ERROR_SETTINGS_UNREADABLE);
     }
-} elseif (!is_file($_CONFIG['settings_file']) || !is_readable($_CONFIG['settings_file'])
-    || !($_SETT = json_decode(file_get_contents($_CONFIG['settings_file']), true))) {
-    lovd_printIfVerbose(VERBOSITY_LOW,
-        'Error: Unreadable settings file.' . "\n\n");
-    die(EXIT_ERROR_SETTINGS_UNREADABLE);
 }
 
 // The settings file always replaces the standard defaults.
@@ -460,30 +457,51 @@ foreach ($aFiles as $sFile => $sCenter) {
         die(EXIT_ERROR_INPUT_CANT_OPEN);
     }
 
-    while ($sLine = fgets($fInput)) {
-        $nLine++;
-        $sLine = strtolower(rtrim($sLine));
-        if (!$sLine) {
-            continue;
+    // The Radboud data doesn't have a header :(
+    if ($sCenter == 'radboud_mumc') {
+        // Invent the header.
+        $sLine = implode("\t", array(
+            'chromosome',
+            'start',
+            'stop',
+            'ref',
+            'alt',
+            'gene',
+            'transcript_or_dna',
+            'empty',
+            'empty',
+            'location',
+            'empty',
+            'classification',
+        ));
+
+    } else {
+        // Loop through data until we get a header.
+        while ($sLine = fgets($fInput)) {
+            $nLine++;
+            $sLine = strtolower(rtrim($sLine));
+            if (!$sLine) {
+                continue;
+            }
+            break;
         }
+    }
 
-        // First line should be headers.
-        $aHeaders = explode("\t", $sLine);
-        $nHeaders = count($aHeaders);
+    // First line should be headers.
+    $aHeaders = explode("\t", $sLine);
+    $nHeaders = count($aHeaders);
 
-        // Check headers signature.
-        $aSignature = $aHeaders;
-        sort($aSignature);
-        $sHeaderSignature = implode(';', $aSignature);
+    // Check headers signature.
+    $aSignature = $aHeaders;
+    sort($aSignature);
+    $sHeaderSignature = implode(';', $aSignature);
 
-        if (!isset($_CONFIG['header_signatures'][$sHeaderSignature])) {
-            lovd_printIfVerbose(VERBOSITY_LOW,
-                'Error: File does not conform to any known format: ' . $sFile . ".\n\n");
-            die(EXIT_ERROR_HEADER_FIELDS_INCORRECT);
-        } else {
-            $sFileType = $_CONFIG['header_signatures'][$sHeaderSignature];
-        }
-        break;
+    if (!isset($_CONFIG['header_signatures'][$sHeaderSignature])) {
+        lovd_printIfVerbose(VERBOSITY_LOW,
+            'Error: File does not conform to any known format: ' . $sFile . ".\n\n");
+        die(EXIT_ERROR_HEADER_FIELDS_INCORRECT);
+    } else {
+        $sFileType = $_CONFIG['header_signatures'][$sHeaderSignature];
     }
 
     if (!$aHeaders) {
@@ -538,6 +556,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                     $sCenter . '_link' => $aDataLine['last_updated_by'],
                 );
                 break;
+
             case 'lumc':
                 // Because all data is otherwise in (sort of) VCF fields and I don't want to pull the normalization code
                 //  into this script, I'm just creating the (sort of) VCF fields that VKGL is using. This would allow
@@ -582,6 +601,59 @@ foreach ($aFiles as $sFile => $sCenter) {
                         ), strtolower($aDataLine['variant_effect'])),
                     $sCenter . '_link' => $aDataLine['refseq_build'],
                 );
+                break;
+
+            case 'radboud':
+                // The transcript field is a bit of a mix.
+                $sTranscript = '';
+                $sDNA = '';
+                $sProtein = '';
+                $aTranscripts = array_map('trim', preg_split('/[,; ]/', $aDataLine['transcript_or_dna']));
+                foreach ($aTranscripts as $sDescription) {
+                    if (preg_match('/(NM_[0-9]{6,9}\.[0-9]+|ENST[0-9]+\.[0-9])(?:\(' . preg_quote($aDataLine['gene'], '/') . '\))?:(c\.[0-9_+-]+[A-Z>deldupins]+)/', $sDescription, $aRegs)) {
+                        // cDNA given; store separate fields.
+                        $sTranscript = $aRegs[1];
+                        $sDNA = $aRegs[2];
+                        continue;
+                    } elseif (preg_match('/p\.(\([A-Z][a-z]{2}[0-9]+[A-Z][a-z]{2}\)|[A-Z][a-z]{2}[0-9]+[A-Z][a-z]{2})/', $sDescription, $aRegs)) {
+                        // Protein given; store in protein field.
+                        $sProtein = $aRegs[0];
+                        continue;
+                    } elseif (preg_match('/^(Chr[0-9XYM]+\(GRCh[0-9]{2}\):)?g\.[0-9]+([A-Z]>[A-Z]|ins[ACGT]+)$/', $sDescription, $aRegs)) {
+                        // Genomic DNA given; store in DNA field.
+                        $sDNA = $aRegs[0];
+                        continue;
+                    }
+                }
+
+                $sVariantKey = implode('|', array(
+                    $aDataLine['chromosome'],
+                    $aDataLine['start'],
+                    $aDataLine['ref'],
+                    $aDataLine['alt'],
+                    $aDataLine['gene'],
+                    $sTranscript,
+                    $sDNA,
+                ));
+                $aValues = array(
+                    'protein' => $sProtein,
+                    $sCenter => str_replace(
+                        array(
+                            'class 1',
+                            'class 2',
+                            'class 3',
+                            'class 4',
+                            'class 5',
+                        ), array(
+                            'B',
+                            'LB',
+                            'VUS',
+                            'LP',
+                            'P',
+                        ), strtolower($aDataLine['classification'])),
+                    $sCenter . '_link' => $aDataLine['classification'],
+                );
+                break;
         }
 
         if (!$sVariantKey) {
