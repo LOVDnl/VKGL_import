@@ -51,13 +51,26 @@ $_CONFIG = array(
     'flags' => array(
         'y' => false,
     ),
-    'mutalyzer_URL' => 'https://test.mutalyzer.nl/', // Test may be faster than www.mutalyzer.nl.
+    'columns_mandatory' => array(
+        // These are the columns that need to be present in order for the file to get processed.
+        'id',
+        'chromosome',
+        'start',
+        'ref',
+        'alt',
+        'gene',
+        'transcript',
+        'c_dna',
+        'protein',
+    ),
+    'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
     'header_signatures' => array(
         'alt;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;' .
             'ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
         'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc',
         'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud',
     ),
+    'mutalyzer_URL' => 'https://test.mutalyzer.nl/', // Test may be faster than www.mutalyzer.nl.
     'user' => array(
         // Variables we will be asking the user.
         'consensus_file' => 'vkgl_consensus_' . date('Y-m-d') . '.tsv',
@@ -438,12 +451,16 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM, "\n" .
 
 
 
-// Loop through files and load all data, converting and normalizing the VCF fields.
+// Loop through files and load all data, grouping the entries in memory.
 $aData = array();
 ksort($aFiles);
+$nFile = 0;
 foreach ($aFiles as $sFile => $sCenter) {
-    lovd_printIfVerbose(VERBOSITY_MEDIUM, "\n" .
-        ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Parsing VKGL file for center ' . $sCenter . '...' . "\n");
+    lovd_printIfVerbose(VERBOSITY_MEDIUM,
+        ' ' . date('H:i:s', time() - $tStart) . ' [' .
+        str_pad(number_format(($nFile/$nCentersFound)*100, 1), 5, ' ', STR_PAD_LEFT) .
+        '%] Parsing VKGL file for center ' . $sCenter . '...' . "\n");
+    $nFile ++;
 
     $aHeaders = array();
     $nHeaders = 0;
@@ -531,7 +548,8 @@ foreach ($aFiles as $sFile => $sCenter) {
         } elseif ($nHeaders < $nDataColumns) {
             // Eh? More data received than headers.
             lovd_printIfVerbose(VERBOSITY_LOW,
-                'Error: Data line ' . $nLine . ' has ' . count($aDataLine) . ' columns instead of the expected ' . $nHeaders . ".\n\n");
+                'Error: Data line ' . $nLine . ' has ' . count($aDataLine) .
+                ' columns instead of the expected ' . $nHeaders . ".\n\n");
             die(EXIT_ERROR_DATA_FIELD_COUNT_INCORRECT);
         }
 
@@ -553,7 +571,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                 $aValues = array(
                     'protein' => $aDataLine['p_nomen'],
                     $sCenter => str_replace(array('_', 'vous'), array(' ', 'vus'), strtolower($aDataLine['classification'])),
-                    $sCenter . '_link' => $aDataLine['last_updated_by'],
+                    $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['last_updated_by'],
                 );
                 break;
 
@@ -565,7 +583,8 @@ foreach ($aFiles as $sFile => $sCenter) {
                 $aVariant = lovd_HGVStoVCF($aDataLine['gdna_normalized']);
                 if ($aVariant === false) {
                     lovd_printIfVerbose(VERBOSITY_LOW,
-                        'Error: Unhandled variant, could not generate VCF fields: ' . $aDataLine['gdna_normalized'] . ".\n\n");
+                        'Error: Unhandled variant, could not generate VCF fields: ' .
+                        $aDataLine['gdna_normalized'] . ".\n\n");
                     die(EXIT_ERROR_DATA_CONTENT_ERROR);
                 }
 
@@ -599,7 +618,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                             'LP',
                             'P',
                         ), strtolower($aDataLine['variant_effect'])),
-                    $sCenter . '_link' => $aDataLine['refseq_build'],
+                    $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['refseq_build'],
                 );
                 break;
 
@@ -610,16 +629,20 @@ foreach ($aFiles as $sFile => $sCenter) {
                 $sProtein = '';
                 $aTranscripts = array_map('trim', preg_split('/[,; ]/', $aDataLine['transcript_or_dna']));
                 foreach ($aTranscripts as $sDescription) {
-                    if (preg_match('/(NM_[0-9]{6,9}\.[0-9]+|ENST[0-9]+\.[0-9])(?:\(' . preg_quote($aDataLine['gene'], '/') . '\))?:(c\.[0-9_+-]+[A-Z>deldupins]+)/', $sDescription, $aRegs)) {
+                    if (preg_match('/(NM_[0-9]{6,9}\.[0-9]+|ENST[0-9]+\.[0-9])(?:\(' .
+                            preg_quote($aDataLine['gene'], '/') .
+                            '\))?:(c\.[0-9_+-]+[A-Z>deldupins]+)/', $sDescription, $aRegs)) {
                         // cDNA given; store separate fields.
                         $sTranscript = $aRegs[1];
                         $sDNA = $aRegs[2];
                         continue;
-                    } elseif (preg_match('/p\.(\([A-Z][a-z]{2}[0-9]+[A-Z][a-z]{2}\)|[A-Z][a-z]{2}[0-9]+[A-Z][a-z]{2})/', $sDescription, $aRegs)) {
+                    } elseif (preg_match('/p\.(\([A-Z][a-z]{2}[0-9]+[A-Z][a-z]{2}\)|[A-Z][a-z]{2}[0-9]+[A-Z][a-z]{2})/',
+                            $sDescription, $aRegs)) {
                         // Protein given; store in protein field.
                         $sProtein = $aRegs[0];
                         continue;
-                    } elseif (preg_match('/^(Chr[0-9XYM]+\(GRCh[0-9]{2}\):)?g\.[0-9]+([A-Z]>[A-Z]|ins[ACGT]+)$/', $sDescription, $aRegs)) {
+                    } elseif (preg_match('/^(Chr[0-9XYM]+\(GRCh[0-9]{2}\):)?g\.[0-9]+([A-Z]>[A-Z]|ins[ACGT]+)$/',
+                            $sDescription, $aRegs)) {
                         // Genomic DNA given; store in DNA field.
                         $sDNA = $aRegs[0];
                         continue;
@@ -651,7 +674,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                             'LP',
                             'P',
                         ), strtolower($aDataLine['classification'])),
-                    $sCenter . '_link' => $aDataLine['classification'],
+                    $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['classification'],
                 );
                 break;
         }
@@ -681,8 +704,15 @@ foreach ($aFiles as $sFile => $sCenter) {
             }
         }
     }
+
+    // Also add center to headers for output.
+    $_CONFIG['columns_mandatory'][] = $sCenter;
+    $_CONFIG['columns_mandatory'][] = $sCenter . $_CONFIG['columns_center_suffix'];
+
     lovd_printIfVerbose(VERBOSITY_MEDIUM,
-        ' ' . date('H:i:s', time() - $tStart) . ' [100.0%] VKGL file successfully parsed, currently at ' . count($aData) . ' variants.' . "\n");
+        ' ' . date('H:i:s', time() - $tStart) . ' [' .
+        str_pad(number_format(($nFile/$nCentersFound)*100, 1), 5, ' ', STR_PAD_LEFT) .
+        '%] VKGL file successfully parsed, currently at ' . count($aData) . ' variants.' . "\n");
 }
 
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
@@ -690,4 +720,64 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
     ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Writing consensus data file...' . "\n");
 
 
+
+
+
+// Write header first.
+$fOutput = fopen($_CONFIG['user']['consensus_file'], 'w');
+if ($fOutput === false) {
+    lovd_printIfVerbose(VERBOSITY_LOW,
+        'Error: Can not open file for writing:' . $_CONFIG['user']['consensus_file'] . ".\n\n");
+    die(EXIT_ERROR_CACHE_CANT_CREATE);
+}
+fputs($fOutput, implode("\t", $_CONFIG['columns_mandatory']) . "\r\n");
+
+
+
+// Loop data and write to file.
+foreach ($aData as $sVariantKey => $aVariant) {
+    // Decompose the key again to Chr, Pos, Ref, Alt, Gene, Transcript, cDNA.
+    $aVariantKey = explode('|', $sVariantKey);
+
+    $aLine = array(
+        // https://github.com/molgenis/data-transform-vkgl/blob/master/src/main/java/org/molgenis/mappers/VkglTableMapper.java#L10
+        substr(hash('sha256',
+            $aVariantKey[0] . '_' . $aVariantKey[1] . '_' . $aVariantKey[2] . '_' . $aVariantKey[3] . '_' .
+            $aVariantKey[4]), 0, 10), // ID; sha256(chr + "_" + pos + "_" + ref + "_" + alt + "_" + gene).substr(0,10);
+        $aVariantKey[0], // Chr.
+        $aVariantKey[1], // Pos.
+        $aVariantKey[2], // Ref.
+        $aVariantKey[3], // Alt.
+        $aVariantKey[4], // Gene.
+        $aVariantKey[5], // Transcript.
+        $aVariantKey[6], // cDNA.
+        implode(', ', $aVariant['protein']),
+    );
+
+    // Loop centers.
+    foreach ($aCentersFound as $sCenter) {
+        if (isset($aVariant[$sCenter])) {
+            $aLine[] = $aVariant[$sCenter];
+        } else {
+            $aLine[] = '';
+        }
+        if (isset($aVariant[$sCenter . $_CONFIG['columns_center_suffix']])) {
+            $aLine[] = $aVariant[$sCenter . $_CONFIG['columns_center_suffix']];
+        } else {
+            $aLine[] = '';
+        }
+    }
+
+    // Write data.
+    fputs($fOutput, implode("\t", $aLine) . "\r\n");
+}
+
+// Final message.
+$nVariants = count($aData);
+lovd_printIfVerbose(VERBOSITY_MEDIUM,
+    ' ' . date('H:i:s', time() - $tStart) . ' [100.0%] ' . $nVariants . ' variants stored.' . "\n\n");
+
+if ($nWarningsOccurred) {
+    die(EXIT_WARNINGS_OCCURRED);
+}
 ?>
