@@ -5,8 +5,8 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-11-07
- * Version     : 0.2.0
+ * Modified    : 2019-11-14
+ * Version     : 0.2.1
  * For LOVD    : 3.0-22
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
@@ -45,6 +45,8 @@
 //  This can be improved on, by taking in mappings that map into locations that we can generate the protein change for.
 //  Notes: Position converter descriptions are *not* normalized. For variants on the reverse strand, this is a problem.
 //         If you fix this, remove "numberConversion" as a method from the cache, so all variants will be repeated.
+// FIXME: Fix conflicts if on different genes, they can be regarded as non-conflicts.
+// FIXME: We are not seeing EREF errors in case of deletions, and they do happen. So we let incorrect variants through.
 
 // Command line only.
 if (isset($_SERVER['HTTP_HOST'])) {
@@ -55,7 +57,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '0.2.0',
+    'version' => '0.2.1',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -829,8 +831,8 @@ while ($sLine = fgets($fInput)) {
 
     $aDataLine = array_combine($aHeaders, $aDataLine);
 
-    // Store data. We assume here that the ID field is unique.
-    $aData[$aDataLine['id']] = array_intersect_key($aDataLine, array_flip($aColumnsToUse));
+    // Store data.
+    $aData[] = array_intersect_key($aDataLine, array_flip($aColumnsToUse));
 }
 
 $nVariants = count($aData);
@@ -852,11 +854,12 @@ $nVariantsDone = 0;
 $nVariantsAddedToCache = 0;
 $nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you can see the progress.
 $tProgressReported = microtime(true); // Don't report progress again within a certain amount of time.
-foreach ($aData as $sID => $aVariant) {
+foreach ($aData as $nKey => $aVariant) {
     // VKGL stores chrM data as "MT".
     if ($aVariant['chromosome'] == 'MT') {
         $aVariant['chromosome'] = 'M';
     }
+    $sID = $aVariant['id'];
 
     if (!isset($_SETT['human_builds'][$_CONFIG['user']['refseq_build']]['ncbi_sequences'][$aVariant['chromosome']])) {
         // Can't get chromosome's NC refseq?
@@ -889,7 +892,7 @@ foreach ($aData as $sID => $aVariant) {
         $nWarningsOccurred ++;
         $nVariantsLost ++;
         $nVariantsDone ++;
-        unset($aData[$sID]); // We don't want to continue working with this variant.
+        unset($aData[$nKey]); // We don't want to continue working with this variant.
         continue; // Next variant.
     }
 
@@ -923,7 +926,7 @@ foreach ($aData as $sID => $aVariant) {
             $nWarningsOccurred ++;
             $nVariantsLost ++;
             $nVariantsDone ++;
-            unset($aData[$sID]); // We don't want to continue working with this variant.
+            unset($aData[$nKey]); // We don't want to continue working with this variant.
             continue; // Next variant.
         }
 
@@ -939,9 +942,9 @@ foreach ($aData as $sID => $aVariant) {
             $aError = array();
             if (!empty($aResult['errors']) && isset($aResult['messages'])) {
                 foreach ($aResult['messages'] as $aMessage) {
-                    if (isset($aMessage['errorcode']) && $aMessage['errorcode'] == 'EREF') {
+                    if (isset($aMessage['errorcode']) && in_array($aMessage['errorcode'], array('ERANGE', 'EREF'))) {
                         // Cache this error.
-                        $aError['EREF'] = $aMessage['message'];
+                        $aError[$aMessage['errorcode']] = $aMessage['message'];
                     }
                 }
                 // Save to cache.
@@ -958,7 +961,7 @@ foreach ($aData as $sID => $aVariant) {
             $nWarningsOccurred ++;
             $nVariantsLost ++;
             $nVariantsDone ++;
-            unset($aData[$sID]); // We don't want to continue working with this variant.
+            unset($aData[$nKey]); // We don't want to continue working with this variant.
             continue; // Next variant.
         }
 
@@ -1034,7 +1037,7 @@ foreach ($aData as $sID => $aVariant) {
     unset($aVariant['position']); // Never needed.
     unset($aVariant['start'], $aVariant['ref'], $aVariant['alt']); // We're done using VCF now.
     unset($aVariant['position_g_start'], $aVariant['position_g_end'], $aVariant['type']); // Are unreliable now.
-    $aData[$sID] = $aVariant;
+    $aData[$nKey] = $aVariant;
 
     // Print update, for every percentage changed.
     $nVariantsDone ++;
@@ -1065,7 +1068,7 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
 
 // Loop variants again, merging entries.
 $nVariantsMerged = 0;
-foreach ($aData as $sID => $aVariant) {
+foreach ($aData as $nKey => $aVariant) {
     // Merging makes reconstructing some fields much harder, so link them now.
     $aVariant['published_as'] = '';
     if ($aVariant['c_dna']) {
@@ -1092,7 +1095,7 @@ foreach ($aData as $sID => $aVariant) {
     }
 
     // Get rid of the old data.
-    unset($aData[$sID]);
+    unset($aData[$nKey]);
 }
 
 $nVariants = count($aData);
@@ -1242,7 +1245,7 @@ foreach ($aData as $sVariant => $aVariant) {
         }
 
         // Published as.
-        $aVariant['published_as'] = array_unique($aVariant['published_as']);
+        $aVariant['published_as'] = array_diff(array_unique($aVariant['published_as']), array(''));
 
         // VariantOnGenome/DNA, we grouped on this, so just remove.
         $aVariant['VariantOnGenome/DNA'] = current($aVariant['VariantOnGenome/DNA']);
