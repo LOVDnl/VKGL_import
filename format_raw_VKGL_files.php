@@ -569,7 +569,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                     $aDataLine['c_nomen'],
                 ));
                 $aValues = array(
-                    'protein' => $aDataLine['p_nomen'],
+                    'protein' => str_replace('NULL', '', $aDataLine['p_nomen']),
                     $sCenter => str_replace(array('_', 'vous'), array(' ', 'VUS'), strtolower($aDataLine['classification'])),
                     $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['last_updated_by'],
                 );
@@ -603,7 +603,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                     $aDataLine['cdna'],
                 ));
                 $aValues = array(
-                    'protein' => $aDataLine['protein'],
+                    'protein' => str_replace('NULL', '', $aDataLine['protein']),
                     $sCenter => str_replace(
                         array(
                             '-?',
