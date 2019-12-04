@@ -5,20 +5,21 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-12-03
+ * Modified    : 2019-12-04
  * Version     : 0.3
  * For LOVD    : 3.0-22
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.3    2019-12-03
+ * Changelog   : 0.3    2019-12-04
  *               Handle conflicts per gene per center, not just per center. Some
  *               centers are classifying a variant twice on purpose, on multiple
  *               genes. (L)P on one, (L)B on the other. From now on, we'll call
  *               conflicts only when the same gene is used within one center. If
  *               multiple genes are used, we'll pick the most severe
  *               classification.
+ *               Also, prevent false positive updates while debugging.
  *               0.2    2019-11-07
  *               Better debugging, store the new VKGL IDs, improved diff
  *               formatting, better annotation of double submissions so we can
@@ -1960,7 +1961,10 @@ foreach ($aData as $sVariant => $aVariant) {
                 $aDiff['VariantOnGenome/Remarks_Non_Public'][1] = $aVOGEntry['VariantOnGenome/Remarks_Non_Public'];
             }
 
-            if ($bDebug) {
+            // If there is a diff, and we're in debug mode, report the diff but do nothing. This way, we can check if
+            //  our script works well. To prevent very long diffs however, remove certain elements from the diff that we
+            //  understand can easily change.
+            if ($aDiff && $bDebug) {
                 // When the classification changes and becomes just a bit more or less sure, it's fine.
                 // Do check if the concluded effect doesn't change.
                 if (isset($aDiff['effectid']) && substr($aDiff['effectid'][0], -1) == substr($aDiff['effectid'][1], -1)) {
