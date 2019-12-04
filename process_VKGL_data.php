@@ -5,14 +5,22 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-11-14
- * Version     : 0.2.1
+ * Modified    : 2019-12-04
+ * Version     : 0.3
  * For LOVD    : 3.0-22
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.2    2019-11-07
+ * Changelog   : 0.3    2019-12-04
+ *               Handle conflicts per gene per center, not just per center. Some
+ *               centers are classifying a variant twice on purpose, on multiple
+ *               genes. (L)P on one, (L)B on the other. From now on, we'll call
+ *               conflicts only when the same gene is used within one center. If
+ *               multiple genes are used, we'll pick the most severe
+ *               classification.
+ *               Also, prevent false positive updates while debugging.
+ *               0.2    2019-11-07
  *               Better debugging, store the new VKGL IDs, improved diff
  *               formatting, better annotation of double submissions so we can
  *               remove them in the future, and now ignoring the HGVS column.
@@ -57,7 +65,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '0.2.1',
+    'version' => '0.3',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -870,11 +878,14 @@ foreach ($aData as $nKey => $aVariant) {
 
     // Translate all classification values to easier values.
     // I need this cleaned up here already, so I can report which centers cause problems.
+    // Also store the genes per center, as the classification is specific for this gene.
     $aVariant['classifications'] = array();
+    $aVariant['genes'] = array();
     foreach ($aCentersFound as $sCenter) {
         if ($aVariant[$sCenter]) {
             $aVariant['classifications'][$sCenter] = str_replace(array('likely ', 'benign', 'pathogenic', 'vus'),
                 array('L', 'B', 'P', 'VUS'), strtolower($aVariant[$sCenter]));
+            $aVariant['genes'][$sCenter] = $aVariant['gene'];
         }
         unset($aVariant[$sCenter]);
     }
@@ -1121,52 +1132,85 @@ foreach ($aData as $sVariant => $aVariant) {
     $bInternalConflict = false;
     foreach ($aVariant['classifications'] as $sCenter => $Classification) {
         if (is_array($Classification)) {
-            // Flipping the array makes the values unique and makes it easier to work with the values
-            // (isset()s are faster than array_search() and in_array()).
-            $aClassifications = array_flip($Classification);
-
-            if (count($aClassifications) > 1) {
-                // Rules: report opposites, */VUS to VUS, LB/B to LB, LP/P to LP.
-                if ((isset($aClassifications['B']) || isset($aClassifications['LB']))
-                    && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
-                    // Internal conflict within center.
-                    lovd_printIfVerbose(VERBOSITY_MEDIUM,
-                        ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
-                            floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
-                            5, ' ', STR_PAD_LEFT) .
-                        '%] Warning: Internal conflict in center ' . $sCenter . ': ' . implode(', ', $Classification) . ".\n" .
-                        '                   IDs: ' . implode("\n                        ", $aVariant['id']) . "\n");
-                    // Reduce to one string, we want to store the conflict to report this in LOVD in a non-public entry.
-                    $aClassifications = array(implode(',', $Classification) => 1);
-                    $bInternalConflict = true; // This'll make the consensus code a lot cleaner.
-
-                } elseif (isset($aClassifications['VUS'])) {
-                    // VUS and something else, not a conflict. OK, VUS then.
-                    $aClassifications = array('VUS' => 1); // Remove the other classification(s).
-
-                } else {
-                    // Still multiple values. LB/B to LB, LP/P to LP.
-                    if (isset($aClassifications['B']) && isset($aClassifications['LB'])) {
-                        unset($aClassifications['B']);
-                    }
-                    if (isset($aClassifications['P']) && isset($aClassifications['LP'])) {
-                        unset($aClassifications['P']);
-                    }
-                }
-
-                if (count($aClassifications) > 1) {
-                    // How can this be?
-                    lovd_printIfVerbose(VERBOSITY_MEDIUM,
-                        ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
-                            floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
-                            5, ' ', STR_PAD_LEFT) .
-                        '%] Warning: Failed to resolve classification string for center ' . $sCenter . ': ' . implode(', ', $Classification) . ".\n" .
-                        '                   IDs: ' . implode("\n                        ", $aVariant['id']) . "\n");
+            // This center has multiple classifications for this variant.
+            // First collect all classifications per gene. Only then can you fully compare.
+            $aGenesClassified = array(); // Classification per gene.
+            foreach ($aVariant['genes'][$sCenter] as $nKey => $sGene) {
+                if (!isset($aGenesClassified[$sGene])) {
+                    $aGenesClassified[$sGene] = array($Classification[$nKey]);
+                } elseif (!in_array($Classification[$nKey], $aGenesClassified[$sGene])) {
+                    $aGenesClassified[$sGene][] = $Classification[$nKey];
                 }
             }
 
-            // Store string value.
-            $aVariant['classifications'][$sCenter] = key($aClassifications); // Should of course have one value.
+            // Then, loop genes; make sure we have only one classification per gene.
+            foreach ($aGenesClassified as $sGene => $aClassifications) {
+                // Flipping the array makes the values unique and makes it easier to work with the values;
+                //  isset()s are faster than array_search() and in_array().
+                $aClassifications = array_flip($aClassifications);
+
+                if (count($aClassifications) > 1) {
+                    // We have seen multiple classifications of this gene.
+
+                    // Rules: report opposites; */VUS to VUS; LB/B to LB; LP/P to LP.
+                    if ((isset($aClassifications['B']) || isset($aClassifications['LB']))
+                        && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
+                        // Internal conflict within center.
+                        lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                            ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                                floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                                5, ' ', STR_PAD_LEFT) .
+                            '%] Warning: Internal conflict in center ' . $sCenter . ' (' . $sGene . '): ' . implode(', ', array_keys($aClassifications)) . ".\n" .
+                            '                   IDs: ' . implode("\n                        ", $aVariant['id']) . "\n");
+                        // Reduce to one string, we want to store the conflict to report this in LOVD in a non-public entry.
+                        $aClassifications = array(implode(',', array_keys($aClassifications)) => 1);
+                        $bInternalConflict = true; // This'll make the consensus code a lot cleaner.
+
+                    } elseif (isset($aClassifications['VUS'])) {
+                        // VUS and something else, not a conflict. OK, VUS then.
+                        $aClassifications = array('VUS' => 1); // Remove the other classification(s).
+
+                    } else {
+                        // Still multiple values. LB/B to LB, LP/P to LP.
+                        if (isset($aClassifications['B']) && isset($aClassifications['LB'])) {
+                            unset($aClassifications['B']);
+                        }
+                        if (isset($aClassifications['P']) && isset($aClassifications['LP'])) {
+                            unset($aClassifications['P']);
+                        }
+                    }
+
+                    if (count($aClassifications) > 1) {
+                        // How can this be?
+                        lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                            ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                                floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                                5, ' ', STR_PAD_LEFT) .
+                            '%] Warning: Failed to resolve classification string for center ' . $sCenter . ' (' . $sGene . '): ' . implode(', ', $Classification) . ".\n" .
+                            '                   IDs: ' . implode("\n                        ", $aVariant['id']) . "\n");
+                    }
+                }
+
+                // Store string value.
+                $aGenesClassified[$sGene] = key($aClassifications); // Should of course have one value.
+            }
+
+            // Per gene, we now have one classification only. If there is no internal conflict, but there's still
+            //  multiple classifications, resolve by picking the most severe.
+            // This solves cases where a center classifies a variant on two genes as P and B at the same time.
+            if (!$bInternalConflict) {
+                // Loop classifications and pick the most severe.
+                foreach (array('P', 'LP', 'VUS', 'LB', 'B') as $sClassification) {
+                    if (in_array($sClassification, $aGenesClassified)) {
+                        $aVariant['classifications'][$sCenter] = $sClassification;
+                        // FIXME: We could here identify the genes that we're ignoring, and remove their annotation.
+                        break;
+                    }
+                }
+            } else {
+                // Conflict, pass on the imploded classification set.
+                $aVariant['classifications'][$sCenter] = implode(',', $aGenesClassified);
+            }
         }
     }
 
@@ -1917,7 +1961,10 @@ foreach ($aData as $sVariant => $aVariant) {
                 $aDiff['VariantOnGenome/Remarks_Non_Public'][1] = $aVOGEntry['VariantOnGenome/Remarks_Non_Public'];
             }
 
-            if ($bDebug) {
+            // If there is a diff, and we're in debug mode, report the diff but do nothing. This way, we can check if
+            //  our script works well. To prevent very long diffs however, remove certain elements from the diff that we
+            //  understand can easily change.
+            if ($aDiff && $bDebug) {
                 // When the classification changes and becomes just a bit more or less sure, it's fine.
                 // Do check if the concluded effect doesn't change.
                 if (isset($aDiff['effectid']) && substr($aDiff['effectid'][0], -1) == substr($aDiff['effectid'][1], -1)) {
