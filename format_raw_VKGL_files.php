@@ -5,15 +5,18 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2019-11-14
- * Version     : 0.1.0
+ * Modified    : 2019-12-10
+ * Version     : 0.1.1
  * For LOVD    : 3.0-22
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.1.0  2019-11-14
+ * Changelog   : 0.1.1  2019-12-10
+ *               Added alternative Alissa format, since we're receiving
+ *               something else now.
+ *               0.1.0  2019-11-14
  *               Initial release.
  *
  * Copyright   : 2004-2019 Leiden University Medical Center; http://www.LUMC.nl/
@@ -46,7 +49,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.1.0',
+    'version' => '0.1.1',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -67,6 +70,9 @@ $_CONFIG = array(
     'header_signatures' => array(
         'alt;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;' .
             'ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
+        'alt;alt_orig;c_nomen;chrom;chromosome;classification;effect;exon;gene;hgvs_normalized_vkgl;id;' .
+            'last_updated_by;last_updated_on;location;p_nomen;pos;ref;ref_orig;significance;start;stop;timestamp;' .
+            'transcript;type;variant_type' => 'alissa2',
         'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc',
         'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud',
     ),
@@ -564,6 +570,23 @@ foreach ($aFiles as $sFile => $sCenter) {
                     $aDataLine['start'],
                     $aDataLine['ref'],
                     $aDataLine['alt'],
+                    $aDataLine['gene'],
+                    $aDataLine['transcript'],
+                    $aDataLine['c_nomen'],
+                ));
+                $aValues = array(
+                    'protein' => str_replace('NULL', '', $aDataLine['p_nomen']),
+                    $sCenter => str_replace(array('_', 'vous'), array(' ', 'VUS'), strtolower($aDataLine['classification'])),
+                    $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['last_updated_by'],
+                );
+                break;
+
+            case 'alissa2':
+                $sVariantKey = implode('|', array(
+                    $aDataLine['chromosome'],
+                    $aDataLine['start'],
+                    $aDataLine['ref_orig'],
+                    $aDataLine['alt_orig'],
                     $aDataLine['gene'],
                     $aDataLine['transcript'],
                     $aDataLine['c_nomen'],

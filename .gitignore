@@ -1,6 +1,7 @@
 .idea
 mapping_cache.txt
 NC_cache.txt
+output_*
 settings.json
-vkgl_conflicts_*
 vkgl_consensus_*
+vkgl_opposites_*
