@@ -5,14 +5,17 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2019-12-04
- * Version     : 0.3
+ * Modified    : 2020-03-20
+ * Version     : 0.4
  * For LOVD    : 3.0-22
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.3    2019-12-04
+ * Changelog   : 0.4    2020-03-20
+ *               Whether single-lab submissions are linked to a public owner or
+ *               instead to a general VKGL account, is now a setting.
+ *               0.3    2019-12-04
  *               Handle conflicts per gene per center, not just per center. Some
  *               centers are classifying a variant twice on purpose, on multiple
  *               genes. (L)P on one, (L)B on the other. From now on, we'll call
@@ -53,6 +56,7 @@
 //  This can be improved on, by taking in mappings that map into locations that we can generate the protein change for.
 //  Notes: Position converter descriptions are *not* normalized. For variants on the reverse strand, this is a problem.
 //         If you fix this, remove "numberConversion" as a method from the cache, so all variants will be repeated.
+//         Perhaps VV can help here, it may provide more mappings and surely is a lot faster.
 // FIXME: Fix conflicts if on different genes, they can be regarded as non-conflicts.
 // FIXME: We are not seeing EREF errors in case of deletions, and they do happen. So we let incorrect variants through.
 
@@ -65,7 +69,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '0.3',
+    'version' => '0.4',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -115,6 +119,7 @@ $_CONFIG = array(
         'mutalyzer_cache_NC' => 'NC_cache.txt', // Stores NC g. descriptions and their corrected output.
         'mutalyzer_cache_mapping' => 'mapping_cache.txt', // Stores NC to NM mappings and the protein predictions.
         'vkgl_generic_id' => 0, // The LOVD ID of the generic VKGL account, needed for single lab submissions.
+        'public_singlelab_owners' => 'y', // Should single-lab submissions get a public owner?
         'delete_redundant_variants' => 'n', // Should we remove variants in LOVD no longer in the dataset?
     ),
 );
@@ -627,6 +632,8 @@ if (!$_CONFIG['flags']['y']) {
             }
         }
     }
+
+    lovd_verifySettings('public_singlelab_owners', 'Should single-lab records be publically linked to the submitting laboratory? (y/n)', 'array', array('y', 'n'));
 
     // Delete LOVD variants no longer in the VKGL dataset? Should be left to "n" for all tests,
     //  otherwise incomplete VKGL files will result in lots of data marked for removal.
@@ -1811,7 +1818,7 @@ foreach ($aData as $sVariant => $aVariant) {
             'type' => $aVariant['type'],
             'created_by' => $aCenterIDs[$sCenter],
             // Created_date will be added later, right now we don't have it to prevent unneeded differences.
-            'owned_by' => ($aVariant['status'] == 'single-lab'? // Single lab gets the generic VKGL account as owner.
+            'owned_by' => ($aVariant['status'] == 'single-lab' && $_CONFIG['user']['public_singlelab_owners'] != 'y'? // Should single-lab entry get the generic VKGL account as owner?
                 $_CONFIG['user']['vkgl_generic_id'] : $aCenterIDs[$sCenter]),
             'statusid' => (string) ($aVariant['status'] == 'opposite'? STATUS_HIDDEN : STATUS_OK), // FIXME: Set to Marked if a warning occurred within this variant? Or like, when not having a mapping?
             'VariantOnGenome/DNA' => $sDNA, // Can actually also update, if the LOVD data is not correct.
