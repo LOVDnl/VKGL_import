@@ -5,15 +5,18 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2019-12-10
- * Version     : 0.1.1
+ * Modified    : 2020-03-23
+ * Version     : 0.1.2
  * For LOVD    : 3.0-22
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.1.1  2019-12-10
+ * Changelog   : 0.1.2  2020-03-23
+ *               Fixed bug; no longer assume the centers' files ares sorted
+ *               alphabetically.
+ *               0.1.1  2019-12-10
  *               Added alternative Alissa format, since we're receiving
  *               something else now.
  *               0.1.0  2019-11-14
@@ -49,7 +52,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.1.1',
+    'version' => '0.1.2',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -459,7 +462,11 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM, "\n" .
 
 // Loop through files and load all data, grouping the entries in memory.
 $aData = array();
-ksort($aFiles);
+// Sort on center names, but keep file names.
+// I don't want to sort on the keys, because files can be in different directories.
+asort($aFiles);
+// Sort center list then too, because we'll loop it later and we need to keep the order the same.
+sort($aCentersFound);
 $nFile = 0;
 foreach ($aFiles as $sFile => $sCenter) {
     lovd_printIfVerbose(VERBOSITY_MEDIUM,
