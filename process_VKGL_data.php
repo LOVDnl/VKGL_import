@@ -5,16 +5,18 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2020-03-20
+ * Modified    : 2020-03-23
  * Version     : 0.4
  * For LOVD    : 3.0-22
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.4    2020-03-20
+ * Changelog   : 0.4    2020-03-23
  *               Whether single-lab submissions are linked to a public owner or
- *               instead to a general VKGL account, is now a setting.
+ *               instead to a general VKGL account, is now a setting. Also, we
+ *               check for the presence of some non-critical columns, so we
+ *               won't die if LOVD doesn't have them activated (i.e. LOVD+).
  *               0.3    2019-12-04
  *               Handle conflicts per gene per center, not just per center. Some
  *               centers are classifying a variant twice on purpose, on multiple
@@ -1662,6 +1664,24 @@ foreach ($aData as $sVariant => $aVariant) {
         $aVariantsDeleted[$sChromosome] = 0;
         $aVariantsSkipped[$sChromosome] = 0;
 
+        // Check if we actually have some columns that we use, activated.
+        // These are optional, so we don't want to die if we don't have them.
+        $aActiveCols = $_DB->query('
+            SELECT colid FROM ' . TABLE_ACTIVE_COLS . '
+            WHERE colid IN (?, ?, ?, ?, ?)',
+            array(
+                'VariantOnGenome/Genetic_origin',
+                'VariantOnGenome/Published_as',
+                'VariantOnGenome/Remarks',
+                'VariantOnGenome/Remarks_Non_Public',
+                'VariantOnTranscript/Classification',
+            ))->fetchAllColumn();
+        $bGeneticOrigin = in_array('VariantOnGenome/Genetic_origin', $aActiveCols);
+        $bPublishedAs = in_array('VariantOnGenome/Published_as', $aActiveCols);
+        $bRemarks = in_array('VariantOnGenome/Remarks', $aActiveCols);
+        $bRemarksNonPublic = in_array('VariantOnGenome/Remarks_Non_Public', $aActiveCols);
+        $bClassification = in_array('VariantOnTranscript/Classification', $aActiveCols);
+
         // Load the data currently in the database.
         // Note, that if there are two entries of the same variant by the same center, we see only *one*.
         $_DB->query('SET group_concat_max_len = 10000');
@@ -1669,14 +1689,17 @@ foreach ($aData as $sVariant => $aVariant) {
             SELECT CONCAT(vog.created_by, ":", ?, ":", vog.`VariantOnGenome/DNA`) AS ID,
               vog.id, vog.allele, vog.effectid, vog.chromosome, vog.position_g_start, vog.position_g_end, vog.type,
               vog.created_by, vog.owned_by, vog.statusid, vog.`VariantOnGenome/DNA`,
-              vog.`VariantOnGenome/DBID`, vog.`VariantOnGenome/Genetic_origin`, vog.`VariantOnGenome/Published_as`,
-              vog.`VariantOnGenome/Remarks`, vog.`VariantOnGenome/Remarks_Non_Public`,
+              vog.`VariantOnGenome/DBID`, ' .
+                (!$bGeneticOrigin? '' : 'vog.`VariantOnGenome/Genetic_origin`, ') .
+                (!$bPublishedAs? '' : 'vog.`VariantOnGenome/Published_as`, ') .
+                (!$bRemarks? '' : 'vog.`VariantOnGenome/Remarks`, ') .
+                (!$bRemarksNonPublic? '' : 'vog.`VariantOnGenome/Remarks_Non_Public`,') . '
               GROUP_CONCAT(vot.transcriptid, ";", vot.effectid, ";",
                 IFNULL(vot.position_c_start, "0"), ";",
                 IFNULL(vot.position_c_start_intron, "0"), ";",
                 IFNULL(vot.position_c_end, "0"), ";",
-                IFNULL(vot.position_c_end_intron, "0"), ";",
-                IFNULL(NULLIF(vot.`VariantOnTranscript/Classification`, ""), "-"), ";",
+                IFNULL(vot.position_c_end_intron, "0"), ";", ' .
+                (!$bClassification? '"-"' : 'IFNULL(NULLIF(vot.`VariantOnTranscript/Classification`, ""), "-")') . ', ";",
                 IFNULL(NULLIF(vot.`VariantOnTranscript/DNA`, ""), "-"), ";",
                 IFNULL(NULLIF(vot.`VariantOnTranscript/RNA`, ""), "-"), ";",
                 IFNULL(NULLIF(vot.`VariantOnTranscript/Protein`, ""), "-") SEPARATOR ";;") AS vots
@@ -1760,11 +1783,12 @@ foreach ($aData as $sVariant => $aVariant) {
                 $sRemoveMessage = 'VKGL data sharing initiative Nederland' .
                     (!$sRemoveMessage? '' : '; ' . $sRemoveMessage);
                 $q = $_DB->query('UPDATE ' . TABLE_VARIANTS . '
-                                  SET `VariantOnGenome/Remarks` = ?, statusid = ?, edited_by = 0, edited_date = NOW()
+                                  SET `VariantOnGenome/Remarks` = ?, statusid = ?, edited_by = 0, edited_date = ?
                                   WHERE id = ? AND !(`VariantOnGenome/Remarks` LIKE ? AND statusid <= ?)',
                     array(
                         $sRemoveMessage,
                         STATUS_HIDDEN,
+                        $sNow,
                         $aLOVDVariant['id'],
                         $sRemoveMessage . '%',
                         STATUS_HIDDEN,
@@ -1834,6 +1858,20 @@ foreach ($aData as $sVariant => $aVariant) {
             'vots' => array(),
         );
 
+        // Some of these columns are optional.
+        if (!$bGeneticOrigin) {
+            unset($aVOGEntry['VariantOnGenome/Genetic_origin']);
+        }
+        if (!$bPublishedAs) {
+            unset($aVOGEntry['VariantOnGenome/Published_as']);
+        }
+        if (!$bRemarks) {
+            unset($aVOGEntry['VariantOnGenome/Remarks']);
+        }
+        if (!$bRemarksNonPublic) {
+            unset($aVOGEntry['VariantOnGenome/Remarks_Non_Public']);
+        }
+
         // Fill VOTs.
         foreach ($aVariant['mappings'] as $sTranscript => $aMapping) {
             $aVOGEntry['vots'][$aTranscripts[$sTranscript]] = array(
@@ -1850,6 +1888,11 @@ foreach ($aData as $sVariant => $aVariant) {
                 'VariantOnTranscript/RNA' => $aMapping['RNA'],
                 'VariantOnTranscript/Protein' => $aMapping['protein'],
             );
+
+            // Some of these columns are optional.
+            if (!$bClassification) {
+                unset($aVOGEntry['vots'][$aTranscripts[$sTranscript]]['VariantOnTranscript/Classification']);
+            }
         }
         // For comparison reasons.
         ksort($aVOGEntry['vots']);
@@ -1860,7 +1903,7 @@ foreach ($aData as $sVariant => $aVariant) {
 
             // Make it easier to compare with our array.
             // Build array from JSON object, if we have it.
-            if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public']) {
+            if (!empty($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'])) {
                 $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] = json_decode($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'], true);
                 if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] === false
                     || !is_array($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'])) {
@@ -1869,7 +1912,7 @@ foreach ($aData as $sVariant => $aVariant) {
                         'Error: Variant ID ' . $sVariant . ' has an unparsable JSON object for center ' . $sCenter . '(' . $aCenterIDs[$sCenter] . ').' . "\n\n");
                     die(EXIT_ERROR_DATA_CONTENT_ERROR);
                 }
-            } else {
+            } elseif ($bRemarksNonPublic) {
                 $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] = array();
             }
             // Rebuild VOTs.
@@ -1892,6 +1935,11 @@ foreach ($aData as $sVariant => $aVariant) {
                         'VariantOnTranscript/RNA' => $aVOT[8],
                         'VariantOnTranscript/Protein' => $aVOT[9],
                     );
+
+                    // Some of these columns are optional.
+                    if (!$bClassification) {
+                        unset($aDataLOVD[$sLOVDKey]['vots'][$aVOT[0]]['VariantOnTranscript/Classification']);
+                    }
                 }
                 ksort($aDataLOVD[$sLOVDKey]['vots']);
             }
@@ -1899,41 +1947,45 @@ foreach ($aData as $sVariant => $aVariant) {
             // Make my life easier, just copy some values.
             $aVOGEntry['id'] = $aDataLOVD[$sLOVDKey]['id'];
             $aVOGEntry['VariantOnGenome/DBID'] = $aDataLOVD[$sLOVDKey]['VariantOnGenome/DBID'];
-            $aVOGEntry['VariantOnGenome/Remarks_Non_Public'] = array_merge(
-                $aVOGEntry['VariantOnGenome/Remarks_Non_Public'],
-                $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public']
-            );
-            // But still store the new ID, if not yet included.
-            foreach ($aVariant['id'] as $sNewID) {
-                if (!in_array($sNewID, $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'])) {
-                    $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'][] = $sNewID;
+            if ($bRemarksNonPublic) {
+                $aVOGEntry['VariantOnGenome/Remarks_Non_Public'] = array_merge(
+                    $aVOGEntry['VariantOnGenome/Remarks_Non_Public'],
+                    $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public']
+                );
+                // But still store the new ID, if not yet included.
+                foreach ($aVariant['id'] as $sNewID) {
+                    if (!in_array($sNewID, $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'])) {
+                        $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'][] = $sNewID;
+                    }
                 }
             }
 
             // NOTE: This is debugging code. It checks the differences, and reports them, instead of running the update.
             if ($bDebug) {
                 // Reduce the differences, by adapting the LOVD record a bit already.
-                if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks'] == 'VKGL data sharing initiative Nederland; correct HGVS to be checked') {
+                if ($bRemarks && $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks'] == 'VKGL data sharing initiative Nederland; correct HGVS to be checked') {
                     $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks'] = $aVOGEntry['VariantOnGenome/Remarks'];
                 }
                 // Don't mention ins to dups, that's the logical result of our checking.
                 if ($aDataLOVD[$sLOVDKey]['type'] == 'ins' && $aVOGEntry['type'] == 'dup') {
                     $aDataLOVD[$sLOVDKey]['type'] = $aVOGEntry['type'];
                 }
-                // My "Published as" is often better. Calculate how much of the original I have.
-                // Differences that we found where mostly c.* variants now mapped to CDS variants. Otherwise, gene symbol changes but keeping the same transcripts.
-                // So if we have some kind of percentage, I'm happy already.
-                if (!$aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']
-                    || ($nPercentageMatch = similar_text(
-                            $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'],
-                            $aVOGEntry['VariantOnGenome/Published_as'])
-                        / strlen($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']) * 100) >= 40) {
-                    // Good enough.
-                    $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'] = $aVOGEntry['VariantOnGenome/Published_as'];
-                } else {
-                    // Not sure about this one. Keep the difference to report, but add the matching percentage,
-                    //  so we can see if we need to lower the threshold.
-                    $aVOGEntry['VariantOnGenome/Published_as'] .= ' (' . round($nPercentageMatch, 2) . ')';
+                if ($bPublishedAs) {
+                    // My "Published as" is often better. Calculate how much of the original I have.
+                    // Differences that we found where mostly c.* variants now mapped to CDS variants. Otherwise, gene symbol changes but keeping the same transcripts.
+                    // So if we have some kind of percentage, I'm happy already.
+                    if (!$aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']
+                        || ($nPercentageMatch = similar_text(
+                                $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'],
+                                $aVOGEntry['VariantOnGenome/Published_as'])
+                            / strlen($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']) * 100) >= 40) {
+                        // Good enough.
+                        $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'] = $aVOGEntry['VariantOnGenome/Published_as'];
+                    } else {
+                        // Not sure about this one. Keep the difference to report, but add the matching percentage,
+                        //  so we can see if we need to lower the threshold.
+                        $aVOGEntry['VariantOnGenome/Published_as'] .= ' (' . round($nPercentageMatch, 2) . ')';
+                    }
                 }
             }
 
@@ -1945,26 +1997,28 @@ foreach ($aData as $sVariant => $aVariant) {
                         $Value,
                         (!isset($aVOGEntry[$sKey])? 'NULL' : $aVOGEntry[$sKey]),
                     );
-                    // Also report differences.
-                    if ($sKey == 'vots') {
-                        // We won't report changes per field here, just per transcript.
-                        foreach (array_unique(array_merge(array_keys($aDiff['vots'][0]), array_keys($aDiff['vots'][1]))) as $nTranscriptID) {
-                            if (!isset($aDiff['vots'][0][$nTranscriptID])) {
-                                $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Added mapping to transcript ' . array_search($nTranscriptID, $aTranscripts) . '.';
-                            } elseif (!isset($aDiff['vots'][1][$nTranscriptID])) {
-                                $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Removed mapping to transcript ' . array_search($nTranscriptID, $aTranscripts) . '.';
-                            } elseif ($aDiff['vots'][0][$nTranscriptID] != $aDiff['vots'][1][$nTranscriptID]) {
-                                $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Updated mapping to transcript ' . array_search($nTranscriptID, $aTranscripts) . '.';
+                    if ($bRemarksNonPublic) {
+                        // Also report differences.
+                        if ($sKey == 'vots') {
+                            // We won't report changes per field here, just per transcript.
+                            foreach (array_unique(array_merge(array_keys($aDiff['vots'][0]), array_keys($aDiff['vots'][1]))) as $nTranscriptID) {
+                                if (!isset($aDiff['vots'][0][$nTranscriptID])) {
+                                    $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Added mapping to transcript ' . array_search($nTranscriptID, $aTranscripts) . '.';
+                                } elseif (!isset($aDiff['vots'][1][$nTranscriptID])) {
+                                    $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Removed mapping to transcript ' . array_search($nTranscriptID, $aTranscripts) . '.';
+                                } elseif ($aDiff['vots'][0][$nTranscriptID] != $aDiff['vots'][1][$nTranscriptID]) {
+                                    $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Updated mapping to transcript ' . array_search($nTranscriptID, $aTranscripts) . '.';
+                                }
                             }
+                        } elseif ($sKey != 'VariantOnGenome/Remarks_Non_Public') {
+                            // Don't self-report, of course.
+                            $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey] = array($Value, $aVOGEntry[$sKey]);
                         }
-                    } elseif ($sKey != 'VariantOnGenome/Remarks_Non_Public') {
-                        // Don't self-report, of course.
-                        $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey] = array($Value, $aVOGEntry[$sKey]);
                     }
                 }
             }
             // Because we were building this while building up the diff array:
-            if ($aDiff && !$bDebug) {
+            if ($bRemarksNonPublic && $aDiff && !$bDebug) {
                 $aDiff['VariantOnGenome/Remarks_Non_Public'][1] = $aVOGEntry['VariantOnGenome/Remarks_Non_Public'];
             }
 
@@ -2116,7 +2170,9 @@ foreach ($aData as $sVariant => $aVariant) {
 
             // Prepare additional data.
             $aVOGEntry['created_date'] = $sNow;
-            $aVOGEntry['VariantOnGenome/Remarks_Non_Public'] = json_encode($aVOGEntry['VariantOnGenome/Remarks_Non_Public']);
+            if ($bRemarksNonPublic) {
+                $aVOGEntry['VariantOnGenome/Remarks_Non_Public'] = json_encode($aVOGEntry['VariantOnGenome/Remarks_Non_Public']);
+            }
             // We can be more correct here by adding VOT data, but this function expects that in quite a complex manner.
             $aVOGEntry['VariantOnGenome/DBID'] = lovd_fetchDBID($aVOGEntry);
 
