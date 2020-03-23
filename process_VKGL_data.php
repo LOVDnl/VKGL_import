@@ -17,6 +17,8 @@
  *               instead to a general VKGL account, is now a setting. Also, we
  *               check for the presence of some non-critical columns, so we
  *               won't die if LOVD doesn't have them activated (i.e. LOVD+).
+ *               Finally, some other LOVD+ optimizations are added and genes
+ *               have their timestamps updated.
  *               0.3    2019-12-04
  *               Handle conflicts per gene per center, not just per center. Some
  *               centers are classifying a variant twice on purpose, on multiple
@@ -1374,7 +1376,7 @@ foreach ($aData as $sVariant => $aVariant) {
     }
 
     // Check if we have anything now.
-    if (!count($aVariant['mappings']) && (empty($aPossibleMappings['methods']) || !in_array('numberConversion', $aPossibleMappings['methods']))) {
+    if (!LOVD_plus && !count($aVariant['mappings']) && (empty($aPossibleMappings['methods']) || !in_array('numberConversion', $aPossibleMappings['methods']))) {
         // Mutalyzer came up with none of LOVD's transcripts.
         // The problem with our method of using runMutalyzer for everything, is that you only use the NC,
         //  and as such you only get the latest transcripts. Mappings on older transcripts are not provided,
@@ -1504,10 +1506,14 @@ foreach ($aData as $sVariant => $aVariant) {
     // Now, generate some more data (position fields, RNA field) and check the predicted protein field.
     foreach ($aVariant['mappings'] as $sTranscript => $aMapping) {
         // First, get positions for variant.
-        $aMapping = array_merge(
+        $aMapping = @array_merge(
             $aMapping,
             lovd_getVariantInfo($aMapping['DNA'], $sTranscript)
         );
+        if (!$aMapping) {
+            // Possible for transcripts created manually in the database without all of their fields set.
+            continue;
+        }
 
         // We're not using lovd_getRNAProteinPrediction() because that's using SOAP and the normal runMutalyzer,
         //  and we already did that stuff. Also, this code below is better in predicting good RNA values.
@@ -2225,7 +2231,7 @@ foreach ($aData as $sVariant => $aVariant) {
     }
 }
 
-// Final message.
+// Final counts.
 $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
     ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
@@ -2250,6 +2256,30 @@ if ($aAddToCache) {
     ' simply because a different description was used. To be safe, no inserts were done because of this reason.' . "\n" .
     'Please check the list below, and add these variants to the NC cache. After that, run this script again.' . "\n" .
     implode("\n", $aAddToCache) . "\n\n");
+}
+
+if (!$bDebug && !LOVD_plus) {
+    // Update all gene's updated dates.
+    // We're going to make this easy for us; all entries created or edited at $sNow,
+    //  we're going to assume are ours. Run on entire database.
+    $aGenesUpdated = $_DB->query('
+        SELECT DISTINCT t.geneid
+        FROM ' . TABLE_TRANSCRIPTS . ' AS t
+         INNER JOIN ' . TABLE_VARIANTS_ON_TRANSCRIPTS . ' AS vot ON (t.id = vot.transcriptid)
+         INNER JOIN ' . TABLE_VARIANTS . ' AS vog ON (vot.id = vog.id)
+        WHERE vog.created_date = ? OR vog.edited_date = ?', array($sNow, $sNow))->fetchAllColumn();
+
+    if ($aGenesUpdated) {
+        // We can't use lovd_setUpdatedDate(), since that contains $_AUTH checks that we won't be able to pass.
+        $q = $_DB->query('
+            UPDATE ' . TABLE_GENES . '
+            SET updated_by = ?, updated_date = ?
+            WHERE updated_date < ? AND id IN (?' . str_repeat(', ?', count($aGenesUpdated) - 1) . ')',
+            array_merge(array(0, $sNow, $sNow), $aGenesUpdated), false);
+        $nUpdated = $q->rowCount();
+        lovd_printIfVerbose(VERBOSITY_MEDIUM,
+            ' ' . date('H:i:s', time() - $tStart) . ' [Totals] Gene(s)  updated: ' . $nUpdated . '/' . count($aGenesUpdated) . ".\n\n");
+    }
 }
 
 if ($nWarningsOccurred) {
