@@ -5,14 +5,17 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2020-03-23
- * Version     : 0.4
+ * Modified    : 2020-04-02
+ * Version     : 0.5
  * For LOVD    : 3.0-22
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.4    2020-03-23
+ * Changelog   : 0.5    2020-04-02
+ *               Improved variant validation error messages so they can be
+ *               easily extracted from the output and reported to the centers.
+ *               0.4    2020-03-23
  *               Whether single-lab submissions are linked to a public owner or
  *               instead to a general VKGL account, is now a setting. Also, we
  *               check for the presence of some non-critical columns, so we
@@ -73,7 +76,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '0.4',
+    'version' => '0.5',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -910,7 +913,8 @@ foreach ($aData as $nKey => $aVariant) {
             ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                 floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                 5, ' ', STR_PAD_LEFT) . '%] Warning: Error for variant ' . $sID . ' (' . implode(', ', array_keys($aVariant['classifications'])) . ").\n" .
-            '                   Could not construct DNA field.' . "\n");
+            '                   Could not construct DNA field.' . "\n" .
+            '                   {' . $aVariant['id'] . '|' . $aVariant['chromosome'] . '|' . $aVariant['start'] . '|' . $aVariant['ref'] . '|' . $aVariant['alt'] . '|' . $aVariant['gene'] . '|Error: Could not construct DNA field.|' . implode(',', array_keys($aVariant['classifications'])) . '}' . "\n");
         $nWarningsOccurred ++;
         $nVariantsLost ++;
         $nVariantsDone ++;
@@ -944,7 +948,8 @@ foreach ($aData as $nKey => $aVariant) {
                     floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                     5, ' ', STR_PAD_LEFT) . '%] Warning: Error for variant ' . $sID . ' (' . implode(', ', array_keys($aVariant['classifications'])) . ").\n" .
                 '                   It was sent as ' . $sVariant . ".\n" .
-                (!$aError? '' : '                   Error: ' . implode("\n" . str_repeat(' ', 26), $aError) . "\n"));
+                (!$aError? '' : '                   Error: ' . implode("\n" . str_repeat(' ', 26), $aError) . "\n") .
+                '                   {' . $aVariant['id'] . '|' . $aVariant['chromosome'] . '|' . $aVariant['start'] . '|' . $aVariant['ref'] . '|' . $aVariant['alt'] . '|' . $aVariant['gene'] . '|' . (!$aError? '' : 'Error: ' . implode(';', $aError)) . '|' . implode(',', array_keys($aVariant['classifications'])) . '}' . "\n");
             $nWarningsOccurred ++;
             $nVariantsLost ++;
             $nVariantsDone ++;
@@ -979,7 +984,8 @@ foreach ($aData as $nKey => $aVariant) {
                         floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                     5, ' ', STR_PAD_LEFT) . '%] Warning: Error for variant ' . $sID . ' (' . implode(', ', array_keys($aVariant['classifications'])) . ").\n" .
                 '                   It was sent as ' . $sVariant . ".\n" .
-                (!$aError? '' : '                   Error: ' . implode("\n" . str_repeat(' ', 26), $aError) . "\n"));
+                (!$aError? '' : '                   Error: ' . implode("\n" . str_repeat(' ', 26), $aError) . "\n") .
+                '                   {' . $aVariant['id'] . '|' . $aVariant['chromosome'] . '|' . $aVariant['start'] . '|' . $aVariant['ref'] . '|' . $aVariant['alt'] . '|' . $aVariant['gene'] . '|' . (!$aError? '' : 'Error: ' . implode(';', $aError)) . '|' . implode(',', array_keys($aVariant['classifications'])) . '}' . "\n");
             $nWarningsOccurred ++;
             $nVariantsLost ++;
             $nVariantsDone ++;
