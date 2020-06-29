@@ -5,15 +5,17 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2020-03-23
- * Version     : 0.1.2
+ * Modified    : 2020-06-29
+ * Version     : 0.1.3
  * For LOVD    : 3.0-22
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.1.2  2020-03-23
+ * Changelog   : 0.1.3  2020-06-29
+ *               Fixed bug; Now also handling file headers with quotes.
+ *               0.1.2  2020-03-23
  *               Fixed bug; no longer assume the centers' files ares sorted
  *               alphabetically.
  *               0.1.1  2019-12-10
@@ -52,7 +54,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.1.2',
+    'version' => '0.1.3',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -520,6 +522,7 @@ foreach ($aFiles as $sFile => $sCenter) {
     // First line should be headers.
     $aHeaders = explode("\t", $sLine);
     $nHeaders = count($aHeaders);
+    $aHeaders = array_map('trim', $aHeaders, array_fill(0, $nHeaders, '"'));
 
     // Check headers signature.
     $aSignature = $aHeaders;
