@@ -234,8 +234,12 @@ if (!$_VV || !$_VV->test()) {
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
     ' ' . date('H:i:s', time() - $tStart) . ' [      ] Loading Mutalyzer cache files...' . "\n");
 $_CACHE = array();
-foreach (array('mutalyzer_cache_NC', 'mutalyzer_cache_mapping') as $sKeyName) {
+foreach (array('mutalyzer_cache_NC', 'mutalyzer_cache_mapping', 'mutalyzer_cache_mapping_VV') as $sKeyName) {
     $_CACHE[$sKeyName] = array();
+    if ($sKeyName == 'mutalyzer_cache_mapping_VV') {
+        // This one we received through an argument.
+        $_CONFIG['user'][$sKeyName] = $aFiles[0];
+    }
     if (!file_exists($_CONFIG['user'][$sKeyName])
         || !is_file($_CONFIG['user'][$sKeyName]) || !is_readable($_CONFIG['user'][$sKeyName])) {
         lovd_printIfVerbose(VERBOSITY_LOW,
@@ -250,7 +254,7 @@ foreach (array('mutalyzer_cache_NC', 'mutalyzer_cache_mapping') as $sKeyName) {
             $nCacheLine ++;
             $aVariant = explode("\t", $sVariant);
             if (count($aVariant) == 2) {
-                if ($sKeyName == 'mutalyzer_cache_mapping') {
+                if (substr($sKeyName, 0, 23) == 'mutalyzer_cache_mapping') {
                     // The mapping cache has a JSON structure.
                     $_CACHE[$sKeyName][$aVariant[0]] = json_decode($aVariant[1], true);
                 } else {
