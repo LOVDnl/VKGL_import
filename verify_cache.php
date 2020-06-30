@@ -5,8 +5,8 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2020-04-02
- * Modified    : 2020-04-03
- * Version     : 0.1
+ * Modified    : 2020-06-30
+ * Version     : 0.2
  * For LOVD    : 3.0-24
  *
  * Purpose     : Checks the NC cache and extends the mapping cache using the new
@@ -44,7 +44,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 // Default settings. We won't verify any setting, that's up to the process script.
 $_CONFIG = array(
     'name' => 'VKGL cache verification using Variant Validator',
-    'version' => '0.1',
+    'version' => '0.2',
     'settings_file' => 'settings.json',
     'VV_URL' => 'https://www35.lamp.le.ac.uk/', // Test instance with the latest LOVD endpoint. // www.variantvalidator.org.
     'user' => array(
@@ -112,13 +112,42 @@ $sScriptName = array_shift($aArgs);
 $nArgs --;
 $nWarningsOccurred = 0;
 
-if ($nArgs) {
+if ($nArgs > 1) {
     lovd_printIfVerbose(VERBOSITY_LOW,
         $_CONFIG['name'] . ' v' . $_CONFIG['version'] . '.' . "\n" .
-        'Usage: ' . $sScriptName . "\n\n");
+        'Usage: ' . $sScriptName . ' [mapping_cache_VV.txt]' . "\n\n");
     die(EXIT_ERROR_ARGS_NOT_UNDERSTOOD);
 }
 
+// Parse arguments and flags.
+$aFiles = array();
+while ($nArgs) {
+    // Check for flags.
+    $sArg = array_shift($aArgs);
+    $nArgs --;
+    if (preg_match('/^-[A-Z]+$/i', $sArg)) {
+        $sArg = substr($sArg, 1);
+        foreach (str_split($sArg) as $sFlag) {
+            if (isset($_CONFIG['flags'][$sFlag])) {
+                $_CONFIG['flags'][$sFlag] = true;
+            } else {
+                // Flag not recognized.
+                lovd_printIfVerbose(VERBOSITY_LOW,
+                    'Error: Flag -' . $sFlag . ' not understood.' . "\n\n");
+                die(EXIT_ERROR_ARGS_NOT_UNDERSTOOD);
+            }
+        }
+
+    } elseif (file_exists($sArg)) {
+        $aFiles[] = $sArg;
+
+    } else {
+        // Argument not recognized.
+        lovd_printIfVerbose(VERBOSITY_LOW,
+            'Error: Argument ' . $sArg . ' not understood.' . "\n\n");
+        die(EXIT_ERROR_ARGS_NOT_UNDERSTOOD);
+    }
+}
 $bCron = (empty($_SERVER['REMOTE_ADDR']) && empty($_SERVER['TERM']));
 define('VERBOSITY', ($bCron? 5 : 7));
 $tStart = time() + date('Z', 0); // Correct for timezone, otherwise the start value is not 0.
@@ -127,6 +156,22 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
     $_CONFIG['name'] . ' v' . $_CONFIG['version'] . '.' . "\n");
 
 
+
+
+
+// Check files passed as an argument.
+foreach ($aFiles as $sFile) {
+    if (!file_exists($sFile) || !is_file($sFile)) {
+        lovd_printIfVerbose(VERBOSITY_LOW,
+            'Error: Input is not a file:' . $sFile . ".\n\n");
+        die(EXIT_ERROR_INPUT_NOT_A_FILE);
+    }
+    if (!is_readable($sFile)) {
+        lovd_printIfVerbose(VERBOSITY_LOW,
+            'Error: Unreadable input file:' . $sFile . ".\n\n");
+        die(EXIT_ERROR_INPUT_UNREADABLE);
+    }
+}
 
 
 
