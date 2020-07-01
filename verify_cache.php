@@ -443,6 +443,11 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                     // Mutalyzer gave p.(=) for intronic variants or sometimes did other predictions, VV returns p.?,
                     //  or vice versa.
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'];
+
+                } elseif ($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] == 'p.(=)'
+                    && preg_match('/^p\.\([A-Z][a-z]{2}[0-9]+=\)$/', $aMapping['p'])) {
+                    // VV uses p.(Arg26=) while Mutalyzer uses p.(=). Use VV's description.
+                    $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'];
                 }
             }
 
