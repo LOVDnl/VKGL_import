@@ -445,10 +445,19 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                     // VV detected a mismatch between the genome and transcript,
                     //  returns WT while Mutalyzer never knew.
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] = $aMapping;
+
+                } elseif (similar_text($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'], $aMapping['c'], $n) && $n >= 75
+                    && (!isset($aMapping['p'])
+                        || similar_text($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'], $aMapping['p'], $n) && $n >= 50)) {
+                    // We have similar cDNA values and similar protein values, or the latter is not available.
+                    // VV often maps a codon or so away from Mutalyzer's mapping.
+                    // VV probably knows better because they check the genome/transcript differences.
+                    $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] = $aMapping;
                 }
             }
 
-            if (isset($aMapping['p'])) {
+            if (isset($aMapping['p'])
+                && $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] != $aMapping['p']) {
                 if (preg_match('/[0-9]+[+-][0-9]+/', $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'])) {
                     // Mutalyzer gave p.(=) for intronic variants or sometimes did other predictions, VV returns p.?,
                     //  or vice versa.
@@ -525,7 +534,9 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
         && floor($nVariantsDone * 1000 / $nVariants) != $nPercentageComplete) {
         $nPercentageComplete = floor($nVariantsDone * 1000 / $nVariants);
         $nAPICallsToReport = ($nAPICalls - $nAPICallsReported);
-        $nRateToReport = ($nSecondsWaiting / $nAPICallsToReport);
+        if ($nAPICallsToReport) {
+            $nRateToReport = ($nSecondsWaiting / $nAPICallsToReport);
+        }
         lovd_printIfVerbose(VERBOSITY_MEDIUM,
             ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format($nPercentageComplete / 10, 1),
                 5, ' ', STR_PAD_LEFT) . '%] ' .
