@@ -438,6 +438,16 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
             }
 
             // OK, so there's something different.
+            if ($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c']
+                != $aMapping['c']) {
+                // cDNA is different.
+                if (substr($aMapping['c'], -1) == '=') {
+                    // VV detected a mismatch between the genome and transcript,
+                    //  returns WT while Mutalyzer never knew.
+                    $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] = $aMapping;
+                }
+            }
+
             if (isset($aMapping['p'])) {
                 if (preg_match('/[0-9]+[+-][0-9]+/', $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'])) {
                     // Mutalyzer gave p.(=) for intronic variants or sometimes did other predictions, VV returns p.?,
