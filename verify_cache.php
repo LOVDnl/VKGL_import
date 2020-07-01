@@ -448,6 +448,11 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                     && preg_match('/^p\.\([A-Z][a-z]{2}[0-9]+=\)$/', $aMapping['p'])) {
                     // VV uses p.(Arg26=) while Mutalyzer uses p.(=). Use VV's description.
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'];
+
+                } elseif (strpos($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'], '*') !== false) {
+                    // Replace * by Ter.
+                    $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] =
+                        str_replace('*', 'Ter', $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p']);
                 }
             }
 
