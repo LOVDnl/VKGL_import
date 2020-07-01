@@ -459,6 +459,13 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                     // VV uses p.(Arg26=) while Mutalyzer uses p.(=). Use VV's description.
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'];
 
+                } elseif (preg_match('/^c\.[*-][0-9]+/', $aMapping['c'])
+                    && in_array($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'], array('p.?', 'p.(=)'))
+                    && in_array($aMapping['p'], array('p.?', 'p.(=)'))) {
+                    // Our VV module, for a while, returned p.? for 3'UTR variants,
+                    //  which should have been p.(=).
+                    $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'] = 'p.(=)';
+
                 } elseif (strpos($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'], '*') !== false) {
                     // Replace * by Ter.
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] =
