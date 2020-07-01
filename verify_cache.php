@@ -437,16 +437,39 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                 continue;
             }
 
-            // Position converter descriptions are *not* normalized.
-            // Freely overwrite mappings if we haven't added our method to it yet.
-            $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] = $aMapping;
+            // OK, so there's something different.
+            // Ask user which one to pick.
+            print(' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                5, ' ', STR_PAD_LEFT) . '%] VOT predictions differ for variant ' . $sVariantCorrected . ' on ' . $sRefSeq . ".\n" .
+                '                   Select your preference for Mutalyzer or Variant Validator with M or V.' . "\n" .
+                '                   Mutalyzer: ' . $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'] . ' - ' .
+                                                   $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] . "\n" .
+                '                   Validator: ' . $aMapping['c'] . ' - ' . $aMapping['p'] . "\n");
+
+            while (true) {
+                print('                   (M/V) [V]: ');
+                $sInput = strtolower(trim(fgets(STDIN)));
+                if (!strlen($sInput)) {
+                    $sInput = 'v';
+                }
+                if ($sInput == 'm') {
+                    // User chose Mutalyzer, don't overwrite this mapping.
+                    continue 2;
+                } elseif ($sInput == 'v') {
+                    // User chose VV, overwrite this mapping.
+                    $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] = $aMapping;
+                    break;
+                }
+            }
         }
+
         // Add our method to the list as well, so we won't repeat this.
         $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected]['methods'][] = 'VV';
 
         // Add to mapping cache.
         file_put_contents($_CONFIG['user']['mutalyzer_cache_mapping'],
-         $sVariantCorrected . "\t" . json_encode($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected]) . "\n", FILE_APPEND);
+            $sVariantCorrected . "\t" . json_encode($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected]) . "\n", FILE_APPEND);
         $nVariantsAddedToCache ++;
     }
 
