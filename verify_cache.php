@@ -403,23 +403,43 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
             continue; // Next variant.
         }
 
-        // When we get there, both variant predictors agreed.
+        // When we get there, both variant predictors agreed on the NC variant.
         // Now loop through the mappings we got from VV, and see if we can
         //  extend/update the current mapping cache.
         // We'll store all mappings, since we don't know which ones we want.
         foreach ($aResult['data']['transcript_mappings'] as $sRefSeq => $aMapping) {
-            // Position converter descriptions are *not* normalized.
-            // Freely overwrite mappings if we haven't added our method to it yet.
-            $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] =
-                array(
-                    'c' => $aMapping['DNA'],
-                    'p' => $aMapping['protein'],
-                );
+            // Is this one of those empty mappings from VV?
+            if (empty($aMapping['DNA'])) {
+                // Skip this; we have lots of these entries in the cache.
+                continue;
+            }
+
+            // Convert the mapping array into the cache's model.
+            $aMapping = array(
+                'c' => $aMapping['DNA'],
+                'p' => (isset($aMapping['protein'])? $aMapping['protein'] : 'p'),
+            );
 
             // But wait, did we just fill in a protein field for a non-coding transcript?
             if (substr($sRefSeq, 1, 1) == 'R') {
-                unset($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p']);
+                unset($aMapping['p']);
             }
+            // Both $aMapping and the current cache may now be missing 'p'.
+
+            // If we didn't have this mapping, just add it.
+            if (!isset($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq])) {
+                $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] = $aMapping;
+                continue;
+            }
+
+            // Is there something to change at all?
+            if ($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] == $aMapping) {
+                continue;
+            }
+
+            // Position converter descriptions are *not* normalized.
+            // Freely overwrite mappings if we haven't added our method to it yet.
+            $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] = $aMapping;
         }
         // Add our method to the list as well, so we won't repeat this.
         $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected]['methods'][] = 'VV';
