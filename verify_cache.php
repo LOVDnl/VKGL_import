@@ -459,6 +459,11 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                     // VV uses p.(Arg26=) while Mutalyzer uses p.(=). Use VV's description.
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'];
 
+                } elseif ($aMapping['p'] == 'p.(Met1?)') {
+                    // VV uses p.(Met1?) for changes in the first codon while Mutalyzer uses p.?, p.(=), or a prediction.
+                    // Use VV's description.
+                    $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'];
+
                 } elseif (preg_match('/^c\.[*-][0-9]+/', $aMapping['c'])
                     && in_array($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'], array('p.?', 'p.(=)'))
                     && in_array($aMapping['p'], array('p.?', 'p.(=)'))) {
