@@ -438,28 +438,42 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
             }
 
             // OK, so there's something different.
-            // Ask user which one to pick.
-            print(' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
-                floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
-                5, ' ', STR_PAD_LEFT) . '%] VOT predictions differ for variant ' . $sVariantCorrected . ' on ' . $sRefSeq . ".\n" .
-                '                   Select your preference for Mutalyzer or Variant Validator with M or V.' . "\n" .
-                '                   Mutalyzer: ' . $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'] . ' - ' .
-                                                   $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] . "\n" .
-                '                   Validator: ' . $aMapping['c'] . ' - ' . $aMapping['p'] . "\n");
-
-            while (true) {
-                print('                   (M/V) [V]: ');
-                $sInput = strtolower(trim(fgets(STDIN)));
-                if (!strlen($sInput)) {
-                    $sInput = 'v';
+            if (isset($aMapping['p'])) {
+                if (preg_match('/[0-9]+[+-][0-9]+/', $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'])) {
+                    // Mutalyzer gave p.(=) for intronic variants or sometimes did other predictions, VV returns p.?,
+                    //  or vice versa.
+                    $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'];
                 }
-                if ($sInput == 'm') {
-                    // User chose Mutalyzer, don't overwrite this mapping.
-                    continue 2;
-                } elseif ($sInput == 'v') {
-                    // User chose VV, overwrite this mapping.
-                    $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] = $aMapping;
-                    break;
+            }
+
+            if ($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] != $aMapping) {
+                // Something is still different.
+                // Ask user which one to pick.
+                print(' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                        floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                        5, ' ', STR_PAD_LEFT) . '%] VOT predictions differ for variant ' . $sVariantCorrected . ' on ' . $sRefSeq . ".\n" .
+                    '                   Select your preference for Mutalyzer or Variant Validator with M or V.' . "\n" .
+                    '                   Mutalyzer: ' . $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'] . ' - ' .
+                                                       $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] . "\n" .
+                    '                   Validator: ' . $aMapping['c'] . ' - ' . $aMapping['p'] . "\n");
+
+                while (true) {
+                    print('                 (M/V/s) [V]: ');
+                    $sInput = strtolower(trim(fgets(STDIN)));
+                    if (!strlen($sInput)) {
+                        $sInput = 'v';
+                    }
+                    if ($sInput == 'm') {
+                        // User chose Mutalyzer, don't overwrite this mapping.
+                        continue 2;
+                    } elseif ($sInput == 'v') {
+                        // User chose VV, overwrite this mapping.
+                        $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] = $aMapping;
+                        continue 2;
+                    } elseif ($sInput == 's') {
+                        // User chose to skip this variant.
+                        continue 3;
+                    }
                 }
             }
         }
