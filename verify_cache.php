@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2020-04-02
- * Modified    : 2020-06-30
+ * Modified    : 2020-07-01
  * Version     : 0.2
  * For LOVD    : 3.0-24
  *
@@ -284,6 +284,7 @@ set_time_limit(0);
 
 
 // Correct all genomic variants, using the cache. Skip substitutions.
+// Skip variants already checked by VV.
 // And don't bother using the database, we'll assume the cache knows it all.
 $nVariantsDone = 0;
 $nVariantsAddedToCache = 0;
@@ -317,21 +318,45 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
 
     // Update cache if needed.
     if ($bUpdateCache) {
-        $tStartWait = microtime(true);
-        // Call VV, don't limit to certain transcripts, we don't know which ones we'll want.
-        $aResult = $_VV->verifyGenomicAndPredictProtein($sVariant);
-        $nSecondsWaiting += (microtime(true) - $tStartWait);
-        $nAPICalls ++;
-        if (!$aResult) {
-            // Strange, VV failed completely for this variant.
-            lovd_printIfVerbose(VERBOSITY_MEDIUM,
-                ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
-                    floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
-                    5, ' ', STR_PAD_LEFT) . '%] Error: Variant Validator failed for variant ' . $sVariant . ".\n" .
-                '                   {' . $sVariant . '|' . $sVariantCorrected . '|FALSE||Error: Variant Validator failed.}' . "\n");
-            $nWarningsOccurred ++;
-            $nVariantsDone ++;
-            continue; // Next variant.
+        // If we've been passed a mapping cache with VV annotations, use that to
+        //  update the existing cache. This will save us a lot of time.
+        if (isset($_CACHE['mutalyzer_cache_mapping_VV'][$sVariantCorrected])
+            && in_array('VV', $_CACHE['mutalyzer_cache_mapping_VV'][$sVariantCorrected]['methods'])) {
+            // Try updating with the VV cache first.
+            $aResult = array(
+                'data' => array(
+                    'DNA' => $sVariantCorrected,
+                    'transcript_mappings' => array(),
+                ),
+                'warnings' => array(),
+                'errors' => array(),
+            );
+            foreach ($_CACHE['mutalyzer_cache_mapping_VV'][$sVariantCorrected] as $sRefSeq => $aMapping) {
+                if ($sRefSeq != 'methods') {
+                    $aResult['data']['transcript_mappings'][$sRefSeq] = array(
+                        'DNA' => $aMapping['c'],
+                        'protein' => (empty($aMapping['p'])? '' : $aMapping['p']),
+                    );
+                }
+            }
+
+        } else {
+            $tStartWait = microtime(true);
+            // Call VV, don't limit to certain transcripts, we don't know which ones we'll want.
+            $aResult = $_VV->verifyGenomicAndPredictProtein($sVariant);
+            $nSecondsWaiting += (microtime(true) - $tStartWait);
+            $nAPICalls ++;
+            if (!$aResult) {
+                // Strange, VV failed completely for this variant.
+                lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                    ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                        floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                        5, ' ', STR_PAD_LEFT) . '%] Error: Variant Validator failed for variant ' . $sVariant . ".\n" .
+                    '                   {' . $sVariant . '|' . $sVariantCorrected . '|FALSE||Error: Variant Validator failed.}' . "\n");
+                $nWarningsOccurred ++;
+                $nVariantsDone ++;
+                continue; // Next variant.
+            }
         }
 
         // If VV complains that the variant description has been corrected, we ignore this.
