@@ -480,6 +480,11 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                     //  which should have been p.(=).
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'] = 'p.(=)';
 
+                } elseif ($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'] == $aMapping['c']
+                    && similar_text($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'], $aMapping['p'], $n) && $n > 75) {
+                    // DNA is the same, protein prediction has a very high similarity; VV wins.
+                    $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'];
+
                 } elseif (strpos($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'], '*') !== false) {
                     // Replace * by Ter.
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] =
