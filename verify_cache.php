@@ -457,6 +457,15 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                     // VV often maps a codon or so away from Mutalyzer's mapping.
                     // VV probably knows better because they check the genome/transcript differences.
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] = $aMapping;
+
+                } elseif (isset($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p']) && isset($aMapping['p'])
+                    && in_array(substr($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'], -3), array('del', 'dup'))
+                    && substr($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'], -3) == substr($aMapping['c'], -3)
+                    && similar_text($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'], $aMapping['c'], $n) && $n >= 50
+                    && similar_text($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'], $aMapping['p'], $n) && $n >= 85) {
+                    // We have a protein description, DNA change is of the same type (del or dup) and at least 50% similar,
+                    //  protein change is highly similar. We're aiming for 3' shifted variants that only VV shifted well.
+                    $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] = $aMapping;
                 }
             }
 
