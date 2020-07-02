@@ -491,6 +491,14 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                     // DNA is the same, protein prediction has a very high similarity; VV wins.
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'];
 
+                } elseif (preg_match('/[0-9]ins/', $aMapping['c'])
+                    && strpos($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'], 'delins') !== false &&
+                    preg_match('/^p\.\([A-Z][a-z]{2}[0-9]+_[A-Z][a-z]{2}[0-9]+ins.*Ter/', $aMapping['p'])) {
+                    // When an insertion adds a Ter, Mutalyzer claims part of the protein is deleted.
+                    // VV just inserts the sequence including the Ter, which is as the HGVS recommends it:
+                    // http://varnomen.hgvs.org/recommendations/protein/variant/insertion/
+                    $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'];
+
                 } elseif (strpos($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'], '*') !== false) {
                     // Replace * by Ter.
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] =
