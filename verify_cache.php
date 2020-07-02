@@ -478,7 +478,7 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                 }
             }
 
-            if (isset($aMapping['p'])
+            if (isset($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p']) && isset($aMapping['p'])
                 && $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] != $aMapping['p']) {
                 if (preg_match('/[0-9]+[+-][0-9]+/', $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'])) {
                     // Mutalyzer gave p.(=) for intronic variants or sometimes did other predictions, VV returns p.?,
@@ -529,7 +529,7 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                 print(' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                         floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                         5, ' ', STR_PAD_LEFT) . '%] VOT predictions differ for variant ' . $sVariantCorrected . ' on ' . $sRefSeq . ".\n" .
-                    '                   Select your preference for Mutalyzer or Variant Validator with M or V.' . "\n" .
+                    '                   Select your preference for Mutalyzer or Variant Validator with M or V, or use s to skip.' . "\n" .
                     '                   Mutalyzer: ' . $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'] . ' / ' .
                     (!isset($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'])? '-'
                         : $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p']) . "\n" .
