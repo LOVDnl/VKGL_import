@@ -438,6 +438,15 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
             }
 
             // OK, so there's something different.
+            // To help all protein prediction diff checks, replace * by Ter.
+            if (isset($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'])
+                && strpos($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'], '*') !== false) {
+                // Replace * by Ter.
+                $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] =
+                    str_replace('*', 'Ter', $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p']);
+            }
+
+            // Check for differences in the cDNA description.
             if ($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c']
                 != $aMapping['c']) {
                 // cDNA is different.
@@ -511,11 +520,6 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                     // VV just inserts the sequence including the Ter, which is as the HGVS recommends it:
                     // http://varnomen.hgvs.org/recommendations/protein/variant/insertion/
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'];
-
-                } elseif (strpos($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'], '*') !== false) {
-                    // Replace * by Ter.
-                    $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] =
-                        str_replace('*', 'Ter', $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p']);
                 }
             }
 
