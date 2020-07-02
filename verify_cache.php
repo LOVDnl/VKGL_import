@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2020-04-02
- * Modified    : 2020-07-01
+ * Modified    : 2020-07-02
  * Version     : 0.2
  * For LOVD    : 3.0-24
  *
@@ -494,9 +494,11 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                         floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                         5, ' ', STR_PAD_LEFT) . '%] VOT predictions differ for variant ' . $sVariantCorrected . ' on ' . $sRefSeq . ".\n" .
                     '                   Select your preference for Mutalyzer or Variant Validator with M or V.' . "\n" .
-                    '                   Mutalyzer: ' . $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'] . ' - ' .
-                                                       $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] . "\n" .
-                    '                   Validator: ' . $aMapping['c'] . ' - ' . $aMapping['p'] . "\n");
+                    '                   Mutalyzer: ' . $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'] . ' / ' .
+                    (!isset($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'])? '-'
+                        : $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p']) . "\n" .
+                    '                   Validator: ' . $aMapping['c'] . ' / ' .
+                    (!isset($aMapping['p'])? '-' : $aMapping['p']) . "\n");
 
                 while (true) {
                     print('                 (M/V/s) [V]: ');
