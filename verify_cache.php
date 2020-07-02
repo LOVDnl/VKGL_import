@@ -441,9 +441,13 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
             if ($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c']
                 != $aMapping['c']) {
                 // cDNA is different.
-                if (substr($aMapping['c'], -1) == '=') {
+                if (substr($aMapping['c'], -1) == '='
+                    || (strpos($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'], 'del')
+                        && strpos($aMapping['c'], 'dup'))
+                    || (strpos($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'], 'dup')
+                        && strpos($aMapping['c'], 'del'))) {
                     // VV detected a mismatch between the genome and transcript,
-                    //  returns WT while Mutalyzer never knew.
+                    //  returns correct cDNA while Mutalyzer never knew.
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] = $aMapping;
 
                 } elseif (similar_text($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'], $aMapping['c'], $n) && $n >= 75
