@@ -505,8 +505,9 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'];
 
                 } elseif ($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] == 'p.(=)'
+                    && $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'] == $aMapping['c']
                     && preg_match('/^p\.\([A-Z][a-z]{2}[0-9]+=\)$/', $aMapping['p'])) {
-                    // VV uses p.(Arg26=) while Mutalyzer uses p.(=). Use VV's description.
+                    // VV uses p.(Arg26=) while Mutalyzer uses p.(=). Use VV's description if the cDNA matches.
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'];
 
                 } elseif ($aMapping['p'] == 'p.(Met1?)') {
