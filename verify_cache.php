@@ -461,6 +461,7 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
 
                 } elseif (similar_text($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'], $aMapping['c'], $n) && $n >= 75
                     && (!isset($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'])
+                        || $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] == 'p.?'
                         || similar_text($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'], $aMapping['p'], $n) && $n >= 50)) {
                     // We have similar cDNA values and similar protein values, or the latter is not available.
                     // VV often maps a codon or so away from Mutalyzer's mapping.
