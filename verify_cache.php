@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2020-04-02
- * Modified    : 2020-07-02
+ * Modified    : 2020-07-03
  * Version     : 0.2
  * For LOVD    : 3.0-24
  *
@@ -474,6 +474,16 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                     && similar_text($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'], $aMapping['p'], $n) && $n >= 85) {
                     // We have a protein description, DNA change is of the same type (del or dup) and at least 50% similar,
                     //  protein change is highly similar. We're aiming for 3' shifted variants that only VV shifted well.
+                    $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] = $aMapping;
+
+                } elseif (!isset($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p']) && isset($aMapping['p'])
+                    && substr($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'], 0, 2) == 'n.'
+                    && substr($aMapping['c'], 0, 2) == 'c.'
+                    && substr($sRefSeq, 1, 1) == 'M') {
+                    // Mutalyzer doesn't have a protein description and uses n.,
+                    //  but VV does have a protein description and uses c.
+                    // When this is an NM or XM (the latter is actually not
+                    //  supported by VV at this point), then surely VV is right.
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] = $aMapping;
                 }
             }
