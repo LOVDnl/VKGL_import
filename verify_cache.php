@@ -12,7 +12,12 @@
  * Purpose     : Checks the NC cache and extends the mapping cache using the new
  *               Variant Validator object.
  *
- * Changelog   : 0.1    2020-04-03
+ * Changelog   : 0.2    2020-07-03
+ *               We can now receive a VV mapping cache through the arguments,
+ *               which it will use instead of calls to VV. Also, we are now
+ *               interactive, predicting when VV's mapping information is better
+ *               than Mutalyzer's, but asking when it's not sure.
+ *               0.1    2020-04-03
  *               Initial release.
  *
  * Copyright   : 2004-2020 Leiden University Medical Center; http://www.LUMC.nl/
