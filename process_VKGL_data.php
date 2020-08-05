@@ -14,7 +14,8 @@
  *
  * Changelog   : 0.6    2020-08-05
  *               Conflicts are now reported while determining consensus
- *               classifications, so we can report them.
+ *               classifications, so we can report them. When debugging, changes
+ *               to the protein field are not easily reported anymore.
  *               0.5    2020-04-02
  *               Improved variant validation error messages so they can be
  *               easily extracted from the output and reported to the centers.
@@ -2085,7 +2086,7 @@ foreach ($aData as $sVariant => $aVariant) {
                     foreach ($aDiff['vots'][0] as $nTranscriptID => $aLOVDVot) {
                         // Often the problem is that our RNA is better (and sometimes our Protein as well).
                         if (isset($aDiff['vots'][1][$nTranscriptID])
-                            && in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', '-'))
+                            && in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', 'r.(?)', '-'))
                             && in_array($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', 'r.(?)', 'r.spl?'))) {
                             $aLOVDVot['VariantOnTranscript/RNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'];
                             if (in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/Protein'], array('p.(=)', '-'))) {
