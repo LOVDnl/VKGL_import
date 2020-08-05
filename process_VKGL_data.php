@@ -2089,7 +2089,9 @@ foreach ($aData as $sVariant => $aVariant) {
                             && in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', 'r.(?)', '-'))
                             && in_array($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', 'r.(?)', 'r.spl?'))) {
                             $aLOVDVot['VariantOnTranscript/RNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'];
-                            if (in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/Protein'], array('p.(=)', '-'))) {
+                            if (in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/Protein'], array('p.(=)', '-'))
+                                || str_replace('*', 'Ter', $aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/Protein'])
+                                    == $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein']) {
                                 $aLOVDVot['VariantOnTranscript/Protein'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'];
                             }
                         }
