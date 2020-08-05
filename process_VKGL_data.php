@@ -5,14 +5,17 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2020-04-02
- * Version     : 0.5
+ * Modified    : 2020-08-05
+ * Version     : 0.6
  * For LOVD    : 3.0-22
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.5    2020-04-02
+ * Changelog   : 0.6    2020-08-05
+ *               Conflicts are now reported while determining consensus
+ *               classifications, so we can report them.
+ *               0.5    2020-04-02
  *               Improved variant validation error messages so they can be
  *               easily extracted from the output and reported to the centers.
  *               0.4    2020-03-23
@@ -76,7 +79,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '0.5',
+    'version' => '0.6',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -1323,6 +1326,17 @@ foreach ($aData as $sVariant => $aVariant) {
             $aVariant['protein'] = array();
         }
         $aVariant['published_as'] = array($aVariant['published_as']);
+    }
+
+    // Report opposites.
+    if ($aVariant['status'] == 'opposite') {
+        lovd_printIfVerbose(VERBOSITY_MEDIUM,
+            ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                    floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                5, ' ', STR_PAD_LEFT) .
+            '%] Conflict: ' . implode(', ', array_map(function ($key, $val) { return $key . ': ' . $val; }, array_keys($aVariant['classifications']), $aVariant['classifications'])) . ' (' . implode(', ', array_unique($aVariant['gene'])) . ").\n" .
+            '                   IDs: ' . implode(', ', array_unique($aVariant['id'])) . ".\n" .
+            '                   DNA: ' . $aVariant['VariantOnGenome/DNA'] . "\n");
     }
 
     $aData[$sVariant] = $aVariant;
