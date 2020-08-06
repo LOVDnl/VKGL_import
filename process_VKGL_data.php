@@ -2104,8 +2104,11 @@ foreach ($aData as $sVariant => $aVariant) {
                         // Or, the DNA changed because we fixed it, but the protein change is the same.
                         if (isset($aDiff['vots'][1][$nTranscriptID])
                             && $aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/DNA'] != $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA']
-                            && $aLOVDVot['VariantOnTranscript/Protein'] == $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein']) {
+                            && ($aLOVDVot['VariantOnTranscript/Protein'] == $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein']
+                                || substr($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA'], -1) == '=')) {
                             $aLOVDVot['VariantOnTranscript/DNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA'];
+                            $aLOVDVot['VariantOnTranscript/RNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'];
+                            $aLOVDVot['VariantOnTranscript/Protein'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'];
                         }
                         // If the same, toss.
                         if (isset($aDiff['vots'][1][$nTranscriptID]) && $aLOVDVot == $aDiff['vots'][1][$nTranscriptID]) {
