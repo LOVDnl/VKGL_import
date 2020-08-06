@@ -5,16 +5,17 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2020-04-02
- * Modified    : 2020-08-05
+ * Modified    : 2020-08-06
  * Version     : 0.3
  * For LOVD    : 3.0-24
  *
  * Purpose     : Checks the NC cache and extends the mapping cache using the new
  *               Variant Validator object.
  *
- * Changelog   : 0.3    2020-08-05
+ * Changelog   : 0.3    2020-08-06
  *               Receiving a VV mapping cache as an argument is now optional,
- *               the way it was intended.
+ *               the way it was intended. Also, fixed notices from variants that
+ *               caused a VV error.
  *               0.2    2020-07-03
  *               We can now receive a VV mapping cache through the arguments,
  *               which it will use instead of calls to VV. Also, we are now
@@ -399,7 +400,7 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                     ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                         floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                         5, ' ', STR_PAD_LEFT) . '%] Error: Variant Validator error disagrees for variant ' . $sVariant . ".\n" .
-                    '                   {' . $sVariant . '|' . $sVariantCorrected . '|' . $aResult['data']['DNA'] . '|' . implode(';', $aResult['warnings']) . '|Error: Variant Validator error disagrees: ' . implode(';', $aResult['errors']) . '}' . "\n");
+                    '                   {' . $sVariant . '|' . $sVariantCorrected . '|(no results)|' . implode(';', $aResult['warnings']) . '|Error: Variant Validator error disagrees: ' . implode(';', $aResult['errors']) . '}' . "\n");
                 $nWarningsOccurred ++;
             }
             $nVariantsDone ++;
