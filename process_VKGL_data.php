@@ -5,14 +5,14 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2020-08-05
+ * Modified    : 2020-08-06
  * Version     : 0.6
  * For LOVD    : 3.0-22
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.6    2020-08-05
+ * Changelog   : 0.6    2020-08-06
  *               Conflicts are now reported while determining consensus
  *               classifications, so we can report them. When debugging, changes
  *               to the protein field are not easily reported anymore.
@@ -2089,7 +2089,7 @@ foreach ($aData as $sVariant => $aVariant) {
                             && in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', 'r.(?)', '-'))
                             && in_array($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', 'r.(?)', 'r.spl?'))) {
                             $aLOVDVot['VariantOnTranscript/RNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'];
-                            if (in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/Protein'], array('p.(=)', '-'))
+                            if (in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/Protein'], array('p.(=)', 'p.?', '-'))
                                 || str_replace('*', 'Ter', $aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/Protein'])
                                     == $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein']) {
                                 $aLOVDVot['VariantOnTranscript/Protein'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'];
