@@ -15,7 +15,8 @@
  * Changelog   : 0.6    2020-08-06
  *               Conflicts are now reported while determining consensus
  *               classifications, so we can report them. When debugging, changes
- *               to the protein field are not easily reported anymore.
+ *               caused by the new VV predictions (c.= transcript variants and
+ *               changes to the protein field) are not easily reported anymore.
  *               0.5    2020-04-02
  *               Improved variant validation error messages so they can be
  *               easily extracted from the output and reported to the centers.
@@ -1540,7 +1541,12 @@ foreach ($aData as $sVariant => $aVariant) {
         //  and we already did that stuff. Also, this code below is better in predicting good RNA values.
         // We will be borrowing quite some logic though. It would be better if this was solved.
         $aMapping['RNA'] = 'r.(?)'; // Default.
-        if (in_array($aMapping['protein'], array('', 'p.?', 'p.(=)'))) {
+        if ($aMapping['type'] == '=') {
+            $aMapping['RNA'] = 'r.(=)';
+            if (strpos($aMapping['protein'], '=') === false) {
+                $aMapping['protein'] = 'p.(=)';
+            }
+        } elseif (in_array($aMapping['protein'], array('', 'p.?', 'p.(=)'))) {
             // We'd want to check this.
             // Splicing.
             if (($aMapping['position_start_intron'] && abs($aMapping['position_start_intron']) <= 5)
