@@ -5,14 +5,19 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2020-04-02
- * Version     : 0.5
+ * Modified    : 2020-08-06
+ * Version     : 0.6
  * For LOVD    : 3.0-22
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.5    2020-04-02
+ * Changelog   : 0.6    2020-08-06
+ *               Conflicts are now reported while determining consensus
+ *               classifications, so we can report them. When debugging, changes
+ *               caused by the new VV predictions (c.= transcript variants and
+ *               changes to the protein field) are not easily reported anymore.
+ *               0.5    2020-04-02
  *               Improved variant validation error messages so they can be
  *               easily extracted from the output and reported to the centers.
  *               0.4    2020-03-23
@@ -76,7 +81,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '0.5',
+    'version' => '0.6',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -1325,6 +1330,17 @@ foreach ($aData as $sVariant => $aVariant) {
         $aVariant['published_as'] = array($aVariant['published_as']);
     }
 
+    // Report opposites.
+    if ($aVariant['status'] == 'opposite') {
+        lovd_printIfVerbose(VERBOSITY_MEDIUM,
+            ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                    floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                5, ' ', STR_PAD_LEFT) .
+            '%] Conflict: ' . implode(', ', array_map(function ($key, $val) { return $key . ': ' . $val; }, array_keys($aVariant['classifications']), $aVariant['classifications'])) . ' (' . implode(', ', array_unique($aVariant['gene'])) . ").\n" .
+            '                   IDs: ' . implode(', ', array_unique($aVariant['id'])) . ".\n" .
+            '                   DNA: ' . $aVariant['VariantOnGenome/DNA'] . "\n");
+    }
+
     $aData[$sVariant] = $aVariant;
     $nVariantsDone ++;
 }
@@ -1525,7 +1541,12 @@ foreach ($aData as $sVariant => $aVariant) {
         //  and we already did that stuff. Also, this code below is better in predicting good RNA values.
         // We will be borrowing quite some logic though. It would be better if this was solved.
         $aMapping['RNA'] = 'r.(?)'; // Default.
-        if (in_array($aMapping['protein'], array('', 'p.?', 'p.(=)'))) {
+        if ($aMapping['type'] == '=') {
+            $aMapping['RNA'] = 'r.(=)';
+            if (strpos($aMapping['protein'], '=') === false) {
+                $aMapping['protein'] = 'p.(=)';
+            }
+        } elseif (in_array($aMapping['protein'], array('', 'p.?', 'p.(=)'))) {
             // We'd want to check this.
             // Splicing.
             if (($aMapping['position_start_intron'] && abs($aMapping['position_start_intron']) <= 5)
@@ -2071,18 +2092,23 @@ foreach ($aData as $sVariant => $aVariant) {
                     foreach ($aDiff['vots'][0] as $nTranscriptID => $aLOVDVot) {
                         // Often the problem is that our RNA is better (and sometimes our Protein as well).
                         if (isset($aDiff['vots'][1][$nTranscriptID])
-                            && in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', '-'))
+                            && in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', 'r.(?)', '-'))
                             && in_array($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', 'r.(?)', 'r.spl?'))) {
                             $aLOVDVot['VariantOnTranscript/RNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'];
-                            if (in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/Protein'], array('p.(=)', '-'))) {
+                            if (in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/Protein'], array('p.(=)', 'p.?', '-'))
+                                || str_replace('*', 'Ter', $aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/Protein'])
+                                    == $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein']) {
                                 $aLOVDVot['VariantOnTranscript/Protein'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'];
                             }
                         }
                         // Or, the DNA changed because we fixed it, but the protein change is the same.
                         if (isset($aDiff['vots'][1][$nTranscriptID])
                             && $aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/DNA'] != $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA']
-                            && $aLOVDVot['VariantOnTranscript/Protein'] == $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein']) {
+                            && ($aLOVDVot['VariantOnTranscript/Protein'] == $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein']
+                                || substr($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA'], -1) == '=')) {
                             $aLOVDVot['VariantOnTranscript/DNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA'];
+                            $aLOVDVot['VariantOnTranscript/RNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'];
+                            $aLOVDVot['VariantOnTranscript/Protein'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'];
                         }
                         // If the same, toss.
                         if (isset($aDiff['vots'][1][$nTranscriptID]) && $aLOVDVot == $aDiff['vots'][1][$nTranscriptID]) {

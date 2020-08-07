@@ -5,14 +5,18 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2020-04-02
- * Modified    : 2020-07-03
- * Version     : 0.2
+ * Modified    : 2020-08-06
+ * Version     : 0.3
  * For LOVD    : 3.0-24
  *
  * Purpose     : Checks the NC cache and extends the mapping cache using the new
  *               Variant Validator object.
  *
- * Changelog   : 0.2    2020-07-03
+ * Changelog   : 0.3    2020-08-06
+ *               Receiving a VV mapping cache as an argument is now optional,
+ *               the way it was intended. Also, fixed notices from variants that
+ *               caused a VV error.
+ *               0.2    2020-07-03
  *               We can now receive a VV mapping cache through the arguments,
  *               which it will use instead of calls to VV. Also, we are now
  *               interactive, predicting when VV's mapping information is better
@@ -49,7 +53,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 // Default settings. We won't verify any setting, that's up to the process script.
 $_CONFIG = array(
     'name' => 'VKGL cache verification using Variant Validator',
-    'version' => '0.2',
+    'version' => '0.3',
     'settings_file' => 'settings.json',
     'VV_URL' => 'https://www35.lamp.le.ac.uk/', // Test instance with the latest LOVD endpoint. // www.variantvalidator.org.
     'user' => array(
@@ -242,8 +246,14 @@ $_CACHE = array();
 foreach (array('mutalyzer_cache_NC', 'mutalyzer_cache_mapping', 'mutalyzer_cache_mapping_VV') as $sKeyName) {
     $_CACHE[$sKeyName] = array();
     if ($sKeyName == 'mutalyzer_cache_mapping_VV') {
-        // This one we received through an argument.
-        $_CONFIG['user'][$sKeyName] = $aFiles[0];
+        // This one we received through an argument, optionally.
+        if ($aFiles) {
+            $_CONFIG['user'][$sKeyName] = $aFiles[0];
+        } else {
+            // Not received from user.
+            $_CACHE[$sKeyName] = array();
+            continue;
+        }
     }
     if (!file_exists($_CONFIG['user'][$sKeyName])
         || !is_file($_CONFIG['user'][$sKeyName]) || !is_readable($_CONFIG['user'][$sKeyName])) {
@@ -390,7 +400,7 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                     ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                         floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                         5, ' ', STR_PAD_LEFT) . '%] Error: Variant Validator error disagrees for variant ' . $sVariant . ".\n" .
-                    '                   {' . $sVariant . '|' . $sVariantCorrected . '|' . $aResult['data']['DNA'] . '|' . implode(';', $aResult['warnings']) . '|Error: Variant Validator error disagrees: ' . implode(';', $aResult['errors']) . '}' . "\n");
+                    '                   {' . $sVariant . '|' . $sVariantCorrected . '|(no results)|' . implode(';', $aResult['warnings']) . '|Error: Variant Validator error disagrees: ' . implode(';', $aResult['errors']) . '}' . "\n");
                 $nWarningsOccurred ++;
             }
             $nVariantsDone ++;
