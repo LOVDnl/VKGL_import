@@ -5,14 +5,19 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2020-08-06
- * Version     : 0.6
- * For LOVD    : 3.0-22
+ * Modified    : 2020-09-15
+ * Version     : 0.7
+ * For LOVD    : 3.0-25
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.6    2020-08-06
+ * Changelog   : 0.7    2020-09-15
+ *               The VOT/Classification column moved to VOG and was renamed to
+ *               VOG/ClinicalClassification. Also, when debugging, silently skip
+ *               reports of this column being filled in. The previous run (June
+ *               2020) was run without this column filled in.
+ *               0.6    2020-08-06
  *               Conflicts are now reported while determining consensus
  *               classifications, so we can report them. When debugging, changes
  *               caused by the new VV predictions (c.= transcript variants and
@@ -81,7 +86,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '0.6',
+    'version' => '0.7',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -1124,6 +1129,8 @@ foreach ($aData as $nKey => $aVariant) {
     } else {
         // Variant has already been seen before.
         $aData[$aVariant['VariantOnGenome/DNA']] = array_merge_recursive($aData[$aVariant['VariantOnGenome/DNA']], $aVariant);
+        // Enable the line below to log which variants are reported as duplicates.
+        // print($aVariant['id'] . "\t" . $aVariant['gene'] . "\t" . 'Equal to:' . "\t" . $aData[$aVariant['VariantOnGenome/DNA']]['id'][0] . "\t" . $aData[$aVariant['VariantOnGenome/DNA']]['gene'][0] . "\t" . $aVariant['VariantOnGenome/DNA'] . "\n");
         $nVariantsMerged ++;
     }
 
@@ -1707,13 +1714,13 @@ foreach ($aData as $sVariant => $aVariant) {
                 'VariantOnGenome/Published_as',
                 'VariantOnGenome/Remarks',
                 'VariantOnGenome/Remarks_Non_Public',
-                'VariantOnTranscript/Classification',
+                'VariantOnGenome/ClinicalClassification',
             ))->fetchAllColumn();
         $bGeneticOrigin = in_array('VariantOnGenome/Genetic_origin', $aActiveCols);
         $bPublishedAs = in_array('VariantOnGenome/Published_as', $aActiveCols);
         $bRemarks = in_array('VariantOnGenome/Remarks', $aActiveCols);
         $bRemarksNonPublic = in_array('VariantOnGenome/Remarks_Non_Public', $aActiveCols);
-        $bClassification = in_array('VariantOnTranscript/Classification', $aActiveCols);
+        $bClassification = in_array('VariantOnGenome/ClinicalClassification', $aActiveCols);
 
         // Load the data currently in the database.
         // Note, that if there are two entries of the same variant by the same center, we see only *one*.
@@ -1726,13 +1733,13 @@ foreach ($aData as $sVariant => $aVariant) {
                 (!$bGeneticOrigin? '' : 'vog.`VariantOnGenome/Genetic_origin`, ') .
                 (!$bPublishedAs? '' : 'vog.`VariantOnGenome/Published_as`, ') .
                 (!$bRemarks? '' : 'vog.`VariantOnGenome/Remarks`, ') .
-                (!$bRemarksNonPublic? '' : 'vog.`VariantOnGenome/Remarks_Non_Public`,') . '
+                (!$bRemarksNonPublic? '' : 'vog.`VariantOnGenome/Remarks_Non_Public`, ') .
+                (!$bClassification? '' : 'IFNULL(NULLIF(vog.`VariantOnGenome/ClinicalClassification`, ""), "-") AS `VariantOnGenome/ClinicalClassification`,') . '
               GROUP_CONCAT(vot.transcriptid, ";", vot.effectid, ";",
                 IFNULL(vot.position_c_start, "0"), ";",
                 IFNULL(vot.position_c_start_intron, "0"), ";",
                 IFNULL(vot.position_c_end, "0"), ";",
-                IFNULL(vot.position_c_end_intron, "0"), ";", ' .
-                (!$bClassification? '"-"' : 'IFNULL(NULLIF(vot.`VariantOnTranscript/Classification`, ""), "-")') . ', ";",
+                IFNULL(vot.position_c_end_intron, "0"), ";",
                 IFNULL(NULLIF(vot.`VariantOnTranscript/DNA`, ""), "-"), ";",
                 IFNULL(NULLIF(vot.`VariantOnTranscript/RNA`, ""), "-"), ";",
                 IFNULL(NULLIF(vot.`VariantOnTranscript/Protein`, ""), "-") SEPARATOR ";;") AS vots
@@ -1878,6 +1885,9 @@ foreach ($aData as $sVariant => $aVariant) {
             'owned_by' => ($aVariant['status'] == 'single-lab' && $_CONFIG['user']['public_singlelab_owners'] != 'y'? // Should single-lab entry get the generic VKGL account as owner?
                 $_CONFIG['user']['vkgl_generic_id'] : $aCenterIDs[$sCenter]),
             'statusid' => (string) ($aVariant['status'] == 'opposite'? STATUS_HIDDEN : STATUS_OK), // FIXME: Set to Marked if a warning occurred within this variant? Or like, when not having a mapping?
+            // Don't let internal conflicts cause notices here.
+            'VariantOnGenome/ClinicalClassification' => (!isset($_CONFIG['effect_mapping_classification'][$sClassification])? '-' :
+                $_CONFIG['effect_mapping_classification'][$sClassification]),
             'VariantOnGenome/DNA' => $sDNA, // Can actually also update, if the LOVD data is not correct.
             'VariantOnGenome/DBID' => '', // FIXME: Will be filled in later for records to be created!
             'VariantOnGenome/Genetic_origin' => 'CLASSIFICATION record',
@@ -1892,6 +1902,9 @@ foreach ($aData as $sVariant => $aVariant) {
         );
 
         // Some of these columns are optional.
+        if (!$bClassification) {
+            unset($aVOGEntry['VariantOnGenome/ClinicalClassification']);
+        }
         if (!$bGeneticOrigin) {
             unset($aVOGEntry['VariantOnGenome/Genetic_origin']);
         }
@@ -1914,18 +1927,10 @@ foreach ($aData as $sVariant => $aVariant) {
                 'position_c_start_intron' => $aMapping['position_start_intron'],
                 'position_c_end' => $aMapping['position_end'],
                 'position_c_end_intron' => $aMapping['position_end_intron'],
-                // Don't let internal conflicts cause notices here.
-                'VariantOnTranscript/Classification' => (!isset($_CONFIG['effect_mapping_classification'][$sClassification])? '-' :
-                    $_CONFIG['effect_mapping_classification'][$sClassification]),
                 'VariantOnTranscript/DNA' => $aMapping['DNA'],
                 'VariantOnTranscript/RNA' => $aMapping['RNA'],
                 'VariantOnTranscript/Protein' => $aMapping['protein'],
             );
-
-            // Some of these columns are optional.
-            if (!$bClassification) {
-                unset($aVOGEntry['vots'][$aTranscripts[$sTranscript]]['VariantOnTranscript/Classification']);
-            }
         }
         // For comparison reasons.
         ksort($aVOGEntry['vots']);
@@ -1963,16 +1968,10 @@ foreach ($aData as $sVariant => $aVariant) {
                         'position_c_start_intron' => $aVOT[3],
                         'position_c_end' => $aVOT[4],
                         'position_c_end_intron' => $aVOT[5],
-                        'VariantOnTranscript/Classification' => $aVOT[6],
-                        'VariantOnTranscript/DNA' => $aVOT[7],
-                        'VariantOnTranscript/RNA' => $aVOT[8],
-                        'VariantOnTranscript/Protein' => $aVOT[9],
+                        'VariantOnTranscript/DNA' => $aVOT[6],
+                        'VariantOnTranscript/RNA' => $aVOT[7],
+                        'VariantOnTranscript/Protein' => $aVOT[8],
                     );
-
-                    // Some of these columns are optional.
-                    if (!$bClassification) {
-                        unset($aDataLOVD[$sLOVDKey]['vots'][$aVOT[0]]['VariantOnTranscript/Classification']);
-                    }
                 }
                 ksort($aDataLOVD[$sLOVDKey]['vots']);
             }
@@ -2068,17 +2067,22 @@ foreach ($aData as $sVariant => $aVariant) {
                     );
                     sort($aEffects);
                     if (in_array(implode('', $aEffects), array('13', '35', '57', '79'))) {
-                        unset($aDiff['effectid']);
+                        unset($aDiff['effectid'], $aDiff['VariantOnGenome/ClinicalClassification']);
                         // And do the same in the vots.
                         if (isset($aDiff['vots'])) {
                             foreach (array(0, 1) as $nKey) {
                                 $aDiff['vots'][$nKey] = array_map(function ($aVOT) {
-                                    unset($aVOT['effectid'], $aVOT['VariantOnTranscript/Classification']);
+                                    unset($aVOT['effectid']);
                                     return $aVOT;
                                 }, $aDiff['vots'][$nKey]);
                             }
                         }
                     }
+                }
+                // ClinicalClassification was filled in only later.
+                if (isset($aDiff['VariantOnGenome/ClinicalClassification'])
+                    && in_array($aDiff['VariantOnGenome/ClinicalClassification'][0], array('', '-'))) {
+                    unset($aDiff['VariantOnGenome/ClinicalClassification']);
                 }
                 // If diff is only the status change, it's fine.
                 if (count($aDiff) == 1 && isset($aDiff['statusid'])) {
