@@ -5,14 +5,19 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2020-09-15
- * Version     : 0.7
- * For LOVD    : 3.0-25
+ * Modified    : 2021-02-10
+ * Version     : 0.8
+ * For LOVD    : 3.0-26
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.7    2020-09-15
+ * Changelog   : 0.8    2021-02-10
+ *               Conflicts are now reported in a structured manner, so we can
+ *               easily filter them out of the run logs, and convert them
+ *               automatically into a tab-delimited format to be reported to all
+ *               the centers.
+ *               0.7    2020-09-15
  *               The VOT/Classification column moved to VOG and was renamed to
  *               VOG/ClinicalClassification. Also, when debugging, silently skip
  *               reports of this column being filled in. The previous run (June
@@ -86,7 +91,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '0.7',
+    'version' => '0.8',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -1346,6 +1351,14 @@ foreach ($aData as $sVariant => $aVariant) {
             '%] Conflict: ' . implode(', ', array_map(function ($key, $val) { return $key . ': ' . $val; }, array_keys($aVariant['classifications']), $aVariant['classifications'])) . ' (' . implode(', ', array_unique($aVariant['gene'])) . ").\n" .
             '                   IDs: ' . implode(', ', array_unique($aVariant['id'])) . ".\n" .
             '                   DNA: ' . $aVariant['VariantOnGenome/DNA'] . "\n");
+        // Also report in a structured manner which we can extract from the output to report.
+        $sReport = '{Conflict|' . $aVariant['VariantOnGenome/DNA'] . '|' . implode(',', $aVariant['gene']);
+        foreach (array_keys($aCenterIDs) as $sCenter) {
+            // This is called a "Null coalescing operator" (PHP7) and doesn't emit a notice.
+            $sReport .= '|' . ($aVariant['classifications'][$sCenter] ?? '');
+        }
+        lovd_printIfVerbose(VERBOSITY_MEDIUM,
+            '                   ' . $sReport . "}\n");
     }
 
     $aData[$sVariant] = $aVariant;
@@ -1359,7 +1372,8 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
             function ($sKey, $nValue) {
                 global $lPadding;
                 return '                   ' . str_pad(ucfirst($sKey), $lPadding, ' ') . ' : ' . $nValue;
-            }, array_keys($aStatusCounts), array_values($aStatusCounts))) . "\n\n" .
+            }, array_keys($aStatusCounts), array_values($aStatusCounts))) . "\n" .
+    '                   {ConflictHeader|# Variant (HGVS, normalized)|Gene(s)|' . implode('|', array_keys($aCenterIDs)) . "}\n\n" .
     ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Verifying transcript variants...' . "\n");
 
 
