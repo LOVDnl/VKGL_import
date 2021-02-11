@@ -4,5 +4,8 @@ mapping_cache.*
 NC_cache.txt
 output_*
 settings.json
+stats.txt
+verification_*
 vkgl_consensus_*
+vkgl_errors_*
 vkgl_opposites_*
