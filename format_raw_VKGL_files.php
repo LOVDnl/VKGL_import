@@ -5,15 +5,18 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2020-06-29
- * Version     : 0.1.3
- * For LOVD    : 3.0-22
+ * Modified    : 2021-02-09
+ * Version     : 0.1.4
+ * For LOVD    : 3.0-26
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.1.3  2020-06-29
+ * Changelog   : 0.1.4  2021-02-09
+ *               Added handling duplicate variants in one file; the VUMC list
+ *               now consists of two files that have a small overlap.
+ *               0.1.3  2020-06-29
  *               Fixed bug; Now also handling file headers with quotes.
  *               0.1.2  2020-03-23
  *               Fixed bug; no longer assume the centers' files ares sorted
@@ -24,7 +27,7 @@
  *               0.1.0  2019-11-14
  *               Initial release.
  *
- * Copyright   : 2004-2019 Leiden University Medical Center; http://www.LUMC.nl/
+ * Copyright   : 2004-2021 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
  *
  *
@@ -54,7 +57,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.1.3',
+    'version' => '0.1.4',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -728,10 +731,26 @@ foreach ($aFiles as $sFile => $sCenter) {
             } else {
                 // These values cannot already exist.
                 if (isset($aData[$sVariantKey][$sKey])) {
-                    // Center already seen for this variant???
-                    lovd_printIfVerbose(VERBOSITY_LOW,
-                        'Error: Center ' . $sCenter . ' has two classifications for same variant key ' . $sKey . ".\n\n");
-                    die(EXIT_ERROR_DATA_CONTENT_ERROR);
+                    // Center already seen for this variant?
+                    // 2021-02-04; VUMC now delivers *two* files of the same
+                    //  format, and with some overlap (right now 16 variants).
+                    // So we can't just die here anymore. There are some
+                    //  conflicts, which we'll need to drop, but the rest can
+                    //  just continue.
+                    if ($aData[$sVariantKey][$sCenter] == $aValues[$sCenter]) {
+                        // Same classification. It's OK, just overwrite.
+                        // Do report.
+                        lovd_printIfVerbose(VERBOSITY_HIGH,
+                            '                   Warning: Center ' . $sCenter . ' has two entries for same variant key: ' . $sVariantKey . ".\n");
+                    } else {
+                        // Now we're actually in trouble. Internal conflict.
+                        // We won't die, but we need to ignore BOTH entries.
+                        lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                            '                   Warning: Internal conflict in center ' . $sCenter . ': ' . $aData[$sVariantKey][$sCenter] . ', ' . $aValues[$sCenter] . ".\n" .
+                            '                   ID: ' . $sVariantKey . "\n");
+                        unset($aData[$sVariantKey]); // Delete variant.
+                        continue 2; // Next line in the file.
+                    }
                 }
                 $aData[$sVariantKey][$sKey] = $sValue;
             }
