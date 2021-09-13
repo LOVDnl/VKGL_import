@@ -5,15 +5,18 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2021-02-09
- * Version     : 0.1.4
+ * Modified    : 2021-09-13
+ * Version     : 0.1.5
  * For LOVD    : 3.0-26
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.1.4  2021-02-09
+ * Changelog   : 0.1.5  2021-09-13
+ *               Added yet another file header signature, we keep receiving
+ *               different files each time.
+ *               0.1.4  2021-02-09
  *               Added handling duplicate variants in one file; the VUMC list
  *               now consists of two files that have a small overlap.
  *               0.1.3  2020-06-29
@@ -76,6 +79,8 @@ $_CONFIG = array(
     ),
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
     'header_signatures' => array(
+        'alt;c;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;' .
+            'ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
         'alt;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;' .
             'ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
         'alt;alt_orig;c_nomen;chrom;chromosome;classification;effect;exon;gene;hgvs_normalized_vkgl;id;' .
