@@ -60,7 +60,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.1.4',
+    'version' => '0.1.5',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
