@@ -5,14 +5,16 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2020-04-02
- * Modified    : 2020-08-06
- * Version     : 0.3
+ * Modified    : 2022-05-09
+ * Version     : 0.4
  * For LOVD    : 3.0-24
  *
  * Purpose     : Checks the NC cache and extends the mapping cache using the new
  *               Variant Validator object.
  *
- * Changelog   : 0.3    2020-08-06
+ * Changelog   : 0.4    2022-05-09
+ *               Reduce the output by ignoring VV's peculiar p.(*123=) notation.
+ *               0.3    2020-08-06
  *               Receiving a VV mapping cache as an argument is now optional,
  *               the way it was intended. Also, fixed notices from variants that
  *               caused a VV error.
@@ -55,7 +57,7 @@ $_CONFIG = array(
     'name' => 'VKGL cache verification using Variant Validator',
     'version' => '0.3',
     'settings_file' => 'settings.json',
-    'VV_URL' => 'https://www35.lamp.le.ac.uk/', // Test instance with the latest LOVD endpoint. // www.variantvalidator.org.
+    'VV_URL' => 'https://rest.variantvalidator.org/',
     'user' => array(
         // We don't have defaults, we load everything from the settings file.
     ),
@@ -521,8 +523,9 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
 
                 } elseif ($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] == 'p.(=)'
                     && $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['c'] == $aMapping['c']
-                    && preg_match('/^p\.\([A-Z][a-z]{2}[0-9]+=\)$/', $aMapping['p'])) {
-                    // VV uses p.(Arg26=) while Mutalyzer uses p.(=). Use VV's description if the cDNA matches.
+                    && preg_match('/^p\.\(([A-Z][a-z]{2}|\*)[0-9]+=\)$/', $aMapping['p'])) {
+                    // VV uses p.(Arg26=) or p.(*123=)  while Mutalyzer uses p.(=). Use VV's description if the cDNA matches.
+                    // FIXME: Actually, I'm not sure about VV's description here.
                     $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p'] = $aMapping['p'];
 
                 } elseif ($aMapping['p'] == 'p.(Met1?)') {
