@@ -1825,7 +1825,8 @@ foreach ($aData as $sVariant => $aVariant) {
                 // Before we recommend adding it to the cache, check its nomenclature. If not HGVS, ignore it.
                 // This is not a great HGVS check; this function does allow some non-HGVS descriptions.
                 $bHGVS = (bool) lovd_getVariantInfo($sLOVDVariant);
-                if ($bHGVS) {
+                if ($bHGVS && substr($sLOVDVariant, -1) != '=' && strpos($sLOVDVariant, '?') === false) {
+                    // WT variants or partially unknown variants we'll consider non-HGVS here.
                     $aAddToCache[] = $sLOVDVariant;
                     continue;
                 } else {
