@@ -5,14 +5,18 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2021-02-10
- * Version     : 0.8
+ * Modified    : 2022-05-09
+ * Version     : 0.9
  * For LOVD    : 3.0-26
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.8    2021-02-10
+ * Changelog   : 0.9    2022-05-09
+ *               The JSON will no longer reports differences to transcript
+ *               mappings when in reality, only the effectid changed. Also the
+ *               debugging info will now ignore effectid changes in VOT data.
+ *               0.8    2021-02-10
  *               Conflicts are now reported in a structured manner, so we can
  *               easily filter them out of the run logs, and convert them
  *               automatically into a tab-delimited format to be reported to all
@@ -2047,12 +2051,17 @@ foreach ($aData as $sVariant => $aVariant) {
                         // Also report differences.
                         if ($sKey == 'vots') {
                             // We won't report changes per field here, just per transcript.
+                            // But, only report differences in VOTs that are not the classification.
+                            // We can't just remove the effectid from $aDiff, as that array is
+                            //  being used to process the diff into the DB. So, hide it in the comparison only.
+                            $aTmpClassification = array('effectid' => 99); // Value doesn't actually matter.
                             foreach (array_unique(array_merge(array_keys($aDiff['vots'][0]), array_keys($aDiff['vots'][1]))) as $nTranscriptID) {
                                 if (!isset($aDiff['vots'][0][$nTranscriptID])) {
                                     $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Added mapping to transcript ' . array_search($nTranscriptID, $aTranscripts) . '.';
                                 } elseif (!isset($aDiff['vots'][1][$nTranscriptID])) {
                                     $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Removed mapping to transcript ' . array_search($nTranscriptID, $aTranscripts) . '.';
-                                } elseif ($aDiff['vots'][0][$nTranscriptID] != $aDiff['vots'][1][$nTranscriptID]) {
+                                } elseif (array_diff_key($aDiff['vots'][0][$nTranscriptID], $aTmpClassification) != array_diff_key($aDiff['vots'][1][$nTranscriptID], $aTmpClassification)) {
+                                    // VOT is different, outside of the effectid fields.
                                     $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Updated mapping to transcript ' . array_search($nTranscriptID, $aTranscripts) . '.';
                                 }
                             }
@@ -2108,31 +2117,34 @@ foreach ($aData as $sVariant => $aVariant) {
                 if (isset($aDiff['vots'])) {
                     // Loop the original data's VOTs and see if we can find them in the new data.
                     foreach ($aDiff['vots'][0] as $nTranscriptID => $aLOVDVot) {
-                        // Often the problem is that our RNA is better (and sometimes our Protein as well).
-                        if (isset($aDiff['vots'][1][$nTranscriptID])
-                            && in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', 'r.(?)', '-'))
-                            && in_array($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', 'r.(?)', 'r.spl?'))) {
-                            $aLOVDVot['VariantOnTranscript/RNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'];
-                            if (in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/Protein'], array('p.(=)', 'p.?', '-'))
-                                || str_replace('*', 'Ter', $aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/Protein'])
-                                    == $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein']) {
+                        if (isset($aDiff['vots'][1][$nTranscriptID])) {
+                            // Often the problem is that our RNA is better (and sometimes our Protein as well).
+                            if (in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', 'r.(?)', '-'))
+                                && in_array($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'], array('r.(=)', 'r.(?)', 'r.spl?'))) {
+                                $aLOVDVot['VariantOnTranscript/RNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'];
+                                if (in_array($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/Protein'], array('p.(=)', 'p.?', '-'))
+                                    || str_replace('*', 'Ter', $aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/Protein'])
+                                        == $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein']) {
+                                    $aLOVDVot['VariantOnTranscript/Protein'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'];
+                                }
+                            }
+                            // Or, the DNA changed because we fixed it, but the protein change is the same.
+                            if ($aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/DNA']
+                                != $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA']
+                                && ($aLOVDVot['VariantOnTranscript/Protein'] == $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein']
+                                    || substr($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA'], -1) == '=')) {
+                                $aLOVDVot['VariantOnTranscript/DNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA'];
+                                $aLOVDVot['VariantOnTranscript/RNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'];
                                 $aLOVDVot['VariantOnTranscript/Protein'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'];
                             }
-                        }
-                        // Or, the DNA changed because we fixed it, but the protein change is the same.
-                        if (isset($aDiff['vots'][1][$nTranscriptID])
-                            && $aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/DNA'] != $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA']
-                            && ($aLOVDVot['VariantOnTranscript/Protein'] == $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein']
-                                || substr($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA'], -1) == '=')) {
-                            $aLOVDVot['VariantOnTranscript/DNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA'];
-                            $aLOVDVot['VariantOnTranscript/RNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'];
-                            $aLOVDVot['VariantOnTranscript/Protein'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'];
-                        }
-                        // If the same, toss.
-                        if (isset($aDiff['vots'][1][$nTranscriptID]) && $aLOVDVot == $aDiff['vots'][1][$nTranscriptID]) {
-                            // We have this one also in the new data. It's unchanged.
-                            unset($aDiff['vots'][0][$nTranscriptID]);
-                            unset($aDiff['vots'][1][$nTranscriptID]);
+                            // Obviously, classifications change a lot.
+                            unset($aLOVDVot['effectid'], $aDiff['vots'][0][$nTranscriptID]['effectid'], $aDiff['vots'][1][$nTranscriptID]['effectid']);
+                            // If the same, toss.
+                            if ($aLOVDVot == $aDiff['vots'][1][$nTranscriptID]) {
+                                // We have this one also in the new data. It's unchanged.
+                                unset($aDiff['vots'][0][$nTranscriptID]);
+                                unset($aDiff['vots'][1][$nTranscriptID]);
+                            }
                         }
                     }
                     if (!count($aDiff['vots'][0])) {
