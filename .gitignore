@@ -1,5 +1,6 @@
 .idea
 20??-??
+dump_*sql*
 mapping_cache.*
 NC_cache.txt
 output_*
