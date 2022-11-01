@@ -5,15 +5,17 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2021-09-13
- * Version     : 0.1.5
+ * Modified    : 2022-11-01
+ * Version     : 0.1.6
  * For LOVD    : 3.0-26
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.1.5  2021-09-13
+ * Changelog   : 0.1.6  2022-11-01
+ *               Improved warning reporting; they can now easily be grepped.
+ *               0.1.5  2021-09-13
  *               Added yet another file header signature, we keep receiving
  *               different files each time.
  *               0.1.4  2021-02-09
@@ -60,7 +62,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.1.5',
+    'version' => '0.1.6',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -89,7 +91,7 @@ $_CONFIG = array(
         'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc',
         'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud',
     ),
-    'mutalyzer_URL' => 'https://test.mutalyzer.nl/', // Test may be faster than www.mutalyzer.nl.
+    'mutalyzer_URL' => 'https://v2.mutalyzer.nl/',
     'user' => array(
         // Variables we will be asking the user.
         'consensus_file' => 'vkgl_consensus_' . date('Y-m-d') . '.tsv',
@@ -746,13 +748,12 @@ foreach ($aFiles as $sFile => $sCenter) {
                         // Same classification. It's OK, just overwrite.
                         // Do report.
                         lovd_printIfVerbose(VERBOSITY_HIGH,
-                            '                   Warning: Center ' . $sCenter . ' has two entries for same variant key: ' . $sVariantKey . ".\n");
+                            '                   Warning: Center ' . $sCenter . ' has two entries for the same variant. ID: ' . $sVariantKey . "\n");
                     } else {
                         // Now we're actually in trouble. Internal conflict.
                         // We won't die, but we need to ignore BOTH entries.
                         lovd_printIfVerbose(VERBOSITY_MEDIUM,
-                            '                   Warning: Internal conflict in center ' . $sCenter . ': ' . $aData[$sVariantKey][$sCenter] . ', ' . $aValues[$sCenter] . ".\n" .
-                            '                   ID: ' . $sVariantKey . "\n");
+                            '                   Warning: Center ' . $sCenter . ' has an internal conflict; ' . $aData[$sVariantKey][$sCenter] . ', ' . $aValues[$sCenter] . '. ID: ' . $sVariantKey . "\n");
                         unset($aData[$sVariantKey]); // Delete variant.
                         continue 2; // Next line in the file.
                     }
