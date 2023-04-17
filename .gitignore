@@ -9,4 +9,5 @@ stats.txt
 verification_*
 vkgl_consensus_*
 vkgl_errors_*
+vkgl_internal_*
 vkgl_opposites_*
