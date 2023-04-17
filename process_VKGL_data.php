@@ -5,14 +5,18 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2022-05-09
- * Version     : 0.9
+ * Modified    : 2023-04-17
+ * Version     : 1.0
  * For LOVD    : 3.0-26
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 0.9    2022-05-09
+ * Changelog   : 1.0    2023-04-17
+ *               Updated all PDO queries to the new q() method, now that our
+ *               LOVD3 code has been updated. Otherwise, the script refuses to
+ *               function.
+ *               0.9    2022-05-09
  *               The JSON will no longer reports differences to transcript
  *               mappings when in reality, only the effectid changed. Also the
  *               debugging info will now ignore effectid changes in VOT data.
@@ -95,7 +99,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '0.8',
+    'version' => '1.0',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -707,7 +711,7 @@ lovd_printIfVerbose(VERBOSITY_HIGH,
 
 
 // Check given refseq build.
-$sRefSeqBuild = $_DB->query('SELECT refseq_build FROM ' . TABLE_CONFIG)->fetchColumn();
+$sRefSeqBuild = $_DB->q('SELECT refseq_build FROM ' . TABLE_CONFIG)->fetchColumn();
 $bRefSeqBuildOK = ($_CONFIG['user']['refseq_build'] == $sRefSeqBuild);
 
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
@@ -724,7 +728,7 @@ if (!$bRefSeqBuildOK) {
 // Get IDs. It is assumed that all numeric values in the user array are user IDs.
 $aUserIDs = array_filter($_CONFIG['user'], function ($Val) { return (is_int($Val)); });
 // Cast id to UNSIGNED to make sure our ints match.
-$aUsers = $_DB->query('SELECT CAST(id AS UNSIGNED) AS id, name FROM ' . TABLE_USERS . ' WHERE id IN (?' . str_repeat(', ?', count($aUserIDs) - 1) . ') ORDER BY id',
+$aUsers = $_DB->q('SELECT CAST(id AS UNSIGNED) AS id, name FROM ' . TABLE_USERS . ' WHERE id IN (?' . str_repeat(', ?', count($aUserIDs) - 1) . ') ORDER BY id',
     array_values($aUserIDs))->fetchAllCombine();
 
 $bAccountsOK = true;
@@ -1391,7 +1395,7 @@ $nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you 
 $tProgressReported = microtime(true); // Don't report progress again within a certain amount of time.
 
 // Store all of LOVD's transcripts, we need them; array(id_ncbi => id).
-$aTranscripts = $_DB->query('
+$aTranscripts = $_DB->q('
     SELECT id_ncbi, id
     FROM ' . TABLE_TRANSCRIPTS . '
     ORDER BY id_ncbi')->fetchAllCombine();
@@ -1724,7 +1728,7 @@ foreach ($aData as $sVariant => $aVariant) {
 
         // Check if we actually have some columns that we use, activated.
         // These are optional, so we don't want to die if we don't have them.
-        $aActiveCols = $_DB->query('
+        $aActiveCols = $_DB->q('
             SELECT colid FROM ' . TABLE_ACTIVE_COLS . '
             WHERE colid IN (?, ?, ?, ?, ?)',
             array(
@@ -1742,8 +1746,8 @@ foreach ($aData as $sVariant => $aVariant) {
 
         // Load the data currently in the database.
         // Note, that if there are two entries of the same variant by the same center, we see only *one*.
-        $_DB->query('SET group_concat_max_len = 10000');
-        $aDataLOVD = $_DB->query('
+        $_DB->q('SET group_concat_max_len = 10000');
+        $aDataLOVD = $_DB->q('
             SELECT CONCAT(vog.created_by, ":", ?, ":", vog.`VariantOnGenome/DNA`) AS ID,
               vog.id, vog.allele, vog.effectid, vog.chromosome, vog.position_g_start, vog.position_g_end, vog.type,
               vog.created_by, vog.owned_by, vog.statusid, vog.`VariantOnGenome/DNA`,
@@ -1841,9 +1845,9 @@ foreach ($aData as $sVariant => $aVariant) {
             if ($bRemoveVariant && !$bDebug) {
                 $sRemoveMessage = 'VKGL data sharing initiative Nederland' .
                     (!$sRemoveMessage? '' : '; ' . $sRemoveMessage);
-                $q = $_DB->query('UPDATE ' . TABLE_VARIANTS . '
-                                  SET `VariantOnGenome/Remarks` = ?, statusid = ?, edited_by = 0, edited_date = ?
-                                  WHERE id = ? AND !(`VariantOnGenome/Remarks` LIKE ? AND statusid <= ?)',
+                $q = $_DB->q('UPDATE ' . TABLE_VARIANTS . '
+                              SET `VariantOnGenome/Remarks` = ?, statusid = ?, edited_by = 0, edited_date = ?
+                              WHERE id = ? AND !(`VariantOnGenome/Remarks` LIKE ? AND statusid <= ?)',
                     array(
                         $sRemoveMessage,
                         STATUS_HIDDEN,
@@ -2174,7 +2178,7 @@ foreach ($aData as $sVariant => $aVariant) {
                         if (!isset($aDiff['vots'][0][$nTranscriptID])) {
                             // Add the transcript.
                             $aVOT = $aDiff['vots'][1][$nTranscriptID];
-                            $_DB->query('INSERT INTO ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
+                            $_DB->q('INSERT INTO ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
                               (id, ' . implode(', ', array_map(function ($sField) {
                                   return '`' . $sField . '`';
                               }, array_keys($aVOT))) . ')
@@ -2182,13 +2186,13 @@ foreach ($aData as $sVariant => $aVariant) {
 
                         } elseif (!isset($aDiff['vots'][1][$nTranscriptID])) {
                             // Remove the transcript.
-                            $_DB->query('DELETE FROM ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
+                            $_DB->q('DELETE FROM ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
                               WHERE id = ? AND transcriptid = ?', array($aVOGEntry['id'], $nTranscriptID));
 
                         } elseif ($aDiff['vots'][0][$nTranscriptID] != $aDiff['vots'][1][$nTranscriptID]) {
                             // Update the transcript, remove 'transcriptid' as an updateable field (it shouldn't be there, but still).
                             $aFieldsToUpdate = array_diff_key($aDiff['vots'][1][$nTranscriptID], array('transcriptid' => 0));
-                            $_DB->query('UPDATE ' . TABLE_VARIANTS_ON_TRANSCRIPTS . ' SET ' .
+                            $_DB->q('UPDATE ' . TABLE_VARIANTS_ON_TRANSCRIPTS . ' SET ' .
                                 implode(', ', array_map(function ($sField) {
                                     return '`' . $sField . '` = ?';
                                 }, array_keys($aFieldsToUpdate))) . '
@@ -2212,7 +2216,7 @@ foreach ($aData as $sVariant => $aVariant) {
                 $aFieldsToUpdate['edited_by'] = 0;
                 $aFieldsToUpdate['edited_date'] = $sNow;
 
-                $_DB->query('UPDATE ' . TABLE_VARIANTS . ' SET ' .
+                $_DB->q('UPDATE ' . TABLE_VARIANTS . ' SET ' .
                     implode(', ', array_map(function ($sField) {
                         return '`' . $sField . '` = ?';
                     }, array_keys($aFieldsToUpdate))) . '
@@ -2252,8 +2256,8 @@ foreach ($aData as $sVariant => $aVariant) {
             $aVOTs = $aVOGEntry['vots'];
             unset($aVOGEntry['vots']);
             $aFields = array_keys($aVOGEntry);
-            $_DB->query('INSERT INTO ' . TABLE_VARIANTS . '
-                             (' . implode(', ', array_map(function ($sField) {
+            $_DB->q('INSERT INTO ' . TABLE_VARIANTS . '
+                         (' . implode(', ', array_map(function ($sField) {
                     return '`' . $sField . '`';
                 }, $aFields)) . ')
                          VALUES (?' . str_repeat(', ?', count($aFields) - 1) . ')', array_values($aVOGEntry));
@@ -2262,8 +2266,8 @@ foreach ($aData as $sVariant => $aVariant) {
             // Then the VOTs.
             foreach ($aVOTs as $nTranscriptID => $aVOT) {
                 // Add the transcript.
-                $_DB->query('INSERT INTO ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
-                                 (id, ' . implode(', ', array_map(function ($sField) {
+                $_DB->q('INSERT INTO ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
+                             (id, ' . implode(', ', array_map(function ($sField) {
                         return '`' . $sField . '`';
                     }, array_keys($aVOT))) . ')
                              VALUES (?' . str_repeat(', ?', count($aVOT)) . ')', array_merge(array($aVOGEntry['id']), array_values($aVOT)));
@@ -2325,7 +2329,7 @@ if (!$bDebug && !LOVD_plus) {
     // Update all gene's updated dates.
     // We're going to make this easy for us; all entries created or edited at $sNow,
     //  we're going to assume are ours. Run on entire database.
-    $aGenesUpdated = $_DB->query('
+    $aGenesUpdated = $_DB->q('
         SELECT DISTINCT t.geneid
         FROM ' . TABLE_TRANSCRIPTS . ' AS t
          INNER JOIN ' . TABLE_VARIANTS_ON_TRANSCRIPTS . ' AS vot ON (t.id = vot.transcriptid)
@@ -2334,7 +2338,7 @@ if (!$bDebug && !LOVD_plus) {
 
     if ($aGenesUpdated) {
         // We can't use lovd_setUpdatedDate(), since that contains $_AUTH checks that we won't be able to pass.
-        $q = $_DB->query('
+        $q = $_DB->q('
             UPDATE ' . TABLE_GENES . '
             SET updated_by = ?, updated_date = ?
             WHERE updated_date < ? AND id IN (?' . str_repeat(', ?', count($aGenesUpdated) - 1) . ')',
