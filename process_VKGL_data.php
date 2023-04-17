@@ -17,6 +17,7 @@
  *               LOVD3 code has been updated. Otherwise, the script refuses to
  *               function.
  *               Updated Mutalyzer URL to their v2 backup URL.
+ *               Improved HGVS check.
  *               0.9    2022-05-09
  *               The JSON will no longer reports differences to transcript
  *               mappings when in reality, only the effectid changed. Also the
@@ -1828,8 +1829,7 @@ foreach ($aData as $sVariant => $aVariant) {
                 // Maybe it helps if we add it. We won't implement that here.
 
                 // Before we recommend adding it to the cache, check its nomenclature. If not HGVS, ignore it.
-                // This is not a great HGVS check; this function does allow some non-HGVS descriptions.
-                $bHGVS = (bool) lovd_getVariantInfo($sLOVDVariant);
+                $bHGVS = lovd_getVariantInfo($sLOVDVariant, false, true);
                 if ($bHGVS && substr($sLOVDVariant, -1) != '=' && strpos($sLOVDVariant, '?') === false) {
                     // WT variants or partially unknown variants we'll consider non-HGVS here.
                     $aAddToCache[] = $sLOVDVariant;
