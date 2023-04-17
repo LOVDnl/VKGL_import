@@ -16,6 +16,7 @@
  *               Updated all PDO queries to the new q() method, now that our
  *               LOVD3 code has been updated. Otherwise, the script refuses to
  *               function.
+ *               Updated Mutalyzer URL to their v2 backup URL.
  *               0.9    2022-05-09
  *               The JSON will no longer reports differences to transcript
  *               mappings when in reality, only the effectid changed. Also the
@@ -141,7 +142,7 @@ $_CONFIG = array(
         'LP' => 'likely pathogenic',
         'P' => 'pathogenic',
     ),
-    'mutalyzer_URL' => 'https://test.mutalyzer.nl/', // Test may be faster than www.mutalyzer.nl.
+    'mutalyzer_URL' => 'https://v2.mutalyzer.nl/',
     'user' => array(
         // Variables we will be asking the user.
         'refseq_build' => 'hg19',
