@@ -5,49 +5,52 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2023-04-17
+ * Modified    : 2023-04-18
  * Version     : 1.0
  * For LOVD    : 3.0-26
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 1.0    2023-04-17
+ * Changelog   : 1.0     2023-04-17
  *               Updated all PDO queries to the new q() method, now that our
  *               LOVD3 code has been updated. Otherwise, the script refuses to
  *               function.
  *               Updated Mutalyzer URL to their v2 backup URL.
  *               Improved HGVS check.
- *               0.9    2022-05-09
+ *               Updated 2023-04-18
+ *               Handle some notices that sometimes show up in LOVD+.
+ *               Also, 
+ *               0.9     2022-05-09
  *               The JSON will no longer reports differences to transcript
  *               mappings when in reality, only the effectid changed. Also the
  *               debugging info will now ignore effectid changes in VOT data.
- *               0.8    2021-02-10
+ *               0.8     2021-02-10
  *               Conflicts are now reported in a structured manner, so we can
  *               easily filter them out of the run logs, and convert them
  *               automatically into a tab-delimited format to be reported to all
  *               the centers.
- *               0.7    2020-09-15
+ *               0.7     2020-09-15
  *               The VOT/Classification column moved to VOG and was renamed to
  *               VOG/ClinicalClassification. Also, when debugging, silently skip
  *               reports of this column being filled in. The previous run (June
  *               2020) was run without this column filled in.
- *               0.6    2020-08-06
+ *               0.6     2020-08-06
  *               Conflicts are now reported while determining consensus
  *               classifications, so we can report them. When debugging, changes
  *               caused by the new VV predictions (c.= transcript variants and
  *               changes to the protein field) are not easily reported anymore.
- *               0.5    2020-04-02
+ *               0.5     2020-04-02
  *               Improved variant validation error messages so they can be
  *               easily extracted from the output and reported to the centers.
- *               0.4    2020-03-23
+ *               0.4     2020-03-23
  *               Whether single-lab submissions are linked to a public owner or
  *               instead to a general VKGL account, is now a setting. Also, we
  *               check for the presence of some non-critical columns, so we
  *               won't die if LOVD doesn't have them activated (i.e. LOVD+).
  *               Finally, some other LOVD+ optimizations are added and genes
  *               have their timestamps updated.
- *               0.3    2019-12-04
+ *               0.3     2019-12-04
  *               Handle conflicts per gene per center, not just per center. Some
  *               centers are classifying a variant twice on purpose, on multiple
  *               genes. (L)P on one, (L)B on the other. From now on, we'll call
@@ -55,14 +58,14 @@
  *               multiple genes are used, we'll pick the most severe
  *               classification.
  *               Also, prevent false positive updates while debugging.
- *               0.2    2019-11-07
+ *               0.2     2019-11-07
  *               Better debugging, store the new VKGL IDs, improved diff
  *               formatting, better annotation of double submissions so we can
  *               remove them in the future, and now ignoring the HGVS column.
- *               0.1    2019-07-18
+ *               0.1     2019-07-18
  *               Initial release.
  *
- * Copyright   : 2004-2020 Leiden University Medical Center; http://www.LUMC.nl/
+ * Copyright   : 2004-2023 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
  *
  *
@@ -1947,12 +1950,12 @@ foreach ($aData as $sVariant => $aVariant) {
             $aVOGEntry['vots'][$aTranscripts[$sTranscript]] = array(
                 'transcriptid' => $aTranscripts[$sTranscript],
                 'effectid' => $aVOGEntry['effectid'],
-                'position_c_start' => $aMapping['position_start'],
-                'position_c_start_intron' => $aMapping['position_start_intron'],
-                'position_c_end' => $aMapping['position_end'],
-                'position_c_end_intron' => $aMapping['position_end_intron'],
+                'position_c_start' => ($aMapping['position_start'] ?? null),
+                'position_c_start_intron' => ($aMapping['position_start_intron'] ?? null),
+                'position_c_end' => ($aMapping['position_end'] ?? null),
+                'position_c_end_intron' => ($aMapping['position_end_intron'] ?? null),
                 'VariantOnTranscript/DNA' => $aMapping['DNA'],
-                'VariantOnTranscript/RNA' => $aMapping['RNA'],
+                'VariantOnTranscript/RNA' => ($aMapping['RNA'] ?? 'r.(?)'),
                 'VariantOnTranscript/Protein' => $aMapping['protein'],
             );
         }
