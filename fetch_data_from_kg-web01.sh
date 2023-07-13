@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Created  : 2023-03-12
-# Modified : 2023-03-12
+# Created  : 2023-07-12
+# Modified : 2023-07-13
 
 # This will check if we have the data ready on kg-web01.
 
@@ -14,6 +14,15 @@ if [ ! -d "${DIR}" ];
 then
     mkdir "${DIR}";
 fi;
+
+# If the log indicates we were done before, then we don't have to do anything.
+if [ "$(grep " OK " "${LOG}" | wc -l)" -gt "0" ];
+then
+    # We're done already. If they really want to re-run, we should either introduce a -f, or the log should be emptied.
+    exit 0;
+fi;
+
+
 
 echo "" >> "${LOG}";
 echo "$(date '+%Y-%m-%d %H:%M:%S')    Checking for remote files..." >> "${LOG}";
@@ -80,5 +89,5 @@ then
 fi;
 
 # If we get here, we have what we need. We will also have more (status.log, alissa.tar.gz), but that's OK.
-# Adding this file also signals to the next step, that we're ready.
+# Adding this line also signals to the next step, that we're ready.
 echo "$(date '+%Y-%m-%d %H:%M:%S') OK All files are ready, ready for the next step." >> "${LOG}";
