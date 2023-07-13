@@ -67,3 +67,18 @@ do
         fi;
     fi;
 done;
+
+
+
+# Check if we have everything.
+DIFF=$(diff <(echo -e "amc.txt\nerasmus.txt\nlumc.txt\nnki.txt\nradboud_mumc.txt\numcg.txt\numcu.txt\nvumc.txt") <(cd "${DIR}"; ls -1) | grep -v "^[0-9>]");
+if [ "${DIFF}" ];
+then
+    echo "$(date '+%Y-%m-%d %H:%M:%S')    One or more data files are missing:" >> "${LOG}";
+    echo "${DIFF}" | sed 's/^</                      /' >> "${LOG}";
+    exit 5;
+fi;
+
+# If we get here, we have what we need. We will also have more (status.log, alissa.tar.gz), but that's OK.
+# Adding this file also signals to the next step, that we're ready.
+echo "$(date '+%Y-%m-%d %H:%M:%S') OK All files are ready, ready for the next step." >> "${LOG}";
