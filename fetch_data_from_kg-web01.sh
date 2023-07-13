@@ -18,7 +18,7 @@ fi;
 echo "" >> "${LOG}";
 echo "$(date '+%Y-%m-%d %H:%M:%S')    Checking for remote files..." >> "${LOG}";
 
-FILES=$(ssh ${HOST} ls "${REMOTE}" | grep -E "^(alissa.tar.gz|lumc.txt.gz|radboud_mumc.txt.gz)$");
+FILES=$(ssh ${HOST} ls "${REMOTE}" | grep -E "^(alissa.tar|lumc.txt|radboud_mumc.txt)\.gz$");
 if [ "$(echo "${FILES}" | wc -l)" -eq "0" ];
 then
     # If there's nothing to do, just die here.
