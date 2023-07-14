@@ -16,7 +16,8 @@
  *               Added a dry run flag (the old $bDebug variable), so that we can
  *               control debugging when invoking the script, enabling automation
  *               of the whole workflow. Also, fixed string offsets; curly braces
- *               are no longer supported.
+ *               are no longer supported. Updated the script to allow running it
+ *               from any directory other than the project's directory.
  *               1.0     2023-04-17
  *               Updated all PDO queries to the new q() method, now that our
  *               LOVD3 code has been updated. Otherwise, the script refuses to
@@ -103,11 +104,14 @@ if (isset($_SERVER['HTTP_HOST'])) {
     die('Please run this script through the command line.' . "\n");
 }
 
+// We're already using ROOT_PATH to point to LOVD, so define CWD to point to the directory where this script resides.
+define('CWD', dirname(__FILE__) . '/');
+
 // Default settings. Everything in 'user' will be verified with the user, and stored in settings.json.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
     'version' => '1.1',
-    'settings_file' => 'settings.json',
+    'settings_file' => CWD . 'settings.json',
     'flags' => array(
         'n' => false, // Dry run.
         'y' => false, // Yes; accept current settings and don't ask anything.
@@ -154,8 +158,8 @@ $_CONFIG = array(
         // Variables we will be asking the user.
         'refseq_build' => 'hg19',
         'lovd_path' => '/www/databases.lovd.nl/shared/',
-        'mutalyzer_cache_NC' => 'NC_cache.txt', // Stores NC g. descriptions and their corrected output.
-        'mutalyzer_cache_mapping' => 'mapping_cache.txt', // Stores NC to NM mappings and the protein predictions.
+        'mutalyzer_cache_NC' => CWD . 'NC_cache.txt', // Stores NC g. descriptions and their corrected output.
+        'mutalyzer_cache_mapping' => CWD . 'mapping_cache.txt', // Stores NC to NM mappings and the protein predictions.
         'vkgl_generic_id' => 0, // The LOVD ID of the generic VKGL account, needed for single lab submissions.
         'public_singlelab_owners' => 'y', // Should single-lab submissions get a public owner?
         'delete_redundant_variants' => 'n', // Should we remove variants in LOVD no longer in the dataset?
