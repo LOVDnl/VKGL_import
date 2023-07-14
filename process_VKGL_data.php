@@ -5,14 +5,18 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2023-04-18
- * Version     : 1.0
+ * Modified    : 2023-07-14
+ * Version     : 1.1
  * For LOVD    : 3.0-26
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 1.0     2023-04-17
+ * Changelog   : 1.1     2023-07-14
+ *               Added a dry run flag (the old $bDebug variable), so that we can
+ *               control debugging when invoking the script, enabling automation
+ *               of the whole workflow.
+ *               1.0     2023-04-17
  *               Updated all PDO queries to the new q() method, now that our
  *               LOVD3 code has been updated. Otherwise, the script refuses to
  *               function.
@@ -20,7 +24,6 @@
  *               Improved HGVS check.
  *               Updated 2023-04-18
  *               Handle some notices that sometimes show up in LOVD+.
- *               Also, 
  *               0.9     2022-05-09
  *               The JSON will no longer reports differences to transcript
  *               mappings when in reality, only the effectid changed. Also the
@@ -93,7 +96,6 @@
 //         If you fix this, remove "numberConversion" as a method from the cache, so all variants will be repeated.
 //         Perhaps VV can help here, it may provide more mappings and surely is a lot faster.
 // FIXME: Fix conflicts if on different genes, they can be regarded as non-conflicts.
-// FIXME: We are not seeing EREF errors in case of deletions, and they do happen. So we let incorrect variants through.
 
 // Command line only.
 if (isset($_SERVER['HTTP_HOST'])) {
@@ -101,13 +103,13 @@ if (isset($_SERVER['HTTP_HOST'])) {
 }
 
 // Default settings. Everything in 'user' will be verified with the user, and stored in settings.json.
-$bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '1.0',
+    'version' => '1.1',
     'settings_file' => 'settings.json',
     'flags' => array(
-        'y' => false,
+        'n' => false, // Dry run.
+        'y' => false, // Yes; accept current settings and don't ask anything.
     ),
     'columns_mandatory' => array(
         // These are the columns that need to be present in order for the file to get processed.
@@ -506,8 +508,12 @@ $bCron = (empty($_SERVER['REMOTE_ADDR']) && empty($_SERVER['TERM']));
 define('VERBOSITY', ($bCron? 5 : 7));
 $tStart = time() + date('Z', 0); // Correct for timezone, otherwise the start value is not 0.
 
+// Configure dry run.
+$bDebug = !empty($_CONFIG['flags']['n']);
+
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
-    $_CONFIG['name'] . ' v' . $_CONFIG['version'] . '.' . "\n");
+    $_CONFIG['name'] . ' v' . $_CONFIG['version'] . '.' . "\n" .
+    (!$bDebug? '' : '  Dry run enabled, not running any database updates.' . "\n"));
 
 
 
