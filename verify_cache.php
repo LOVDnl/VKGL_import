@@ -5,28 +5,30 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2020-04-02
- * Modified    : 2022-05-09
+ * Modified    : 2023-07-14
  * Version     : 0.4
  * For LOVD    : 3.0-24
  *
  * Purpose     : Checks the NC cache and extends the mapping cache using the new
  *               Variant Validator object.
  *
- * Changelog   : 0.4    2022-05-09
+ * Changelog   : 0.4     2022-05-09
  *               Reduce the output by ignoring VV's peculiar p.(*123=) notation.
- *               0.3    2020-08-06
+ *               Updated 2023-07-14
+ *               Fixed string offset; curly braces are no longer supported.
+ *               0.3     2020-08-06
  *               Receiving a VV mapping cache as an argument is now optional,
  *               the way it was intended. Also, fixed notices from variants that
  *               caused a VV error.
- *               0.2    2020-07-03
+ *               0.2     2020-07-03
  *               We can now receive a VV mapping cache through the arguments,
  *               which it will use instead of calls to VV. Also, we are now
  *               interactive, predicting when VV's mapping information is better
  *               than Mutalyzer's, but asking when it's not sure.
- *               0.1    2020-04-03
+ *               0.1     2020-04-03
  *               Initial release.
  *
- * Copyright   : 2004-2020 Leiden University Medical Center; http://www.LUMC.nl/
+ * Copyright   : 2004-2023 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
  *
  *
@@ -312,7 +314,7 @@ $nAPICallsReported = 0;
 $nSecondsWaiting = 0; // Will be reset now and then.
 foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
     // Skip the header.
-    if ($sVariant{0} == '#') {
+    if ($sVariant[0] == '#') {
         continue;
     }
     // Also skip EREF errors. We know VV handles them well, but because these
