@@ -5,28 +5,32 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2020-04-02
- * Modified    : 2022-05-09
- * Version     : 0.4
+ * Modified    : 2023-07-14
+ * Version     : 0.5
  * For LOVD    : 3.0-24
  *
  * Purpose     : Checks the NC cache and extends the mapping cache using the new
  *               Variant Validator object.
  *
- * Changelog   : 0.4    2022-05-09
+ * Changelog   : 0.5     2023-07-14
+ *               When running non-interactively, through cron, don't ask the
+ *               user any questions; just dump all the differences and continue.
+ *               Fixed string offset; curly braces are no longer supported.
+ *               0.4     2022-05-09
  *               Reduce the output by ignoring VV's peculiar p.(*123=) notation.
- *               0.3    2020-08-06
+ *               0.3     2020-08-06
  *               Receiving a VV mapping cache as an argument is now optional,
  *               the way it was intended. Also, fixed notices from variants that
  *               caused a VV error.
- *               0.2    2020-07-03
+ *               0.2     2020-07-03
  *               We can now receive a VV mapping cache through the arguments,
  *               which it will use instead of calls to VV. Also, we are now
  *               interactive, predicting when VV's mapping information is better
  *               than Mutalyzer's, but asking when it's not sure.
- *               0.1    2020-04-03
+ *               0.1     2020-04-03
  *               Initial release.
  *
- * Copyright   : 2004-2020 Leiden University Medical Center; http://www.LUMC.nl/
+ * Copyright   : 2004-2023 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
  *
  *
@@ -52,11 +56,14 @@ if (isset($_SERVER['HTTP_HOST'])) {
     die('Please run this script through the command line.' . "\n");
 }
 
+// We're already using ROOT_PATH to point to LOVD, so define CWD to point to the directory where this script resides.
+define('CWD', dirname(__FILE__) . '/');
+
 // Default settings. We won't verify any setting, that's up to the process script.
 $_CONFIG = array(
     'name' => 'VKGL cache verification using Variant Validator',
-    'version' => '0.3',
-    'settings_file' => 'settings.json',
+    'version' => '0.5',
+    'settings_file' => CWD . 'settings.json',
     'VV_URL' => 'https://rest.variantvalidator.org/',
     'user' => array(
         // We don't have defaults, we load everything from the settings file.
@@ -164,7 +171,8 @@ define('VERBOSITY', ($bCron? 5 : 7));
 $tStart = time() + date('Z', 0); // Correct for timezone, otherwise the start value is not 0.
 
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
-    $_CONFIG['name'] . ' v' . $_CONFIG['version'] . '.' . "\n");
+    $_CONFIG['name'] . ' v' . $_CONFIG['version'] . '.' . "\n" .
+    (!$bCron? '' : ' Detected non-interactive run through cron; repressing questions.' . "\n"));
 
 
 
@@ -312,7 +320,7 @@ $nAPICallsReported = 0;
 $nSecondsWaiting = 0; // Will be reset now and then.
 foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
     // Skip the header.
-    if ($sVariant{0} == '#') {
+    if ($sVariant[0] == '#') {
         continue;
     }
     // Also skip EREF errors. We know VV handles them well, but because these
@@ -424,6 +432,7 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
         // Now loop through the mappings we got from VV, and see if we can
         //  extend/update the current mapping cache.
         // We'll store all mappings, since we don't know which ones we want.
+        $bDifferences = false; // So we know if something was different (important for non-interactive mode).
         foreach ($aResult['data']['transcript_mappings'] as $sRefSeq => $aMapping) {
             // Is this one of those empty mappings from VV?
             if (empty($aMapping['DNA'])) {
@@ -557,6 +566,7 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
 
             if ($_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq] != $aMapping) {
                 // Something is still different.
+                $bDifferences = true;
                 // Ask user which one to pick.
                 print(' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                         floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
@@ -567,6 +577,14 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                         : $_CACHE['mutalyzer_cache_mapping'][$sVariantCorrected][$sRefSeq]['p']) . "\n" .
                     '                   Validator: ' . $aMapping['c'] . ' / ' .
                     (!isset($aMapping['p'])? '-' : $aMapping['p']) . "\n");
+
+                // If run non-interactively, bail out.
+                if ($bCron) {
+                    // We can't ask the user anything. Treat this mapping as skipped,
+                    //  but do continue to the next mapping; we want to see all mappings of this variant.
+                    print('                   Running non-interactively, skipping question.' . "\n");
+                    continue;
+                }
 
                 while (true) {
                     print('                 (M/V/s) [V]: ');
@@ -587,6 +605,12 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                     }
                 }
             }
+        }
+
+        // If we are running non-interactively, and there were differences, don't store this.
+        if ($bCron && $bDifferences) {
+            // We never asked the user what they want, so don't store anything.
+            continue;
         }
 
         // Add our method to the list as well, so we won't repeat this.
