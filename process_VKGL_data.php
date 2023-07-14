@@ -15,7 +15,8 @@
  * Changelog   : 1.1     2023-07-14
  *               Added a dry run flag (the old $bDebug variable), so that we can
  *               control debugging when invoking the script, enabling automation
- *               of the whole workflow.
+ *               of the whole workflow. Also, fixed string offsets; curly braces
+ *               are no longer supported.
  *               1.0     2023-04-17
  *               Updated all PDO queries to the new q() method, now that our
  *               LOVD3 code has been updated. Otherwise, the script refuses to
@@ -240,7 +241,7 @@ function lovd_getVariantDescription (&$aVariant, $sRef, $sAlt)
     $sAltOriginal = $sAlt;
 
     // 'Eat' letters from either end - first left, then right - to isolate the difference.
-    while (strlen($sRef) > 0 && strlen($sAlt) > 0 && $sRef{0} == $sAlt{0}) {
+    while (strlen($sRef) > 0 && strlen($sAlt) > 0 && $sRef[0] == $sAlt[0]) {
         $sRef = substr($sRef, 1);
         $sAlt = substr($sAlt, 1);
         $aVariant['position_g_start'] ++;
@@ -972,7 +973,7 @@ foreach ($aData as $nKey => $aVariant) {
         $sVariantCorrected = $_CACHE['mutalyzer_cache_NC'][$sVariant];
 
         // Check if this is not a cached error message.
-        if ($sVariantCorrected{0} == '{') {
+        if ($sVariantCorrected[0] == '{') {
             // This is a cached error message. Report, but don't cache.
             $aError = json_decode($sVariantCorrected, true);
 
@@ -1796,7 +1797,7 @@ foreach ($aData as $sVariant => $aVariant) {
                 $sVariantCorrected = $_CACHE['mutalyzer_cache_NC'][$sLOVDVariant];
 
                 // Check if this is a cached error message.
-                if ($sVariantCorrected{0} == '{') {
+                if ($sVariantCorrected[0] == '{') {
                     // Variant is actually in error. These are OK to be removed, since we don't want them.
                     // If the variant is still in the source, that's OK, because he will be skipped there, too.
                     $bRemoveVariant = true;
