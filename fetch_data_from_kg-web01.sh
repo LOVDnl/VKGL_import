@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Created  : 2023-07-12
-# Modified : 2023-07-13
+# Modified : 2023-11-29
 
 # This will check if we have the data ready on kg-web01.
 
@@ -13,6 +13,7 @@ LOG="${DIR}/status.log";
 if [ ! -d "${DIR}" ];
 then
     mkdir "${DIR}";
+    touch "${LOG}";
 fi;
 
 # If the log indicates we were done before, then we don't have to do anything.
