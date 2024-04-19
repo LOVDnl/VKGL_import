@@ -5,15 +5,17 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2023-01-10
- * Version     : 0.1.7
+ * Modified    : 2024-04-19
+ * Version     : 0.1.8
  * For LOVD    : 3.0-26
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.1.7  2023-01-10
+ * Changelog   : 0.1.8  2024-04-19
+ *               Sigh... yet another Alissa data signature.
+ *               0.1.7  2023-01-10
  *               Added yet another file header signature; perhaps the final one?
  *               It seems now we really have the raw Alissa data.
  *               0.1.6  2022-11-01
@@ -35,7 +37,7 @@
  *               0.1.0  2019-11-14
  *               Initial release.
  *
- * Copyright   : 2004-2021 Leiden University Medical Center; http://www.LUMC.nl/
+ * Copyright   : 2004-2024 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
  *
  *
@@ -65,7 +67,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.1.7',
+    'version' => '0.1.8',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -93,6 +95,8 @@ $_CONFIG = array(
             'transcript;type;variant_type' => 'alissa2',
         'alt;c;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;' .
             'ref;start;stop;transcript;variant_type' => 'alissa', // Apparently, Groningen used to edit the files and added the id and timestamp fields. Alissa files from the SFTP server don't have those fields.
+        'alt;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;' .
+            'ref;start;stop;transcript;variant_type' => 'alissa', // 2024-02 + 2024-04; Due to a personnel change at Alissa without a proper handover, manual exports are being generated with yet another signature.
         'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc',
         'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud',
     ),
@@ -546,7 +550,7 @@ foreach ($aFiles as $sFile => $sCenter) {
 
     if (!isset($_CONFIG['header_signatures'][$sHeaderSignature])) {
         lovd_printIfVerbose(VERBOSITY_LOW,
-            'Error: File does not conform to any known format: ' . $sFile . ".\n\n");
+            'Error: File does not conform to any known format: ' . $sFile . ".\n({$sHeaderSignature})\n\n");
         die(EXIT_ERROR_HEADER_FIELDS_INCORRECT);
     } else {
         $sFileType = $_CONFIG['header_signatures'][$sHeaderSignature];
