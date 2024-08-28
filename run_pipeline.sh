@@ -51,6 +51,8 @@ cd "${DIR}";
 if [ "$(grep " OK All files are ready" "${LOG}" | wc -l)" -eq "0" ];
 then
     # Attempt to fetch data from the server.
+    # Provide progress feedback, but don't send it to the log, because this script adds to the log.
+    echo "$(date '+%Y-%m-%d %H:%M:%S')    Checking for remote files...";
     ../fetch_data_from_kg-web01.sh;
     if [ $? -ne 0 ];
     then
@@ -59,5 +61,32 @@ then
         exit 1;
     else
         tail -n 1 "${LOG}";
+    fi;
+fi;
+
+
+
+
+
+# Check if we have a file already. Grab the last one.
+FILE=$(ls -1 ${DIR}/vkgl_consensus_20??-??-??.tsv 2> /dev/null | tail -n 1);
+
+# If we have no file, create it.
+if [ ! -f "${FILE}" ];
+then
+    # Format the files.
+    echo "$(date '+%Y-%m-%d %H:%M:%S')    Formatting and grouping the files..." >> "${LOG}";
+    tail -n 1 "${LOG}";
+    ../format_raw_VKGL_files.php *.txt -y > formatting.log;
+    if [ $? -ne 0 ];
+    then
+        # This failed.
+        echo "$(date '+%Y-%m-%d %H:%M:%S')    Failed formatting and grouping the files." >> "${LOG}";
+        tail -n 1 "${LOG}";
+        exit 1;
+    else
+        echo "$(date '+%Y-%m-%d %H:%M:%S') OK Successfully formatted and grouped the files." >> "${LOG}";
+        tail -n 1 "${LOG}";
+        FILE="${DIR}/vkgl_consensus_$(date +\%Y-\%m-\%d).tsv";
     fi;
 fi;
