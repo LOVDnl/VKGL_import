@@ -1,13 +1,17 @@
 #!/bin/bash
 
 # Created  : 2023-07-12
-# Modified : 2023-11-29
+# Modified : 2024-08-28
 
 # This will check if we have the data ready on kg-web01.
 
-DIR="$(dirname $0)/$(date +%Y-%m)";
+PWD="$(dirname $0)";
+DATE="$(${PWD}/get_run_date.sh)";
+YEAR=$(echo $DATE | cut -d - -f 1);
+DIR="${PWD}/${DATE}";
+
 HOST="kg-web01";
-REMOTE="/home/${USER}/git/VKGL_export/$(date +%Y)/$(date +%Y-%m)";
+REMOTE="/home/${USER}/git/VKGL_export/${YEAR}/${DATE}";
 LOG="${DIR}/status.log";
 
 if [ ! -d "${DIR}" ];
