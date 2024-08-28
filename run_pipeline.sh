@@ -70,14 +70,15 @@ fi;
 
 # Check if we have a file already. Grab the last one.
 FILE=$(ls -1 ${DIR}/vkgl_consensus_20??-??-??.tsv 2> /dev/null | tail -n 1);
+OUTFILE="formatting.log";
 
-# If we have no file, create it.
-if [ ! -f "${FILE}" ];
+# If we have no file, create it. Also run when we don't have a formatting.log file yet, as we need it for reporting.
+if [ ! -f "${FILE}" ] || [ ! -f "${OUTFILE}" ];
 then
     # Format the files.
     echo "$(date '+%Y-%m-%d %H:%M:%S')    Formatting and grouping the files..." >> "${LOG}";
     tail -n 1 "${LOG}";
-    ../format_raw_VKGL_files.php *.txt -y > formatting.log;
+    ../format_raw_VKGL_files.php *.txt -y > "${OUTFILE}";
     if [ $? -ne 0 ];
     then
         # This failed.
@@ -87,7 +88,7 @@ then
     else
         echo "$(date '+%Y-%m-%d %H:%M:%S') OK Successfully formatted and grouped the files." >> "${LOG}";
         tail -n 1 "${LOG}";
-        FILE="${DIR}/vkgl_consensus_$(date +\%Y-\%m-\%d).tsv";
+        FILE="${DIR}/vkgl_consensus_$(date '+%Y-%m-%d').tsv";
     fi;
 fi;
 
