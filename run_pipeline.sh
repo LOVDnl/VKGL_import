@@ -105,12 +105,12 @@ OUTPUT=$(/www/git/caches/sync_caches.sh 2> /dev/null);
 if [ $? -ne 0 ];
 then
     # This failed.
-    echo "$OUTPUT" | sed "s/^/$(date '+%Y-%m-%d %H:%M:%S')    /" >> "${LOG}";
+    echo "${OUTPUT}" | sed "s/^/                       /" >> "${LOG}";
     echo "$(date '+%Y-%m-%d %H:%M:%S')    Failed syncing the caches." >> "${LOG}";
     cat "${LOG}" | tail -n +$(($LOGCOUNT + 1));
     exit 1;
 else
-    echo "$OUTPUT" | sed "s/^/$(date '+%Y-%m-%d %H:%M:%S')    /" >> "${LOG}";
-    echo "$(date '+%Y-%m-%d %H:%M:%S')    Successfully synced the caches." >> "${LOG}";
+    echo "${OUTPUT}" | sed "s/^/$(date '+%Y-%m-%d %H:%M:%S')    /" >> "${LOG}";
+    echo "$(date '+%Y-%m-%d %H:%M:%S') OK Successfully synced the caches." >> "${LOG}";
     tail -n 1 "${LOG}";
 fi;
