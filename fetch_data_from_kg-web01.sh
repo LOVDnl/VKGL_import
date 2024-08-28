@@ -29,7 +29,6 @@ fi;
 
 
 
-echo "" >> "${LOG}";
 echo "$(date '+%Y-%m-%d %H:%M:%S')    Checking for remote files..." >> "${LOG}";
 
 FILES=$(ssh ${HOST} ls "${REMOTE}" | grep -E "^(alissa.tar|lumc.txt|radboud_mumc.txt)\.gz$");
@@ -85,7 +84,7 @@ done;
 
 
 # Check if we have everything.
-DIFF=$(diff <(echo -e "amc.txt\nerasmus.txt\nlumc.txt\nnki.txt\nradboud_mumc.txt\numcg.txt\numcu.txt\nvumc.txt") <(cd "${DIR}"; ls -1) | grep -v "^[0-9>]");
+DIFF=$(diff <(echo -e "amc.txt\nerasmus.txt\nlumc.txt\nnki.txt\nradboud_mumc.txt\numcg.txt\numcu.txt\nvumc.txt") <(cd "${DIR}"; ls -1) | grep -v "^[0-9>-]");
 if [ "${DIFF}" ];
 then
     echo "$(date '+%Y-%m-%d %H:%M:%S')    One or more data files are missing:" >> "${LOG}";

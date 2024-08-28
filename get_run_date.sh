@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Created  : 2024-08-28
+# Modified : 2024-08-28
+
 # This script determines which is the latest run date, and returns the string.
 # It's sort of a library that's usable for bash and PHP scripts alike.
 

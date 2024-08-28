@@ -34,3 +34,30 @@ then
     # We're done already. If they really want to re-run, we should either introduce a -f, or the log should be emptied.
     exit 0;
 fi;
+
+# Open the log.
+echo "" >> "${LOG}";
+echo "$(date '+%Y-%m-%d %H:%M:%S')    Checking current status..." >> "${LOG}";
+tail -n 1 "${LOG}";
+LOGCOUNT=$(cat "${LOG}" | wc -l);
+
+cd "${DIR}";
+
+
+
+
+
+# Check if we still need to fetch the data from the server.
+if [ "$(grep " OK All files are ready" "${LOG}" | wc -l)" -eq "0" ];
+then
+    # Attempt to fetch data from the server.
+    ../fetch_data_from_kg-web01.sh;
+    if [ $? -ne 0 ];
+    then
+        # This failed. Get the error from the log, and return.
+        cat "${LOG}" | tail -n +$(($LOGCOUNT + 1));
+        exit 1;
+    else
+        tail -n 1 "${LOG}";
+    fi;
+fi;
