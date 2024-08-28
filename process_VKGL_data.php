@@ -511,7 +511,10 @@ while ($nArgs) {
 }
 $bCron = (empty($_SERVER['REMOTE_ADDR']) && empty($_SERVER['TERM']));
 define('VERBOSITY', ($bCron? 5 : 7));
-$tStart = time() + date('Z', 0); // Correct for timezone, otherwise the start value is not 0.
+// Record the start of the script, but correct for the timezone. This way, (time() - $tStart) doesn't seem to make sense
+//  to us human readers, but when used in combination with date('H:i:s', ...) to format hours, minutes, and seconds
+//  spent, it all makes sense. Note that date("H:i:s", 0) only returns 00:00:00 when your timezone is GMT.
+$tStart = time() + date('Z', 0);
 
 // Configure dry run.
 $bDebug = !empty($_CONFIG['flags']['n']);
