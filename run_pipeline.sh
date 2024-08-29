@@ -115,3 +115,29 @@ else
     echo "$(date '+%Y-%m-%d %H:%M:%S') OK Successfully synced the caches." >> "${LOG}";
     tail -n 1 "${LOG}";
 fi;
+
+
+
+
+
+# If we have not run the debugging yet to build up the caches, do so now.
+OUTFILE="output.01.debugging-to-build-caches.log";
+if [ ! -f "${OUTFILE}" ];
+then
+    # Format the files.
+    echo "$(date '+%Y-%m-%d %H:%M:%S')    Starting the first run, debug flags on, to build the cache..." >> "${LOG}";
+    tail -n 1 "${LOG}";
+    # Also pipe STDERR to the log file so we can catch what went wrong.
+    ../process_VKGL_data.php "${FILE}" -ny > "${OUTFILE}" 2>&1;
+    # The process above always throws warnings and, therefore, never returns 0.
+    if [ $? -ne 64 ];
+    then
+        # This failed.
+        echo "$(date '+%Y-%m-%d %H:%M:%S')    Failed completing the run. Check ${OUTFILE} for more information." >> "${LOG}";
+        tail -n 1 "${LOG}";
+        exit 1;
+    else
+        echo "$(date '+%Y-%m-%d %H:%M:%S') OK Successfully completed the run." >> "${LOG}";
+        tail -n 1 "${LOG}";
+    fi;
+fi;
