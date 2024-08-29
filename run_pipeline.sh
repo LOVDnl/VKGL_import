@@ -83,7 +83,7 @@ then
     if [ $? -ne 0 ];
     then
         # This failed.
-        echo "$(date '+%Y-%m-%d %H:%M:%S')    Failed formatting and grouping the files. Check ${OUTFILE} for more information." >> "${LOG}";
+        echo "$(date '+%Y-%m-%d %H:%M:%S') !! Failed formatting and grouping the files. Check ${OUTFILE} for more information." >> "${LOG}";
         tail -n 1 "${LOG}";
         exit 1;
     else
@@ -107,7 +107,7 @@ if [ $? -ne 0 ];
 then
     # This failed.
     echo "${OUTPUT}" | sed "s/^/                       /" >> "${LOG}";
-    echo "$(date '+%Y-%m-%d %H:%M:%S')    Failed syncing the caches." >> "${LOG}";
+    echo "$(date '+%Y-%m-%d %H:%M:%S') !! Failed syncing the caches." >> "${LOG}";
     cat "${LOG}" | tail -n +$(($LOGCOUNT + 1));
     exit 1;
 else
@@ -136,7 +136,7 @@ then
     if [ $? -ne 64 ];
     then
         # This failed.
-        echo "$(date '+%Y-%m-%d %H:%M:%S')    Failed completing the run. Check ${OUTFILE} for more information." >> "${LOG}";
+        echo "$(date '+%Y-%m-%d %H:%M:%S') !! Failed completing the run. Check ${OUTFILE} for more information." >> "${LOG}";
         tail -n 1 "${LOG}";
         exit 1;
     else
@@ -163,7 +163,7 @@ then
     if [ $? -ne 0 ];
     then
         # This failed.
-        echo "$(date '+%Y-%m-%d %H:%M:%S')    Failed verifying the cache. Check ${OUTFILE} for more information." >> "${LOG}";
+        echo "$(date '+%Y-%m-%d %H:%M:%S') !! Failed verifying the cache. Check ${OUTFILE} for more information." >> "${LOG}";
         tail -n 1 "${LOG}";
         exit 1;
     else
@@ -197,7 +197,7 @@ then
     then
         # This failed.
         echo "${OUTPUT}" | sed "s/^/                       /" >> "${LOG}";
-        echo "$(date '+%Y-%m-%d %H:%M:%S')    Failed syncing the caches." >> "${LOG}";
+        echo "$(date '+%Y-%m-%d %H:%M:%S') !! Failed syncing the caches." >> "${LOG}";
         cat "${LOG}" | tail -n +$(($LOGCOUNT + 1));
         exit 1;
     else
