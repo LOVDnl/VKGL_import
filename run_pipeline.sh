@@ -141,3 +141,34 @@ then
         tail -n 1 "${LOG}";
     fi;
 fi;
+
+
+
+
+
+# If we have not run the cache verification yet, do so now.
+# This will add VV output to the variant mappings and correct Mutalyzer mappings.
+OUTFILE="output.02.verify-cache.log";
+if [ ! -f "${OUTFILE}" ];
+then
+    echo "$(date '+%Y-%m-%d %H:%M:%S')    Verifying the cache..." >> "${LOG}";
+    tail -n 1 "${LOG}";
+    # Also pipe STDERR to the log file so we can catch what went wrong.
+    ../verify_cache.php > "${OUTFILE}" 2>&1;
+    if [ $? -ne 0 ];
+    then
+        # This failed.
+        echo "$(date '+%Y-%m-%d %H:%M:%S')    Failed verifying the cache. Check ${OUTFILE} for more information." >> "${LOG}";
+        tail -n 1 "${LOG}";
+        exit 1;
+    else
+        echo "$(date '+%Y-%m-%d %H:%M:%S') OK Successfully verified the cache." >> "${LOG}";
+        tail -n 1 "${LOG}";
+        # Do check if we ran into issues that were skipped because we ran non-interactively.
+        if [ "$(grep "Running non-interactively, skipping question." "${OUTFILE}" | wc -l)" -gt "0" ];
+        then
+            echo "$(date '+%Y-%m-%d %H:%M:%S') !! Manually re-run the cache verification; questions were skipped." >> "${LOG}";
+            tail -n 1 "${LOG}";
+        fi;
+    fi;
+fi;
