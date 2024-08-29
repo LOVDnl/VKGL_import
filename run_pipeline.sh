@@ -78,11 +78,12 @@ then
     # Format the files.
     echo "$(date '+%Y-%m-%d %H:%M:%S')    Formatting and grouping the files..." >> "${LOG}";
     tail -n 1 "${LOG}";
-    ../format_raw_VKGL_files.php *.txt -y > "${OUTFILE}";
+    # Also pipe STDERR to the log file so we can catch what went wrong.
+    ../format_raw_VKGL_files.php *.txt -y > "${OUTFILE}" 2>&1;
     if [ $? -ne 0 ];
     then
         # This failed.
-        echo "$(date '+%Y-%m-%d %H:%M:%S')    Failed formatting and grouping the files." >> "${LOG}";
+        echo "$(date '+%Y-%m-%d %H:%M:%S')    Failed formatting and grouping the files. Check ${OUTFILE} for more information." >> "${LOG}";
         tail -n 1 "${LOG}";
         exit 1;
     else
