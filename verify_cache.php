@@ -5,14 +5,17 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2020-04-02
- * Modified    : 2023-07-14
- * Version     : 0.5
+ * Modified    : 2024-08-29
+ * Version     : 0.6
  * For LOVD    : 3.0-24
  *
  * Purpose     : Checks the NC cache and extends the mapping cache using the new
  *               Variant Validator object.
  *
- * Changelog   : 0.5     2023-07-14
+ * Changelog   : 0.6     2024-08-29
+ *               Also detect when run through the pipeline script; treat this as
+ *               if we're being run by Cron.
+ *               0.5     2023-07-14
  *               When running non-interactively, through cron, don't ask the
  *               user any questions; just dump all the differences and continue.
  *               Fixed string offset; curly braces are no longer supported.
@@ -30,7 +33,7 @@
  *               0.1     2020-04-03
  *               Initial release.
  *
- * Copyright   : 2004-2023 Leiden University Medical Center; http://www.LUMC.nl/
+ * Copyright   : 2004-2024 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
  *
  *
@@ -62,7 +65,7 @@ define('CWD', dirname(__FILE__) . '/');
 // Default settings. We won't verify any setting, that's up to the process script.
 $_CONFIG = array(
     'name' => 'VKGL cache verification using Variant Validator',
-    'version' => '0.5',
+    'version' => '0.6',
     'settings_file' => CWD . 'settings.json',
     'VV_URL' => 'https://rest.variantvalidator.org/',
     'user' => array(
@@ -167,6 +170,7 @@ while ($nArgs) {
     }
 }
 $bCron = (empty($_SERVER['REMOTE_ADDR']) && empty($_SERVER['TERM']));
+$bCron |= (!empty($_SERVER['SHLVL']) && ctype_digit($_SERVER['SHLVL']) && $_SERVER['SHLVL'] > '1');
 define('VERBOSITY', ($bCron? 5 : 7));
 // Record the start of the script, but correct for the timezone. This way, (time() - $tStart) doesn't seem to make sense
 //  to us human readers, but when used in combination with date('H:i:s', ...) to format hours, minutes, and seconds
