@@ -243,3 +243,30 @@ then
     echo "                    !! Manually re-run the cache verification, and then re-run the pipeline." >> "${LOG}";
     tail -n 2 "${LOG}";
 fi;
+
+
+
+
+
+# If we have not run the full process yet, do so now.
+OUTFILE="output.03.full-run-with-deletes.log";
+if [ ! -f "${OUTFILE}" ];
+then
+    # Go ahead and fully process the data, including the database updates.
+    echo "$(date '+%Y-%m-%d %H:%M:%S')    Starting the full run, with deletes..." >> "${LOG}";
+    tail -n 1 "${LOG}";
+    # Also pipe STDERR to the log file so we can catch what went wrong.
+    ../process_VKGL_data.php "${FILE}" -y > "${OUTFILE}" 2>&1;
+    # The process above always throws warnings and, therefore, never returns 0.
+    if [ $? -ne 64 ];
+    then
+        # This failed.
+        echo "$(date '+%Y-%m-%d %H:%M:%S') !! Failed completing the run. Check ${OUTFILE} for more information." >> "${LOG}";
+        tail -n 1 "${LOG}";
+        exit 1;
+    else
+        echo "$(date '+%Y-%m-%d %H:%M:%S') OK Successfully completed the run." >> "${LOG}";
+        tail -n 1 "${LOG}";
+        SYNCAGAIN=1;
+    fi;
+fi;
