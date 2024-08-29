@@ -116,6 +116,9 @@ else
     tail -n 1 "${LOG}";
 fi;
 
+# Store whether or not we should sync the caches again.
+SYNCAGAIN=0;
+
 
 
 
@@ -139,6 +142,7 @@ then
     else
         echo "$(date '+%Y-%m-%d %H:%M:%S') OK Successfully completed the run." >> "${LOG}";
         tail -n 1 "${LOG}";
+        SYNCAGAIN=1;
     fi;
 fi;
 
@@ -170,5 +174,32 @@ then
             echo "$(date '+%Y-%m-%d %H:%M:%S') !! Manually re-run the cache verification; questions were skipped." >> "${LOG}";
             tail -n 1 "${LOG}";
         fi;
+        SYNCAGAIN=1;
+    fi;
+fi;
+
+
+
+
+
+# Then, sync the caches again, but only if we were requested to do so.
+if [ "${SYNCAGAIN}" -gt "0" ];
+then
+    echo "$(date '+%Y-%m-%d %H:%M:%S')    Syncing the caches..." >> "${LOG}";
+    tail -n 1 "${LOG}";
+    LOGCOUNT=$(cat "${LOG}" | wc -l);
+
+    OUTPUT=$(/www/git/caches/sync_caches.sh 2> /dev/null);
+    if [ $? -ne 0 ];
+    then
+        # This failed.
+        echo "${OUTPUT}" | sed "s/^/                       /" >> "${LOG}";
+        echo "$(date '+%Y-%m-%d %H:%M:%S')    Failed syncing the caches." >> "${LOG}";
+        cat "${LOG}" | tail -n +$(($LOGCOUNT + 1));
+        exit 1;
+    else
+        echo "${OUTPUT}" | sed "s/^/$(date '+%Y-%m-%d %H:%M:%S')    /" >> "${LOG}";
+        echo "$(date '+%Y-%m-%d %H:%M:%S') OK Successfully synced the caches." >> "${LOG}";
+        tail -n 1 "${LOG}";
     fi;
 fi;
