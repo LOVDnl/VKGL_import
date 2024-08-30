@@ -270,3 +270,39 @@ then
         SYNCAGAIN=1;
     fi;
 fi;
+
+
+
+
+
+# Run copy_data_* scripts to copy the data to the servers.
+echo "$(date '+%Y-%m-%d %H:%M:%S')    Copying the data to the remote servers..." >> "${LOG}";
+tail -n 1 "${LOG}";
+LOGCOUNT=$(cat "${LOG}" | wc -l);
+
+OUTPUT=$(../copy_data_to_web01.sh 2>&1);
+if [ $? -ne 0 ];
+then
+    # This failed.
+    echo "${OUTPUT}" | sed "s/^/                       /" >> "${LOG}";
+    echo "$(date '+%Y-%m-%d %H:%M:%S') !! Failed copying the data to Web01." >> "${LOG}";
+    cat "${LOG}" | tail -n +$(($LOGCOUNT + 1));
+    exit 1;
+else
+    echo "${OUTPUT}" | sed "s/^/                       /" >> "${LOG}";
+    echo "$(date '+%Y-%m-%d %H:%M:%S') OK Successfully copied the data to Web01." >> "${LOG}";
+
+    OUTPUT=$(../copy_data_to_kg.sh 2>&1);
+    if [ $? -ne 0 ];
+    then
+        # This failed.
+        echo "${OUTPUT}" | sed "s/^/                       /" >> "${LOG}";
+        echo "$(date '+%Y-%m-%d %H:%M:%S') !! Failed copying the data to KG-Web01." >> "${LOG}";
+        cat "${LOG}" | tail -n +$(($LOGCOUNT + 1));
+        exit 1;
+    else
+        echo "${OUTPUT}" | sed "s/^/                       /" >> "${LOG}";
+        echo "$(date '+%Y-%m-%d %H:%M:%S') OK Successfully copied the data to both servers." >> "${LOG}";
+        tail -n 1 "${LOG}";
+    fi;
+fi;
