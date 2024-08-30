@@ -1,4 +1,8 @@
 #!/bin/bash
 
-rsync -av $(ls -1 /www/git/VKGL_import/$(date +%Y-%m)/vkgl_consensus_* | tr '\n' ' ') "web01:/home/${USER}/git/VKGL_import/"
+PWD="$(dirname $0)";
+DATE="$(${PWD}/get_run_date.sh)";
+DIR="${PWD}/${DATE}";
+
+rsync -av ${DIR}/vkgl_consensus_* "web01:/home/${USER}/git/VKGL_import/"
 
