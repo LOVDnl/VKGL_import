@@ -17,7 +17,8 @@
  *               built code. Also solved errors showing up when processing the
  *               data on LOVD+ and when processing very long variants. From now
  *               on, we're marking conflicting data as such, to explain to users
- *               who can see the entries, why they are non-public.
+ *               who can see the entries, why they are non-public. Variants that
+ *               are simply republished are now hidden from the debug output.
  *               1.1     2023-07-14
  *               Added a dry run flag (the old $bDebug variable), so that we can
  *               control debugging when invoking the script, enabling automation
@@ -2079,6 +2080,12 @@ foreach ($aData as $sVariant => $aVariant) {
                         // No real diff. Just additions by us.
                         unset($aDiff['vots']);
                     }
+                }
+
+                // Check if the diff is simply the re-publication of this variant.
+                // That's a status change to 9 and possibly a Remarks change.
+                if ($aDiff && array_diff(array_keys($aDiff), ['VariantOnGenome/Remarks']) == array('statusid') && $aDiff['statusid'][1] == 9) {
+                    $aDiff = array();
                 }
 
                 if ($aDiff) {
