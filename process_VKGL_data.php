@@ -15,7 +15,7 @@
  * Changelog   : 1.2     2024-09-17
  *               Improved the script by re-using more LOVD code, removing custom
  *               built code. Also solved errors showing up when processing the
- *               data on LOVD+.
+ *               data on LOVD+ and when processing very long variants.
  *               1.1     2023-07-14
  *               Added a dry run flag (the old $bDebug variable), so that we can
  *               control debugging when invoking the script, enabling automation
@@ -1476,7 +1476,7 @@ foreach ($aData as $sVariant => $aVariant) {
             continue;
         }
 
-        // We're not using lovd_getRNAProteinPrediction() because that's using SOAP and the normal runMutalyzer,
+        // We're not using lovd_getRNAProteinPrediction() because that's using runMutalyzerLight,
         //  and we already did that stuff. Also, this code below is better in predicting good RNA values.
         // We will be borrowing quite some logic though. It would be better if this was solved.
         $aMapping['RNA'] = 'r.(?)'; // Default.
@@ -1596,6 +1596,9 @@ $sNow = date('Y-m-d H:i:s');
 $sRefSeq = ''; // The RefSeq (NC) we're currently working on.
 $sPrevRefSeq = ''; // The one (NC) we were working on before.
 $sChromosome = ''; // The chromosome we're currently working on, derived from $sRefSeq.
+
+// We won't process variants that we can't hold.
+$sMaxDNALength = lovd_getColumnLength(TABLE_VARIANTS, 'VariantOnGenome/DNA');
 
 foreach ($aData as $sVariant => $aVariant) {
     // Check chromosome, is this different from the previous line?
@@ -1783,6 +1786,15 @@ foreach ($aData as $sVariant => $aVariant) {
     }
 
 
+
+    // LOVD+ has a much shorter DNA field; only 150 characters.
+    // Trying to put in a variant that's bigger will crash this process.
+    // However, we may also simply find variants longer than 255 characters.
+    // We will simply skip whatever is too long.
+    if (strlen($sDNA) > $sMaxDNALength) {
+        $aVariantsSkipped[$sChromosome] ++;
+        continue;
+    }
 
     // Add some needed fields; (type, position_start, position_end).
     $aVariant = array_merge(
