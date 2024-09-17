@@ -5,14 +5,17 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2023-07-14
- * Version     : 1.1
- * For LOVD    : 3.0-26
+ * Modified    : 2024-09-17
+ * Version     : 1.2
+ * For LOVD    : 3.0-30
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 1.1     2023-07-14
+ * Changelog   : 1.2     2024-09-17
+ *               Improved the script by re-using more LOVD code, removing custom
+ *               built code.
+ *               1.1     2023-07-14
  *               Added a dry run flag (the old $bDebug variable), so that we can
  *               control debugging when invoking the script, enabling automation
  *               of the whole workflow. Also, fixed string offsets; curly braces
@@ -110,7 +113,7 @@ define('CWD', dirname(__FILE__) . '/');
 // Default settings. Everything in 'user' will be verified with the user, and stored in settings.json.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '1.1',
+    'version' => '1.2',
     'settings_file' => CWD . 'settings.json',
     'flags' => array(
         'n' => false, // Dry run.
@@ -194,126 +197,6 @@ define('VERBOSITY_LOW', 3); // Low output, only the really important messages.
 define('VERBOSITY_MEDIUM', 5); // Medium output. No output if there is nothing to do. Useful for when using cron.
 define('VERBOSITY_HIGH', 7); // High output. The default.
 define('VERBOSITY_FULL', 9); // Full output, including debug statements.
-
-
-
-
-
-function lovd_getVariantDescription (&$aVariant, $sRef, $sAlt)
-{
-    // Constructs a variant description from $sRef and $sAlt and adds it to $aVariant in a new 'VariantOnGenome/DNA' key.
-    // The 'position_g_start' and 'position_g_end' keys in $aVariant are adjusted accordingly and a 'type' key is added too.
-    // The numbering scheme is either g. or m. and depends on the 'chromosome' key in $aVariant.
-    // Requires:
-    //   $aVariant['chromosome']
-    //   $aVariant['position']
-    // Adds:
-    //   $aVariant['position_g_start']
-    //   $aVariant['position_g_end']
-    //   $aVariant['type']
-    //   $aVariant['VariantOnGenome/DNA']
-
-    // Make all bases uppercase.
-    $sRef = strtoupper($sRef);
-    $sAlt = strtoupper($sAlt);
-
-    // Clear out empty REF and ALTs. This is not allowed in the VCF specs,
-    //  but some tools create them nonetheless.
-    foreach (array('sRef', 'sAlt') as $var) {
-        if (in_array($$var, array('.', '-'))) {
-            $$var = '';
-        }
-    }
-
-    // No variant?
-    if ($sRef == $sAlt) {
-        return false;
-    }
-
-    // Use the right prefix for the numbering scheme.
-    $sHGVSPrefix = 'g.';
-    if ($aVariant['chromosome'] == 'M') {
-        $sHGVSPrefix = 'm.';
-    }
-
-    // Even substitutions are sometimes mentioned as longer Refs and Alts, so we'll always need to isolate the actual difference.
-    $aVariant['position_g_start'] = $aVariant['position'];
-    $aVariant['position_g_end'] = $aVariant['position'] + strlen($sRef) - 1;
-
-    // Save original values before we edit them.
-    $sRefOriginal = $sRef;
-    $sAltOriginal = $sAlt;
-
-    // 'Eat' letters from either end - first left, then right - to isolate the difference.
-    while (strlen($sRef) > 0 && strlen($sAlt) > 0 && $sRef[0] == $sAlt[0]) {
-        $sRef = substr($sRef, 1);
-        $sAlt = substr($sAlt, 1);
-        $aVariant['position_g_start'] ++;
-    }
-    while (strlen($sRef) > 0 && strlen($sAlt) > 0 && $sRef[strlen($sRef) - 1] == $sAlt[strlen($sAlt) - 1]) {
-        $sRef = substr($sRef, 0, -1);
-        $sAlt = substr($sAlt, 0, -1);
-        $aVariant['position_g_end'] --;
-    }
-
-    // Substitution, or something else?
-    if (strlen($sRef) == 1 && strlen($sAlt) == 1) {
-        // Substitutions.
-        $aVariant['type'] = 'subst';
-        $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . $sRef . '>' . $sAlt;
-    } else {
-        // Insertions/duplications, deletions, inversions, indels.
-
-        // Now find out the variant type.
-        if (strlen($sRef) > 0 && strlen($sAlt) == 0) {
-            // Deletion.
-            $aVariant['type'] = 'del';
-            if ($aVariant['position_g_start'] == $aVariant['position_g_end']) {
-                $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . 'del';
-            } else {
-                $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . '_' . $aVariant['position_g_end'] . 'del';
-            }
-        } elseif (strlen($sAlt) > 0 && strlen($sRef) == 0) {
-            // Something has been added... could be an insertion or a duplication.
-            if ($sRefOriginal && substr($sAltOriginal, strrpos($sAltOriginal, $sAlt) - strlen($sAlt), strlen($sAlt)) == $sAlt) {
-                // Duplicaton (not allowed when REF was empty from the start).
-                $aVariant['type'] = 'dup';
-                $aVariant['position_g_start'] -= strlen($sAlt);
-                if ($aVariant['position_g_start'] == $aVariant['position_g_end']) {
-                    $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . 'dup';
-                } else {
-                    $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . '_' . $aVariant['position_g_end'] . 'dup';
-                }
-            } else {
-                // Insertion.
-                $aVariant['type'] = 'ins';
-                if (!$sRefOriginal) {
-                    // We never got a Ref. This is not allowed, but some centers have it anyway.
-                    $aVariant['position_g_end'] += 2;
-                } else {
-                    // Exchange g_start and g_end; after the 'letter eating' we did, start is actually end + 1!
-                    $aVariant['position_g_start'] --;
-                    $aVariant['position_g_end'] ++;
-                }
-                $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . '_' . $aVariant['position_g_end'] . 'ins' . $sAlt;
-            }
-        } elseif ($sRef == strrev(str_replace(array('a', 'c', 'g', 't'), array('T', 'G', 'C', 'A'), strtolower($sAlt)))) {
-            // Inversion.
-            $aVariant['type'] = 'inv';
-            $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . '_' . $aVariant['position_g_end'] . 'inv';
-        } else {
-            // Deletion/insertion.
-            $aVariant['type'] = 'delins';
-            if ($aVariant['position_g_start'] == $aVariant['position_g_end']) {
-                $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . 'delins' . $sAlt;
-            } else {
-                $aVariant['VariantOnGenome/DNA'] = $sHGVSPrefix . $aVariant['position_g_start'] . '_' . $aVariant['position_g_end'] . 'delins' . $sAlt;
-            }
-        }
-    }
-
-    return true;
-}
 
 
 
@@ -722,6 +605,7 @@ ini_set('log_errors', '0'); // CLI logs errors to the screen, apparently.
 define('SSL', true);
 require ROOT_PATH . 'inc-init.php';
 require ROOT_PATH . 'inc-lib-form.php';
+require ROOT_PATH . 'inc-lib-variants.php'; // For lovd_fixHGVS().
 ini_set('display_errors', '1'); // We do want to see errors from here on.
 
 lovd_printIfVerbose(VERBOSITY_HIGH,
@@ -946,11 +830,14 @@ foreach ($aData as $nKey => $aVariant) {
         unset($aVariant[$sCenter]);
     }
 
-    // Use LOVD+'s lovd_getVariantDescription() to build the HGVS from the VCF fields.
-    // Also adds fields that we currently won't use yet since we don't know yet if this HGVS is correct.
-    $aVariant['position'] = $aVariant['start']; // The function needs this.
-    if (!lovd_getVariantDescription($aVariant, $aVariant['ref'], $aVariant['alt'])) {
-        // Returns false if Ref and Alt are equal (or both empty).
+    // Use LOVD's functions to build the HGVS from the VCF fields.
+    $sVariant = lovd_fixHGVS('g.' . $aVariant['start'] .
+        ($aVariant['ref'] != '.'?
+            $aVariant['ref'] . '>' . $aVariant['alt'] :
+            '_' . ($aVariant['start'] + 1) . 'ins' . $aVariant['alt']));
+    if (!lovd_getVariantInfo($sVariant, false, true)) {
+        // This is not recognized as a valid variant description.
+        // This can happen when Ref and Alt are both empty.
         lovd_printIfVerbose(VERBOSITY_MEDIUM,
             ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                 floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
@@ -969,7 +856,7 @@ foreach ($aData as $nKey => $aVariant) {
     // So to make the code much simpler, just run *everything* through here.
     $sVariant =
         $_SETT['human_builds'][$_CONFIG['user']['refseq_build']]['ncbi_sequences'][$aVariant['chromosome']] .
-        ':' . $aVariant['VariantOnGenome/DNA'];
+        ':' . $sVariant;
 
     // The variant may be in the NC cache, but not yet in the mapping cache.
     // This happens when the NC cache is used by another application, which doesn't build the mapping cache as well.
@@ -1104,9 +991,7 @@ foreach ($aData as $nKey => $aVariant) {
     $aVariant['transcript'] = rtrim($aVariant['transcript'], ' ,:');
 
     // Store new information, dropping some excess information.
-    unset($aVariant['position']); // Never needed.
     unset($aVariant['start'], $aVariant['ref'], $aVariant['alt']); // We're done using VCF now.
-    unset($aVariant['position_g_start'], $aVariant['position_g_end'], $aVariant['type']); // Are unreliable now.
     $aData[$nKey] = $aVariant;
 
     // Print update, for every percentage changed.
