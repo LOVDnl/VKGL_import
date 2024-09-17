@@ -15,7 +15,9 @@
  * Changelog   : 1.2     2024-09-17
  *               Improved the script by re-using more LOVD code, removing custom
  *               built code. Also solved errors showing up when processing the
- *               data on LOVD+ and when processing very long variants.
+ *               data on LOVD+ and when processing very long variants. From now
+ *               on, we're marking conflicting data as such, to explain to users
+ *               who can see the entries, why they are non-public.
  *               1.1     2023-07-14
  *               Added a dry run flag (the old $bDebug variable), so that we can
  *               control debugging when invoking the script, enabling automation
@@ -1836,7 +1838,7 @@ foreach ($aData as $sVariant => $aVariant) {
             'VariantOnGenome/DBID' => '', // FIXME: Will be filled in later for records to be created!
             'VariantOnGenome/Genetic_origin' => 'CLASSIFICATION record',
             'VariantOnGenome/Published_as' => $aVariant['published_as'],
-            'VariantOnGenome/Remarks' => 'VKGL data sharing initiative Nederland',
+            'VariantOnGenome/Remarks' => 'VKGL data sharing initiative Nederland' . ($aVariant['status'] != 'opposite'? '' : '; Variant classification is in conflict with a different center.'),
             'VariantOnGenome/Remarks_Non_Public' => array(
                 'warning' => 'Do not remove or edit this field!',
                 'ids' => $aVariant['id'],
