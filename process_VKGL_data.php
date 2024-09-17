@@ -14,7 +14,8 @@
  *
  * Changelog   : 1.2     2024-09-17
  *               Improved the script by re-using more LOVD code, removing custom
- *               built code.
+ *               built code. Also solved errors showing up when processing the
+ *               data on LOVD+.
  *               1.1     2023-07-14
  *               Added a dry run flag (the old $bDebug variable), so that we can
  *               control debugging when invoking the script, enabling automation
@@ -1461,9 +1462,14 @@ foreach ($aData as $sVariant => $aVariant) {
     // Now, generate some more data (position fields, RNA field) and check the predicted protein field.
     foreach ($aVariant['mappings'] as $sTranscript => $aMapping) {
         // First, get positions for variant.
-        $aMapping = @array_merge(
+        // But, getting positions will fail for 3' UTR variants if we don't have the transcript. Handle that.
+        $aVariantMapping = lovd_getVariantInfo($aMapping['DNA'], $sTranscript);
+        if (!$aVariantMapping) {
+            $aVariantMapping = (lovd_getVariantInfo($aMapping['DNA'], false) ?: []);
+        }
+        $aMapping = array_merge(
             $aMapping,
-            lovd_getVariantInfo($aMapping['DNA'], $sTranscript)
+            $aVariantMapping
         );
         if (!$aMapping) {
             // Possible for transcripts created manually in the database without all of their fields set.
