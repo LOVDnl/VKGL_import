@@ -306,3 +306,25 @@ else
         tail -n 1 "${LOG}";
     fi;
 fi;
+
+
+
+
+
+# Generate the final report; it doesn't take much time, so let's always generate it.
+OUTFILE="output.04.final-report.log";
+echo "$(date '+%Y-%m-%d %H:%M:%S')    Generating final report..." >> "${LOG}";
+tail -n 1 "${LOG}";
+
+# Also pipe STDERR to the output file so we can catch what went wrong.
+../generate_reports.sh > "${OUTFILE}" 2>&1;
+if [ $? -ne 0 ];
+then
+    # This failed.
+    echo "$(date '+%Y-%m-%d %H:%M:%S') !! Failed generating the final report. Check ${OUTFILE} for more information." >> "${LOG}";
+    tail -n 1 "${LOG}";
+    exit 1;
+else
+    echo "$(date '+%Y-%m-%d %H:%M:%S') OK Successfully generated the final report." >> "${LOG}";
+    tail -n 1 "${LOG}";
+fi;
