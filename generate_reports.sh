@@ -24,12 +24,6 @@ echo "Created vkgl_errors_${DATE}.log.";
 
 
 
-# Summary:
-echo "Summary of errors:";
-cut -f 7 vkgl_errors_${DATE}.log | grep -v '^$' | tr ',' '\n' | sort | uniq -c | sort -g
-
-
-
 # Conflicts:
 grep "{" "${LAST_FILE}" | grep ConflictHeader | tr '|' '\t' | cut -f 2- \
   | sed 's/}$//' > vkgl_opposites_${DATE}.log
@@ -55,3 +49,12 @@ Total classifications    : $(echo "$DATA" | tail | grep " Variants " | grep -v "
                            ======
 $(echo "$DATA" | tail | grep " Variants " | cut -b 20- | sed 's/\.$//' | sed 's/Variants/Classifications/' | sed 's/:/  :/')
 ";
+
+
+
+# Summaries:
+echo "Summary of errors:";
+cut -f 7 vkgl_errors_${DATE}.log | grep -v '^$' | tr ',' '\n' | sort | uniq -c | sort -g;
+
+echo "Summary of internal conflicts:";
+cut -d \  -f 3 vkgl_internal_conflicts_${DATE}.log | sort | uniq -c;
