@@ -352,3 +352,11 @@ else
     echo "$(date '+%Y-%m-%d %H:%M:%S') OK Successfully generated the final report." >> "${LOG}";
     tail -n 1 "${LOG}";
 fi;
+
+
+
+
+
+# Close the log. Adding this string will prevent the pipeline from running again.
+echo "$(date '+%Y-%m-%d %H:%M:%S') OK All done." >> "${LOG}";
+tail -n 1 "${LOG}";
