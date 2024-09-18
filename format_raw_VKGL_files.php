@@ -5,15 +5,18 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2024-04-19
- * Version     : 0.1.8
+ * Modified    : 2024-08-28
+ * Version     : 0.1.9
  * For LOVD    : 3.0-26
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.1.8  2024-04-19
+ * Changelog   : 0.1.9  2024-08-28
+ *               Silently skip Leiden's WT variants (g.123456=) that were
+ *               recently introduced and break this script.
+ *               0.1.8  2024-04-19
  *               Sigh... yet another Alissa data signature.
  *               0.1.7  2023-01-10
  *               Added yet another file header signature; perhaps the final one?
@@ -67,7 +70,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.1.8',
+    'version' => '0.1.9',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -374,7 +377,10 @@ while ($nArgs) {
 }
 $bCron = (empty($_SERVER['REMOTE_ADDR']) && empty($_SERVER['TERM']));
 define('VERBOSITY', ($bCron? 5 : 7));
-$tStart = time() + date('Z', 0); // Correct for timezone, otherwise the start value is not 0.
+// Record the start of the script, but correct for the timezone. This way, (time() - $tStart) doesn't seem to make sense
+//  to us human readers, but when used in combination with date('H:i:s', ...) to format hours, minutes, and seconds
+//  spent, it all makes sense. Note that date("H:i:s", 0) only returns 00:00:00 when your timezone is GMT.
+$tStart = time() + date('Z', 0);
 
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
     $_CONFIG['name'] . ' v' . $_CONFIG['version'] . '.' . "\n");
@@ -634,6 +640,12 @@ foreach ($aFiles as $sFile => $sCenter) {
                 //  with the other centers.
                 $aVariant = lovd_HGVStoVCF($aDataLine['gdna_normalized']);
                 if ($aVariant === false) {
+                    // 2024-08-28 Since the July run, LUMC has WT variants (e.g., g.123456=). I guess they come from
+                    //  Moon. Nonetheless, we should get rid of them. Just skip them silently.
+                    if (substr($aDataLine['gdna_normalized'], -1) == '=') {
+                        // Yup, a WT variant. Silently skip it.
+                        continue 2;
+                    }
                     lovd_printIfVerbose(VERBOSITY_LOW,
                         'Error: Unhandled variant, could not generate VCF fields: ' .
                         $aDataLine['gdna_normalized'] . ".\n\n");

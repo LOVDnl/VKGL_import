@@ -1,13 +1,17 @@
 #!/bin/bash
 
 # Created  : 2023-07-12
-# Modified : 2023-11-29
+# Modified : 2024-08-28
 
 # This will check if we have the data ready on kg-web01.
 
-DIR="$(dirname $0)/$(date +%Y-%m)";
+PWD="$(dirname $0)";
+DATE="$(${PWD}/get_run_date.sh)";
+YEAR=$(echo $DATE | cut -d - -f 1);
+DIR="${PWD}/${DATE}";
+
 HOST="kg-web01";
-REMOTE="/home/${USER}/git/VKGL_export/$(date +%Y)/$(date +%Y-%m)";
+REMOTE="/home/${USER}/git/VKGL_export/${YEAR}/${DATE}";
 LOG="${DIR}/status.log";
 
 if [ ! -d "${DIR}" ];
@@ -25,7 +29,6 @@ fi;
 
 
 
-echo "" >> "${LOG}";
 echo "$(date '+%Y-%m-%d %H:%M:%S')    Checking for remote files..." >> "${LOG}";
 
 FILES=$(ssh ${HOST} ls "${REMOTE}" | grep -E "^(alissa.tar|lumc.txt|radboud_mumc.txt)\.gz$");
@@ -81,7 +84,7 @@ done;
 
 
 # Check if we have everything.
-DIFF=$(diff <(echo -e "amc.txt\nerasmus.txt\nlumc.txt\nnki.txt\nradboud_mumc.txt\numcg.txt\numcu.txt\nvumc.txt") <(cd "${DIR}"; ls -1) | grep -v "^[0-9>]");
+DIFF=$(diff <(echo -e "amc.txt\nerasmus.txt\nlumc.txt\nnki.txt\nradboud_mumc.txt\numcg.txt\numcu.txt\nvumc.txt") <(cd "${DIR}"; ls -1) | grep -v "^[0-9>-]");
 if [ "${DIFF}" ];
 then
     echo "$(date '+%Y-%m-%d %H:%M:%S')    One or more data files are missing:" >> "${LOG}";
