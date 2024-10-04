@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Created  : 2023-10-10
-# Modified : 2024-08-28
+# Modified : 2024-10-04
 
 # Because the crontab got too complex, better make this a script.
 
@@ -16,7 +16,7 @@ eval $(keychain --eval --agents ssh id_rsa 2> /dev/null);
 
 PWD="$(dirname $0)";
 DATE="$(${PWD}/get_run_date.sh)";
-DIR="${PWD}/${DATE}";
+DIR="$(realpath "${PWD}/${DATE}")";
 LOG="${DIR}/status.log";
 
 if [ ! -d "${DIR}" ];
