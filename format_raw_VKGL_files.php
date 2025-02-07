@@ -797,6 +797,36 @@ foreach ($aFiles as $sFile => $sCenter) {
         '%] VKGL file successfully parsed, currently at ' . count($aData) . ' variants.' . "\n");
 }
 
+// Now, we'll figure out how to handle multiple entries per variant.
+lovd_printIfVerbose(VERBOSITY_MEDIUM,
+    ' ' . date('H:i:s', time() - $tStart) . ' [' .
+    str_pad(number_format(90, 1), 5, ' ', STR_PAD_LEFT) .
+    '%] Checking VKGL data for intra-center duplicates...' . "\n");
+
+foreach ($aData as $sVariantKey => $aVariant) {
+    foreach ($aCentersFound as $sCenter) {
+        // Does this center even know this variant?
+        if (!isset($aVariant[$sCenter])) {
+            // Nope.
+            continue;
+
+        } elseif (count($aVariant[$sCenter]) == 1) {
+            // No duplicates, all cool.
+            foreach ([$sCenter, $sCenter . $_CONFIG['columns_center_suffix']] as $sKey) {
+                $aData[$sVariantKey][$sKey] = current($aVariant[$sKey]);
+            }
+            continue;
+        }
+
+        // OK, there are multiple entries. Not neccessarily a problem yet.
+        // Simplify storing the _link field.
+        $aData[$sVariantKey][$sCenter . $_CONFIG['columns_center_suffix']] = implode(
+            ', ',
+            array_unique($aVariant[$sCenter . $_CONFIG['columns_center_suffix']])
+        );
+    }
+}
+
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
     "\n" .
     ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Writing consensus data file...' . "\n");
