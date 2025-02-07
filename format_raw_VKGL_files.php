@@ -887,7 +887,7 @@ foreach ($aData as $sVariantKey => $aVariant) {
         $aVariantKey[4], // Gene.
         $aVariantKey[5], // Transcript.
         $aVariantKey[6], // cDNA.
-        implode(', ', array_unique($aVariant['protein'])),
+        implode(', ', array_filter(array_unique($aVariant['protein']))),
     );
 
     // Loop centers.
