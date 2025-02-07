@@ -498,7 +498,7 @@ $nFile = 0;
 foreach ($aFiles as $sFile => $sCenter) {
     lovd_printIfVerbose(VERBOSITY_MEDIUM,
         ' ' . date('H:i:s', time() - $tStart) . ' [' .
-        str_pad(number_format(($nFile/$nCentersFound)*100, 1), 5, ' ', STR_PAD_LEFT) .
+        str_pad(number_format(($nFile/$nCentersFound)*90, 1), 5, ' ', STR_PAD_LEFT) .
         '%] Parsing VKGL file for center ' . $sCenter . '...' . "\n");
     $nFile ++;
 
@@ -549,7 +549,7 @@ foreach ($aFiles as $sFile => $sCenter) {
     $nHeaders = count($aHeaders);
     $aHeaders = array_map('trim', $aHeaders, array_fill(0, $nHeaders, '"'));
 
-    // Check headers signature.
+    // Check header's signature.
     $aSignature = $aHeaders;
     sort($aSignature);
     $sHeaderSignature = implode(';', $aSignature);
@@ -753,10 +753,14 @@ foreach ($aFiles as $sFile => $sCenter) {
         if (!isset($aData[$sVariantKey])) {
             $aData[$sVariantKey] = array('protein' => array());
         }
+        // Everything will go into arrays now, and we'll sort it out later.
+        if (!isset($aData[$sVariantKey][$sCenter])) {
+            $aData[$sVariantKey][$sCenter] = array();
+            $aData[$sVariantKey][$sCenter . $_CONFIG['columns_center_suffix']] = array();
+        }
         foreach ($aValues as $sKey => $sValue) {
-            if ($sKey == 'protein') {
-                $aData[$sVariantKey]['protein'][] = $sValue;
-            } else {
+            $aData[$sVariantKey][$sKey][] = $sValue;
+            continue;
                 // These values cannot already exist.
                 if (isset($aData[$sVariantKey][$sKey])) {
                     // Center already seen for this variant?
@@ -780,7 +784,6 @@ foreach ($aFiles as $sFile => $sCenter) {
                     }
                 }
                 $aData[$sVariantKey][$sKey] = $sValue;
-            }
         }
     }
 
@@ -790,7 +793,7 @@ foreach ($aFiles as $sFile => $sCenter) {
 
     lovd_printIfVerbose(VERBOSITY_MEDIUM,
         ' ' . date('H:i:s', time() - $tStart) . ' [' .
-        str_pad(number_format(($nFile/$nCentersFound)*100, 1), 5, ' ', STR_PAD_LEFT) .
+        str_pad(number_format(($nFile/$nCentersFound)*90, 1), 5, ' ', STR_PAD_LEFT) .
         '%] VKGL file successfully parsed, currently at ' . count($aData) . ' variants.' . "\n");
 }
 
