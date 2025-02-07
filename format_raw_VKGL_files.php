@@ -5,15 +5,23 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2024-08-28
- * Version     : 0.1.9
- * For LOVD    : 3.0-26
+ * Modified    : 2025-02-07
+ * Version     : 0.2.0
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.1.9  2024-08-28
+ * Changelog   : 0.2.0  2025-02-07
+ *               Re-implement the storage of variants and the filtering of
+ *               duplicates completely. We were losing variants when only a
+ *               single center reported multiple classifications. Fixed that and
+ *               handle classification differences neatly (i.e., opposites are
+ *               reported and only the center's opinion is removed, not the
+ *               entire variant; VUS+anything -> VUS, B+LB -> LB; LP+P -> LP).
+ *               Also, the *_link fields can now contain multiple values, and
+ *               empty values are removed from the protein fields.
+ *               0.1.9  2024-08-28
  *               Silently skip Leiden's WT variants (g.123456=) that were
  *               recently introduced and break this script.
  *               0.1.8  2024-04-19
@@ -70,7 +78,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.1.9',
+    'version' => '0.2.0',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
