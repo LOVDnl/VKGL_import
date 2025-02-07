@@ -5,15 +5,23 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2024-08-28
- * Version     : 0.1.9
- * For LOVD    : 3.0-26
+ * Modified    : 2025-02-07
+ * Version     : 0.2.0
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.1.9  2024-08-28
+ * Changelog   : 0.2.0  2025-02-07
+ *               Re-implement the storage of variants and the filtering of
+ *               duplicates completely. We were losing variants when only a
+ *               single center reported multiple classifications. Fixed that and
+ *               handle classification differences neatly (i.e., opposites are
+ *               reported and only the center's opinion is removed, not the
+ *               entire variant; VUS+anything -> VUS, B+LB -> LB; LP+P -> LP).
+ *               Also, the *_link fields can now contain multiple values, and
+ *               empty values are removed from the protein fields.
+ *               0.1.9  2024-08-28
  *               Silently skip Leiden's WT variants (g.123456=) that were
  *               recently introduced and break this script.
  *               0.1.8  2024-04-19
@@ -70,7 +78,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.1.9',
+    'version' => '0.2.0',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -498,7 +506,7 @@ $nFile = 0;
 foreach ($aFiles as $sFile => $sCenter) {
     lovd_printIfVerbose(VERBOSITY_MEDIUM,
         ' ' . date('H:i:s', time() - $tStart) . ' [' .
-        str_pad(number_format(($nFile/$nCentersFound)*100, 1), 5, ' ', STR_PAD_LEFT) .
+        str_pad(number_format(($nFile/$nCentersFound)*90, 1), 5, ' ', STR_PAD_LEFT) .
         '%] Parsing VKGL file for center ' . $sCenter . '...' . "\n");
     $nFile ++;
 
@@ -549,7 +557,7 @@ foreach ($aFiles as $sFile => $sCenter) {
     $nHeaders = count($aHeaders);
     $aHeaders = array_map('trim', $aHeaders, array_fill(0, $nHeaders, '"'));
 
-    // Check headers signature.
+    // Check header's signature.
     $aSignature = $aHeaders;
     sort($aSignature);
     $sHeaderSignature = implode(';', $aSignature);
@@ -753,34 +761,13 @@ foreach ($aFiles as $sFile => $sCenter) {
         if (!isset($aData[$sVariantKey])) {
             $aData[$sVariantKey] = array('protein' => array());
         }
+        // Everything will go into arrays now, and we'll sort it out later.
+        if (!isset($aData[$sVariantKey][$sCenter])) {
+            $aData[$sVariantKey][$sCenter] = array();
+            $aData[$sVariantKey][$sCenter . $_CONFIG['columns_center_suffix']] = array();
+        }
         foreach ($aValues as $sKey => $sValue) {
-            if ($sKey == 'protein') {
-                $aData[$sVariantKey]['protein'][] = $sValue;
-            } else {
-                // These values cannot already exist.
-                if (isset($aData[$sVariantKey][$sKey])) {
-                    // Center already seen for this variant?
-                    // 2021-02-04; VUMC now delivers *two* files of the same
-                    //  format, and with some overlap (right now 16 variants).
-                    // So we can't just die here anymore. There are some
-                    //  conflicts, which we'll need to drop, but the rest can
-                    //  just continue.
-                    if ($aData[$sVariantKey][$sCenter] == $aValues[$sCenter]) {
-                        // Same classification. It's OK, just overwrite.
-                        // Do report.
-                        lovd_printIfVerbose(VERBOSITY_HIGH,
-                            '                   Warning: Center ' . $sCenter . ' has two entries for the same variant. ID: ' . $sVariantKey . "\n");
-                    } else {
-                        // Now we're actually in trouble. Internal conflict.
-                        // We won't die, but we need to ignore BOTH entries.
-                        lovd_printIfVerbose(VERBOSITY_MEDIUM,
-                            '                   Warning: Center ' . $sCenter . ' has an internal conflict; ' . $aData[$sVariantKey][$sCenter] . ', ' . $aValues[$sCenter] . '. ID: ' . $sVariantKey . "\n");
-                        unset($aData[$sVariantKey]); // Delete variant.
-                        continue 2; // Next line in the file.
-                    }
-                }
-                $aData[$sVariantKey][$sKey] = $sValue;
-            }
+            $aData[$sVariantKey][$sKey][] = $sValue;
         }
     }
 
@@ -790,12 +777,90 @@ foreach ($aFiles as $sFile => $sCenter) {
 
     lovd_printIfVerbose(VERBOSITY_MEDIUM,
         ' ' . date('H:i:s', time() - $tStart) . ' [' .
-        str_pad(number_format(($nFile/$nCentersFound)*100, 1), 5, ' ', STR_PAD_LEFT) .
+        str_pad(number_format(($nFile/$nCentersFound)*90, 1), 5, ' ', STR_PAD_LEFT) .
         '%] VKGL file successfully parsed, currently at ' . count($aData) . ' variants.' . "\n");
 }
 
+// Now, we'll figure out how to handle multiple entries per variant.
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
-    "\n" .
+    ' ' . date('H:i:s', time() - $tStart) . ' [' .
+    str_pad(number_format(90, 1), 5, ' ', STR_PAD_LEFT) .
+    '%] Checking VKGL data for intra-center duplicates...' . "\n");
+
+foreach ($aData as $sVariantKey => $aVariant) {
+    foreach ($aCentersFound as $sCenter) {
+        // Does this center even know this variant?
+        if (!isset($aVariant[$sCenter])) {
+            // Nope.
+            continue;
+
+        } elseif (count($aVariant[$sCenter]) == 1) {
+            // No duplicates, all cool.
+            foreach ([$sCenter, $sCenter . $_CONFIG['columns_center_suffix']] as $sKey) {
+                $aData[$sVariantKey][$sKey] = current($aVariant[$sKey]);
+            }
+            continue;
+        }
+
+        // OK, there are multiple entries. Not neccessarily a problem yet.
+        // Simplify storing the _link field.
+        $aData[$sVariantKey][$sCenter . $_CONFIG['columns_center_suffix']] = implode(
+            ', ',
+            array_unique($aVariant[$sCenter . $_CONFIG['columns_center_suffix']])
+        );
+
+        // Now, check the classifications.
+        $aClassifications = array_unique($aVariant[$sCenter]);
+        if (count($aClassifications) == 1) {
+            // Simple, just one classification.
+            $aData[$sVariantKey][$sCenter] = current($aClassifications);
+            // Do report.
+            lovd_printIfVerbose(VERBOSITY_HIGH,
+                '                   Warning: Center ' . $sCenter . ' has two entries for the same variant. ID: ' . $sVariantKey . "\n");
+
+        } else {
+            // Now we're actually in trouble. Internal conflict.
+            // First, report the issue.
+            lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                '                   Warning: Center ' . $sCenter . ' has an internal conflict; ' . implode(', ', $aClassifications) . '. ID: ' . $sVariantKey . "\n");
+
+            $bB   = in_array('benign', $aClassifications);
+            $bLB  = in_array('likely benign', $aClassifications);
+            $bVUS = in_array('VUS', $aClassifications);
+            $bLP  = in_array('likely pathogenic', $aClassifications);
+            $bP   = in_array('pathogenic', $aClassifications);
+            // Rules: report opposites; */VUS to VUS; LB/B to LB; LP/P to LP.
+            if (($bB || $bLB) && ($bLP || $bP)) {
+                // Internal conflict within center; a conflict that we can't resolve.
+                unset($aData[$sVariantKey][$sCenter]);
+                unset($aData[$sVariantKey][$sCenter . $_CONFIG['columns_center_suffix']]);
+
+            } elseif ($bVUS) {
+                // VUS and something else, not a conflict. OK, VUS then.
+                $aData[$sVariantKey][$sCenter] = 'VUS';
+
+            } elseif ($bB && $bLB) {
+                // B + LB. LB, then.
+                $aData[$sVariantKey][$sCenter] = 'likely benign';
+
+            } elseif ($bLP && $bP) { // Deliberately no else. If we messed up somewhere, we want to know.
+                // LP + P. LP, then.
+                $aData[$sVariantKey][$sCenter] = 'likely pathogenic';
+            }
+        }
+    }
+
+    // Drop the variant if now empty.
+    if (count($aData[$sVariantKey]) == 1) {
+        // We have only the protein field left, this variant is now empty.
+        unset($aData[$sVariantKey]);
+    }
+}
+
+lovd_printIfVerbose(VERBOSITY_MEDIUM,
+    ' ' . date('H:i:s', time() - $tStart) . ' [' .
+    str_pad(number_format(100, 1), 5, ' ', STR_PAD_LEFT) .
+    '%] VKGL data successfully cleaned, currently at ' . count($aData) . ' variants.' . "\n\n" .
     ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Writing consensus data file...' . "\n");
 
 
@@ -830,7 +895,7 @@ foreach ($aData as $sVariantKey => $aVariant) {
         $aVariantKey[4], // Gene.
         $aVariantKey[5], // Transcript.
         $aVariantKey[6], // cDNA.
-        implode(', ', array_unique($aVariant['protein'])),
+        implode(', ', array_filter(array_unique($aVariant['protein']))),
     );
 
     // Loop centers.
