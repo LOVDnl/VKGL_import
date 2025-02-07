@@ -764,26 +764,12 @@ foreach ($aFiles as $sFile => $sCenter) {
                 // These values cannot already exist.
                 if (isset($aData[$sVariantKey][$sKey])) {
                     // Center already seen for this variant?
-                    // 2021-02-04; VUMC now delivers *two* files of the same
-                    //  format, and with some overlap (right now 16 variants).
-                    // So we can't just die here anymore. There are some
-                    //  conflicts, which we'll need to drop, but the rest can
-                    //  just continue.
-                    if ($aData[$sVariantKey][$sCenter] == $aValues[$sCenter]) {
-                        // Same classification. It's OK, just overwrite.
-                        // Do report.
-                        lovd_printIfVerbose(VERBOSITY_HIGH,
-                            '                   Warning: Center ' . $sCenter . ' has two entries for the same variant. ID: ' . $sVariantKey . "\n");
-                    } else {
                         // Now we're actually in trouble. Internal conflict.
                         // We won't die, but we need to ignore BOTH entries.
                         lovd_printIfVerbose(VERBOSITY_MEDIUM,
                             '                   Warning: Center ' . $sCenter . ' has an internal conflict; ' . $aData[$sVariantKey][$sCenter] . ', ' . $aValues[$sCenter] . '. ID: ' . $sVariantKey . "\n");
                         unset($aData[$sVariantKey]); // Delete variant.
                         continue 2; // Next line in the file.
-                    }
-                }
-                $aData[$sVariantKey][$sKey] = $sValue;
         }
     }
 
@@ -824,6 +810,16 @@ foreach ($aData as $sVariantKey => $aVariant) {
             ', ',
             array_unique($aVariant[$sCenter . $_CONFIG['columns_center_suffix']])
         );
+
+        // Now, check the classifications.
+        $aClassifications = array_unique($aVariant[$sCenter]);
+        if (count($aClassifications) == 1) {
+            // Simple, just one classification.
+            $aData[$sVariantKey][$sCenter] = current($aClassifications);
+            // Do report.
+            lovd_printIfVerbose(VERBOSITY_HIGH,
+                '                   Warning: Center ' . $sCenter . ' has two entries for the same variant. ID: ' . $sVariantKey . "\n");
+        }
     }
 }
 
