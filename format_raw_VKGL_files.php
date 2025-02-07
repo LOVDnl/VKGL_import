@@ -760,16 +760,6 @@ foreach ($aFiles as $sFile => $sCenter) {
         }
         foreach ($aValues as $sKey => $sValue) {
             $aData[$sVariantKey][$sKey][] = $sValue;
-            continue;
-                // These values cannot already exist.
-                if (isset($aData[$sVariantKey][$sKey])) {
-                    // Center already seen for this variant?
-                        // Now we're actually in trouble. Internal conflict.
-                        // We won't die, but we need to ignore BOTH entries.
-                        lovd_printIfVerbose(VERBOSITY_MEDIUM,
-                            '                   Warning: Center ' . $sCenter . ' has an internal conflict; ' . $aData[$sVariantKey][$sCenter] . ', ' . $aValues[$sCenter] . '. ID: ' . $sVariantKey . "\n");
-                        unset($aData[$sVariantKey]); // Delete variant.
-                        continue 2; // Next line in the file.
         }
     }
 
@@ -819,12 +809,50 @@ foreach ($aData as $sVariantKey => $aVariant) {
             // Do report.
             lovd_printIfVerbose(VERBOSITY_HIGH,
                 '                   Warning: Center ' . $sCenter . ' has two entries for the same variant. ID: ' . $sVariantKey . "\n");
+
+        } else {
+            // Now we're actually in trouble. Internal conflict.
+            // First, report the issue.
+            lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                '                   Warning: Center ' . $sCenter . ' has an internal conflict; ' . implode(', ', $aClassifications) . '. ID: ' . $sVariantKey . "\n");
+
+            $bB   = in_array('benign', $aClassifications);
+            $bLB  = in_array('likely benign', $aClassifications);
+            $bVUS = in_array('VUS', $aClassifications);
+            $bLP  = in_array('likely pathogenic', $aClassifications);
+            $bP   = in_array('pathogenic', $aClassifications);
+            // Rules: report opposites; */VUS to VUS; LB/B to LB; LP/P to LP.
+            if (($bB || $bLB) && ($bLP || $bP)) {
+                // Internal conflict within center; a conflict that we can't resolve.
+                unset($aData[$sVariantKey][$sCenter]);
+                unset($aData[$sVariantKey][$sCenter . $_CONFIG['columns_center_suffix']]);
+
+            } elseif ($bVUS) {
+                // VUS and something else, not a conflict. OK, VUS then.
+                $aData[$sVariantKey][$sCenter] = 'VUS';
+
+            } elseif ($bB && $bLB) {
+                // B + LB. LB, then.
+                $aData[$sVariantKey][$sCenter] = 'likely benign';
+
+            } elseif ($bLP && $bP) { // Deliberately no else. If we messed up somewhere, we want to know.
+                // LP + P. LP, then.
+                $aData[$sVariantKey][$sCenter] = 'likely pathogenic';
+            }
         }
+    }
+
+    // Drop the variant if now empty.
+    if (count($aData[$sVariantKey]) == 1) {
+        // We have only the protein field left, this variant is now empty.
+        unset($aData[$sVariantKey]);
     }
 }
 
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
-    "\n" .
+    ' ' . date('H:i:s', time() - $tStart) . ' [' .
+    str_pad(number_format(100, 1), 5, ' ', STR_PAD_LEFT) .
+    '%] VKGL data successfully cleaned, currently at ' . count($aData) . ' variants.' . "\n\n" .
     ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Writing consensus data file...' . "\n");
 
 
