@@ -5,13 +5,16 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2025-02-07
+ * Modified    : 2025-05-01
  * Version     : 0.2.0
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
+ * Changelog   : 0.2.1  2025-05-01
+ *               Added more variant types to lovd_HGVStoVCF();
+ *               deletion-insertions and inversions.
  * Changelog   : 0.2.0  2025-02-07
  *               Re-implement the storage of variants and the filtering of
  *               duplicates completely. We were losing variants when only a
@@ -48,7 +51,7 @@
  *               0.1.0  2019-11-14
  *               Initial release.
  *
- * Copyright   : 2004-2024 Leiden University Medical Center; http://www.LUMC.nl/
+ * Copyright   : 2004-2025 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
  *
  *
@@ -78,7 +81,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.2.0',
+    'version' => '0.2.1',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -184,6 +187,16 @@ function lovd_HGVStoVCF ($sVariant) {
             $aVCF['ref'] = str_repeat('N', ($aRegs[3] - $aRegs[1] + 1));
         }
 
+    } elseif (preg_match('/^g.([0-9]+)(_([0-9]+))?delins([A-Z]+)$/', $sVariant, $aRegs)) {
+        // Deletion-insertions.
+        $aVCF['pos'] = $aRegs[1];
+        if (empty($aRegs[2])) {
+            $aVCF['ref'] = 'N';
+        } else {
+            $aVCF['ref'] = str_repeat('N', ($aRegs[3] - $aRegs[1] + 1));
+        }
+        $aVCF['alt'] = $aRegs[4];
+
     } elseif (preg_match('/^g.([0-9]+)(_([0-9]+))?dup$/', $sVariant, $aRegs)) {
         // Duplications.
         $aVCF['pos'] = $aRegs[1];
@@ -201,6 +214,12 @@ function lovd_HGVStoVCF ($sVariant) {
         $aVCF['pos'] = $aRegs[1];
         $aVCF['ref'] = 'N';
         $aVCF['alt'] = 'N' . $aRegs[2];
+
+    } elseif (preg_match('/^g.([0-9]+)_([0-9]+)inv$/', $sVariant, $aRegs)) {
+        // Inversions.
+        $aVCF['pos'] = $aRegs[1];
+        $aVCF['ref'] = str_repeat('N', ($aRegs[2] - $aRegs[1]) + 1);
+        $aVCF['alt'] = $aVCF['ref'];
 
     } else {
         return false;
