@@ -12,7 +12,8 @@
  *               VKGL data in the LOVD instance.
  *
  * Changelog   : 1.3     2025-05-02
- *               Handle WT variants that we're now receiving.
+ *               Handle WT variants that we're now receiving, and add more error
+ *               messages to the NC cache.
  *               1.2     2024-09-17
  *               Improved the script by re-using more LOVD code, removing custom
  *               built code. Also solved errors showing up when processing the
@@ -923,7 +924,7 @@ foreach ($aData as $nKey => $aVariant) {
             $aError = array();
             if (!empty($aResult['errors']) && isset($aResult['messages'])) {
                 foreach ($aResult['messages'] as $aMessage) {
-                    if (isset($aMessage['errorcode']) && in_array($aMessage['errorcode'], array('ERANGE', 'EREF'))) {
+                    if (isset($aMessage['errorcode'])) {
                         // Cache this error.
                         $aError[$aMessage['errorcode']] = $aMessage['message'];
                     }
@@ -1126,7 +1127,7 @@ foreach ($aData as $sVariant => $aVariant) {
                     // Rules: report opposites; */VUS to VUS; LB/B to LB; LP/P to LP.
                     if ((isset($aClassifications['B']) || isset($aClassifications['LB']))
                         && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
-                        // Internal conflict within center.
+                        // Internal conflict within center. These are reported in the opposites file.
                         lovd_printIfVerbose(VERBOSITY_MEDIUM,
                             ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                                 floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
