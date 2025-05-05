@@ -13,7 +13,7 @@
  *
  * Changelog   : 0.7     2025-05-05
  *               Skip all Mutalyzer errors to prevent issues and handle chrM:g
- *               issues.
+ *               issues. Also improve the debugging output.
  *               0.6     2024-08-29
  *               Also detect when run through the pipeline script; treat this as
  *               if we're being run by Cron.
@@ -351,6 +351,12 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
 
     // Update cache if needed.
     if ($bUpdateCache) {
+        // Prepare for debugging, in case it's needed.
+        $aDebugging = [
+            'input' => $sVariant,
+            'corrected_mutalyzer' => $sVariantCorrected,
+        ];
+
         // If we've been passed a mapping cache with VV annotations, use that to
         //  update the existing cache. This will save us a lot of time.
         if (isset($_CACHE['mutalyzer_cache_mapping_VV'][$sVariantCorrected])
@@ -376,16 +382,18 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
         } else {
             $tStartWait = microtime(true);
             // Call VV, don't limit to certain transcripts, we don't know which ones we'll want.
+            // Send the *original* variants, so we can double-check the outcome.
             $aResult = $_VV->verifyGenomicAndPredictProtein($sVariant);
             $nSecondsWaiting += (microtime(true) - $tStartWait);
             $nAPICalls ++;
             if (!$aResult) {
                 // Strange, VV failed completely for this variant.
+                $aDebugging['message'] = 'Error: Variant Validator failed.';
                 lovd_printIfVerbose(VERBOSITY_MEDIUM,
                     ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                         floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                         5, ' ', STR_PAD_LEFT) . '%] Error: Variant Validator failed for variant ' . $sVariant . ".\n" .
-                    '                   {' . $sVariant . '|' . $sVariantCorrected . '|FALSE||Error: Variant Validator failed.}' . "\n");
+                    preg_replace('/(^|\n)/', '$1                   ', json_encode($aDebugging, JSON_PRETTY_PRINT)) . "\n");
                 $nWarningsOccurred ++;
                 $nVariantsDone ++;
                 continue; // Next variant.
@@ -394,6 +402,11 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
 
         // If VV complains that the variant description has been corrected, we ignore this.
         unset($aResult['warnings']['WCORRECTED']);
+        $aDebugging += [
+            'corrected_VV' => ($aResult['data']['DNA'] ?? '(no results)'),
+            'errors_VV' => ($aResult['errors'] ?? []),
+            'warnings_VV' => ($aResult['warnings'] ?? []),
+        ];
 
         // If VV throws an error, at least make sure Mutalyzer has the same error.
         if ($aResult['errors']) {
@@ -416,11 +429,12 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                 // Assume errors mismatch, catch these errors and fix when we run into them.
                 // For now, VV fails on ERANGE errors, so we won't get here (yet).
                 // This happens when VV throws an error that Mutalyzer didn't.
+                $aDebugging['message'] = 'Error: Variant Validator error disagrees.';
                 lovd_printIfVerbose(VERBOSITY_MEDIUM,
                     ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                         floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                         5, ' ', STR_PAD_LEFT) . '%] Error: Variant Validator error disagrees for variant ' . $sVariant . ".\n" .
-                    '                   {' . $sVariant . '|' . $sVariantCorrected . '|(no results)|' . implode(';', $aResult['warnings']) . '|Error: Variant Validator error disagrees: ' . implode(';', $aResult['errors']) . '}' . "\n");
+                    preg_replace('/(^|\n)/', '$1                   ', json_encode($aDebugging, JSON_PRETTY_PRINT)) . "\n");
                 $nWarningsOccurred ++;
             }
             $nVariantsDone ++;
@@ -428,11 +442,12 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
 
         } elseif ($aResult['data']['DNA'] != $sVariantCorrected) {
             // Variant threw no error, but Variant Validator disagrees with Mutalyzer.
+            $aDebugging['message'] = 'Error: Variant predictors disagree.';
             lovd_printIfVerbose(VERBOSITY_MEDIUM,
                 ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                     floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                     5, ' ', STR_PAD_LEFT) . '%] Error: Variant predictors disagree for variant ' . $sVariant . ".\n" .
-                '                   {' . $sVariant . '|' . $sVariantCorrected . '|' . $aResult['data']['DNA'] . '|' . implode(';', $aResult['warnings']) . '|Error: Variant predictors disagree.}' . "\n");
+                preg_replace('/(^|\n)/', '$1                   ', json_encode($aDebugging, JSON_PRETTY_PRINT)) . "\n");
             $nWarningsOccurred ++;
             $nVariantsDone ++;
             continue; // Next variant.
