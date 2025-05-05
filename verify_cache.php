@@ -5,14 +5,15 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2020-04-02
- * Modified    : 2024-08-29
- * Version     : 0.6
- * For LOVD    : 3.0-24
+ * Modified    : 2025-05-05
+ * Version     : 0.7
  *
  * Purpose     : Checks the NC cache and extends the mapping cache using the new
  *               Variant Validator object.
  *
- * Changelog   : 0.6     2024-08-29
+ * Changelog   : 0.7     2025-05-05
+ *               Skip all Mutalyzer errors to prevent issues.
+ *               0.6     2024-08-29
  *               Also detect when run through the pipeline script; treat this as
  *               if we're being run by Cron.
  *               0.5     2023-07-14
@@ -65,7 +66,7 @@ define('CWD', dirname(__FILE__) . '/');
 // Default settings. We won't verify any setting, that's up to the process script.
 $_CONFIG = array(
     'name' => 'VKGL cache verification using Variant Validator',
-    'version' => '0.6',
+    'version' => '0.7',
     'settings_file' => CWD . 'settings.json',
     'VV_URL' => 'https://rest.variantvalidator.org/',
     'user' => array(
@@ -330,9 +331,8 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
     if ($sVariant[0] == '#') {
         continue;
     }
-    // Also skip EREF errors. We know VV handles them well, but because these
-    //  are not in the mapping cache, we keep resending them to VV.
-    if (in_array(substr($sVariantCorrected, 0, 8), array('{"EREF":', '{"ERANGE', 'null'))) {
+    // Also skip Mutalyzer errors. This prevents issues with variants being resent to VV all the time.
+    if (substr($sVariantCorrected, 0, 2) != 'NC') {
         $nVariantsDone ++;
         continue; // Next variant.
     }
