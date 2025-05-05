@@ -12,7 +12,8 @@
  *               Variant Validator object.
  *
  * Changelog   : 0.7     2025-05-05
- *               Skip all Mutalyzer errors to prevent issues.
+ *               Skip all Mutalyzer errors to prevent issues and handle chrM:g
+ *               issues.
  *               0.6     2024-08-29
  *               Also detect when run through the pipeline script; treat this as
  *               if we're being run by Cron.
@@ -409,7 +410,9 @@ foreach ($_CACHE['mutalyzer_cache_NC'] as $sVariant => $sVariantCorrected) {
                 // Errors match.
                 unset($aResult['errors']['ESYNTAX']);
             }
-            if ($aResult['errors']) {
+            // Ignore issues with chrM:g variants that we created ourselves by error when processing the Franklin data.
+            if ($aResult['errors']
+                && !(count($aResult['errors']) == 1 && str_contains($aResult['errors'][0], 'For NC_012920.1, please use (m).'))) {
                 // Assume errors mismatch, catch these errors and fix when we run into them.
                 // For now, VV fails on ERANGE errors, so we won't get here (yet).
                 // This happens when VV throws an error that Mutalyzer didn't.
