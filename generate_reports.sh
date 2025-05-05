@@ -37,13 +37,13 @@ echo "Created vkgl_opposites_${DATE}.log.";
 # All stats can be fetched from the last run.
 DATA=$(grep -EA4 "\[(100.0%|Totals)\]" output.03.full-run-with-deletes.log)
 echo "
-Unique variants received : $(echo "$DATA" | grep "VKGL file successfully parsed," | sed 's/^ *//' | cut -d \  -f 8) (after filtering out internal conflicts)
+Unique variants received : $(echo "$DATA" | grep "VKGL file successfully parsed," | sed 's/^ *//' | cut -d \  -f 8) (after filtering out most internal conflicts)
 Unique variants in error : $(echo "$DATA" | grep "Variants lost:" | sed 's/^ *//' | cut -d \  -f 3 | cut -d . -f 1)    -
 Unique variants merged   : $(echo "$DATA" | grep "variants merged. Variants left:" | sed 's/^ *//' | cut -d \  -f 3)  -
                            ======
 Unique variants left     : $(echo "$DATA" | grep "variants merged. Variants left:" | sed 's/^ *//' | cut -d \  -f 8 | cut -d . -f 1)
                            ======
-$(echo "$DATA" | grep -A 3 "Single-lab" | sed 's/^        //')
+$(echo "$DATA" | grep -A 3 "Single-lab" | sed 's/^        //')    (including the last internal conflicts)
 =================================
 Total classifications    : $(echo "$DATA" | tail | grep " Variants " | grep -v "deleted" | cut -b 20- | cut -d : -f 2- | sed 's/\.$//' | paste -sd+ | bc)
                            ======
