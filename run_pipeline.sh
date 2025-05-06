@@ -316,7 +316,7 @@ else
     echo "${OUTPUT}" | sed "s/^/                       /" >> "${LOG}";
     echo "$(date '+%Y-%m-%d %H:%M:%S') OK Successfully copied the data to Web01." >> "${LOG}";
 
-    OUTPUT=$(../copy_data_to_kg.sh 2>&1);
+    OUTPUT=$(../copy_data_to_kg-web01.sh 2>&1);
     if [ $? -ne 0 ];
     then
         # This failed.

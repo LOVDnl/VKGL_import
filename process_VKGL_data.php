@@ -5,14 +5,16 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2024-09-17
- * Version     : 1.2
- * For LOVD    : 3.0-30
+ * Modified    : 2025-05-02
+ * Version     : 1.3
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 1.2     2024-09-17
+ * Changelog   : 1.3     2025-05-02
+ *               Handle WT variants that we're now receiving, and add more error
+ *               messages to the NC cache.
+ *               1.2     2024-09-17
  *               Improved the script by re-using more LOVD code, removing custom
  *               built code. Also solved errors showing up when processing the
  *               data on LOVD+ and when processing very long variants. From now
@@ -117,7 +119,7 @@ define('CWD', dirname(__FILE__) . '/');
 // Default settings. Everything in 'user' will be verified with the user, and stored in settings.json.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '1.2',
+    'version' => '1.3',
     'settings_file' => CWD . 'settings.json',
     'flags' => array(
         'n' => false, // Dry run.
@@ -895,14 +897,34 @@ foreach ($aData as $nKey => $aVariant) {
 
     // Update cache if needed.
     if ($bUpdateCache) {
-        $aResult = json_decode(file_get_contents($_CONFIG['mutalyzer_URL'] . '/json/runMutalyzerLight?variant=' . $sVariant), true);
+        // Hold on; is this a WT variant? If so, Mutalyzer doesn't handle that.
+        // Plus, we don't have to check its description.
+        $aResult = [];
+        if (substr($sVariant, -1) == '=') {
+            // Well, OK, don't blindly accept it, double-check.
+            $aLOVD = json_decode(file_get_contents('https://api.lovd.nl/v2/checkHGVS/' . rawurlencode($sVariant)), true);
+            if ($aLOVD && !$aLOVD['errors'] && $aLOVD['data'][0]['corrected_values']) {
+                // Fake a successful Mutalyzer result.
+                $aResult = [
+                    'genomicDescription' => key($aLOVD['data'][0]['corrected_values']),
+                    'legend' => [], // No transcripts; we'll use VV.
+                    'transcriptDescriptions' => [], // No mappings; we'll use VV.
+                    'proteinDescriptions' => [], // No mappings; we'll use VV.
+                ];
+            }
+        }
+
+        if (!$aResult) {
+            // Call Mutalyzer only when we didn't call our own tool yet.
+            $aResult = json_decode(file_get_contents($_CONFIG['mutalyzer_URL'] . '/json/runMutalyzerLight?variant=' . $sVariant), true);
+        }
         if (!$aResult || !isset($aResult['genomicDescription'])) {
             // Error? Just report. They must be new variants, anyway.
             // If this is a recognized Mutalyzer error, we want to cache this as well, so we won't keep running into it.
             $aError = array();
             if (!empty($aResult['errors']) && isset($aResult['messages'])) {
                 foreach ($aResult['messages'] as $aMessage) {
-                    if (isset($aMessage['errorcode']) && in_array($aMessage['errorcode'], array('ERANGE', 'EREF'))) {
+                    if (isset($aMessage['errorcode'])) {
                         // Cache this error.
                         $aError[$aMessage['errorcode']] = $aMessage['message'];
                     }
@@ -1105,7 +1127,7 @@ foreach ($aData as $sVariant => $aVariant) {
                     // Rules: report opposites; */VUS to VUS; LB/B to LB; LP/P to LP.
                     if ((isset($aClassifications['B']) || isset($aClassifications['LB']))
                         && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
-                        // Internal conflict within center.
+                        // Internal conflict within center. These are reported in the opposites file.
                         lovd_printIfVerbose(VERBOSITY_MEDIUM,
                             ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                                 floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
