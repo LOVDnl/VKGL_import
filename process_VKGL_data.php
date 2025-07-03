@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2025-05-02
+ * Modified    : 2025-07-03
  * Version     : 1.3
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
@@ -1312,6 +1312,49 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
                 return '                   ' . str_pad(ucfirst($sKey), $lPadding, ' ') . ' : ' . $nValue;
             }, array_keys($aStatusCounts), array_values($aStatusCounts))) . "\n" .
     '                   {ConflictHeader|# Variant (HGVS, normalized)|Gene(s)|' . implode('|', array_keys($aCenterIDs)) . "}\n\n" .
+    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Writing data file...' . "\n");
+
+
+
+
+
+// Create a data file. We can keep things simple and just dump the data here.
+// We don't need another script then process that file, we can keep processing it.
+// However, having a data file allows us to check for changes in the data set.
+ksort($aData, SORT_NATURAL);
+$sOutFile = preg_replace(['/(\.tsv|\.txt)$/', '/$/'], ['', '.normalized-data.tsv'], $sFile);
+$fOutput = fopen($sOutFile, 'w');
+fputs($fOutput, "normalized_variant\tstatus\t" . implode("\t", $aCentersFound) . "\tids\tgenes\treported_as\n");
+foreach ($aData as $sVariant => $aVariant) {
+    $aLine = [
+        $sVariant,
+        $aVariant['status'],
+    ];
+    foreach ($aCentersFound as $sCenter) {
+        $aLine[] = ($aVariant['classifications'][$sCenter] ?? '');
+    }
+    $aIDs = array_unique($aVariant['id']);
+    sort($aIDs);
+    $aLine[] = implode(';', $aIDs);
+    $aGenes = [];
+    foreach ($aVariant['genes'] as $Gene) {
+        if (is_array($Gene)) {
+            $aGenes = array_merge($aGenes, $Gene);
+        } else {
+            $aGenes[] = $Gene;
+        }
+    }
+    $aGenes = array_unique($aGenes);
+    sort($aGenes);
+    $aLine[] = implode(';', $aGenes);
+    $aLine[] = implode(', ', $aVariant['published_as']);
+    fputs($fOutput, implode("\t", $aLine) . "\n");
+}
+fclose($fOutput);
+
+// Report progress to the screen and continue.
+lovd_printIfVerbose(VERBOSITY_MEDIUM,
+    ' ' . date('H:i:s', time() - $tStart) . ' [100.0%] Done.' . "\n" .
     ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Verifying transcript variants...' . "\n");
 
 
@@ -1605,7 +1648,6 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
 
 
 // Process updates in the database.
-ksort($aData);
 $nVariantsDone = 0;
 $nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you can see the progress.
 $tProgressReported = microtime(true); // Don't report progress again within a certain amount of time.
