@@ -6,12 +6,16 @@
  *
  * Created     : 2019-06-27
  * Modified    : 2025-07-03
- * Version     : 1.3
+ * Version     : 1.4
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 1.3     2025-05-02
+ * Changelog   : 1.4     2025-07-03
+ *               Create a data file while processing the data. This allows us to
+ *               see what is actually the result of the normalization. What are
+ *               we loading into the database?
+ *               1.3     2025-05-02
  *               Handle WT variants that we're now receiving, and add more error
  *               messages to the NC cache.
  *               1.2     2024-09-17
@@ -119,7 +123,7 @@ define('CWD', dirname(__FILE__) . '/');
 // Default settings. Everything in 'user' will be verified with the user, and stored in settings.json.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '1.3',
+    'version' => '1.4',
     'settings_file' => CWD . 'settings.json',
     'flags' => array(
         'n' => false, // Dry run.
