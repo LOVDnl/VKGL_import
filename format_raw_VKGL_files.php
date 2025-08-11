@@ -5,14 +5,17 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2025-05-01
- * Version     : 0.2.0
+ * Modified    : 2025-08-11
+ * Version     : 0.2.2
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.2.1  2025-05-01
+ * Changelog   : 0.2.2  2025-08-11
+ *               Allow for genomic variants starting with "m."; this is normal
+ *               for mitochondrial genes.
+ *             : 0.2.1  2025-05-01
  *               Added more variant types to lovd_HGVStoVCF();
  *               deletion-insertions and inversions.
  * Changelog   : 0.2.0  2025-02-07
@@ -81,7 +84,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.2.1',
+    'version' => '0.2.2',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -173,11 +176,11 @@ function lovd_HGVStoVCF ($sVariant) {
         $sVariant = substr($sVariant, strlen($aRegs[0]));
     }
 
-    if (preg_match('/^g.([0-9]+)([A-Z])>([A-Z])$/', $sVariant, $aRegs)) {
+    if (preg_match('/^[gm]\.([0-9]+)([A-Z])>([A-Z])$/', $sVariant, $aRegs)) {
         // Substitutions.
         list(,$aVCF['pos'], $aVCF['ref'], $aVCF['alt']) = $aRegs;
 
-    } elseif (preg_match('/^g.([0-9]+)(_([0-9]+))?del$/', $sVariant, $aRegs)) {
+    } elseif (preg_match('/^[gm]\.([0-9]+)(_([0-9]+))?del$/', $sVariant, $aRegs)) {
         // Deletions.
         $aVCF['pos'] = $aRegs[1];
         $aVCF['alt'] = '.';
@@ -187,7 +190,7 @@ function lovd_HGVStoVCF ($sVariant) {
             $aVCF['ref'] = str_repeat('N', ($aRegs[3] - $aRegs[1] + 1));
         }
 
-    } elseif (preg_match('/^g.([0-9]+)(_([0-9]+))?delins([A-Z]+)$/', $sVariant, $aRegs)) {
+    } elseif (preg_match('/^[gm]\.([0-9]+)(_([0-9]+))?delins([A-Z]+)$/', $sVariant, $aRegs)) {
         // Deletion-insertions.
         $aVCF['pos'] = $aRegs[1];
         if (empty($aRegs[2])) {
@@ -197,7 +200,7 @@ function lovd_HGVStoVCF ($sVariant) {
         }
         $aVCF['alt'] = $aRegs[4];
 
-    } elseif (preg_match('/^g.([0-9]+)(_([0-9]+))?dup$/', $sVariant, $aRegs)) {
+    } elseif (preg_match('/^[gm]\.([0-9]+)(_([0-9]+))?dup$/', $sVariant, $aRegs)) {
         // Duplications.
         $aVCF['pos'] = $aRegs[1];
         if (empty($aRegs[2])) {
@@ -208,14 +211,14 @@ function lovd_HGVStoVCF ($sVariant) {
             $aVCF['alt'] = str_repeat('N', strlen($aVCF['ref']) * 2);
         }
 
-    } elseif (preg_match('/^g.([0-9]+)_[0-9]+ins([A-Z]+)$/', $sVariant, $aRegs)) {
+    } elseif (preg_match('/^[gm]\.([0-9]+)_[0-9]+ins([A-Z]+)$/', $sVariant, $aRegs)) {
         // Insertions.
         // This is totally breaking the VCF standard, but whatever, it's what the VKGL uses.
         $aVCF['pos'] = $aRegs[1];
         $aVCF['ref'] = 'N';
         $aVCF['alt'] = 'N' . $aRegs[2];
 
-    } elseif (preg_match('/^g.([0-9]+)_([0-9]+)inv$/', $sVariant, $aRegs)) {
+    } elseif (preg_match('/^[gm]\.([0-9]+)_([0-9]+)inv$/', $sVariant, $aRegs)) {
         // Inversions.
         $aVCF['pos'] = $aRegs[1];
         $aVCF['ref'] = str_repeat('N', ($aRegs[2] - $aRegs[1]) + 1);
