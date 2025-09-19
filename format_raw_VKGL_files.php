@@ -5,8 +5,8 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2025-08-11
- * Version     : 0.2.2
+ * Modified    : 2025-09-19
+ * Version     : 0.2.3
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
@@ -84,7 +84,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.2.2',
+    'version' => '0.2.3',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -534,11 +534,10 @@ foreach ($aFiles as $sFile => $sCenter) {
 
     $aHeaders = array();
     $nHeaders = 0;
-    $nLine = 0;
     $sFileType = '';
 
-    $fInput = fopen($sFile, 'r');
-    if ($fInput === false) {
+    $aLines = file($sFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!$aLines) {
         lovd_printIfVerbose(VERBOSITY_LOW,
             'Error: Can not open file:' . $sFile . ".\n\n");
         die(EXIT_ERROR_INPUT_CANT_OPEN);
@@ -547,35 +546,29 @@ foreach ($aFiles as $sFile => $sCenter) {
     // The Radboud data doesn't have a header :(
     if ($sCenter == 'radboud_mumc') {
         // Invent the header.
-        $sLine = implode("\t", array(
-            'chromosome',
-            'start',
-            'stop',
-            'ref',
-            'alt',
-            'gene',
-            'transcript_or_dna',
-            'empty',
-            'empty',
-            'location',
-            'empty',
-            'classification',
-        ));
-
-    } else {
-        // Loop through data until we get a header.
-        while ($sLine = fgets($fInput)) {
-            $nLine++;
-            $sLine = strtolower(rtrim($sLine));
-            if (!$sLine) {
-                continue;
-            }
-            break;
-        }
+        array_unshift(
+            $aLines,
+            implode("\t",
+                [
+                    'chromosome',
+                    'start',
+                    'stop',
+                    'ref',
+                    'alt',
+                    'gene',
+                    'transcript_or_dna',
+                    'empty',
+                    'empty',
+                    'location',
+                    'empty',
+                    'classification',
+                ]
+            )
+        );
     }
 
     // First line should be headers.
-    $aHeaders = explode("\t", $sLine);
+    $aHeaders = explode("\t", strtolower(array_shift($aLines)));
     $nHeaders = count($aHeaders);
     $aHeaders = array_map('trim', $aHeaders, array_fill(0, $nHeaders, '"'));
 
@@ -600,14 +593,9 @@ foreach ($aFiles as $sFile => $sCenter) {
 
 
 
-    while ($sLine = fgets($fInput)) {
+    foreach ($aLines as $nLine => $sLine) {
         $nLine++;
-        $sLine = rtrim($sLine);
-        if (!$sLine) {
-            continue;
-        }
-
-        $aDataLine = explode("\t", $sLine);
+        $aDataLine = explode("\t", rtrim($sLine));
         // Trim quotes off of the data.
         $aDataLine = array_map(function($sData) {
             return trim($sData, '"');
