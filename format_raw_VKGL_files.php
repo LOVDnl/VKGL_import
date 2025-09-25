@@ -5,14 +5,17 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2025-08-11
- * Version     : 0.2.2
+ * Modified    : 2025-09-25
+ * Version     : 0.2.3
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.2.2  2025-08-11
+ * Changelog   : 0.2.3  2025-09-25
+ *               Allow processing JSON files, too. Currently, we only support
+ *               the JSON data from the NKI.
+ *               0.2.2  2025-08-11
  *               Allow for genomic variants starting with "m."; this is normal
  *               for mitochondrial genes.
  *             : 0.2.1  2025-05-01
@@ -84,7 +87,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.2.2',
+    'version' => '0.2.3',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -103,19 +106,26 @@ $_CONFIG = array(
     ),
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
     'header_signatures' => array(
-        'alt;c;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;' .
-            'ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
-        'alt;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;' .
-            'ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
-        'alt;alt_orig;c_nomen;chrom;chromosome;classification;effect;exon;gene;hgvs_normalized_vkgl;id;' .
-            'last_updated_by;last_updated_on;location;p_nomen;pos;ref;ref_orig;significance;start;stop;timestamp;' .
-            'transcript;type;variant_type' => 'alissa2',
-        'alt;c;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;' .
-            'ref;start;stop;transcript;variant_type' => 'alissa', // Apparently, Groningen used to edit the files and added the id and timestamp fields. Alissa files from the SFTP server don't have those fields.
-        'alt;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;' .
-            'ref;start;stop;transcript;variant_type' => 'alissa', // 2024-02 + 2024-04; Due to a personnel change at Alissa without a proper handover, manual exports are being generated with yet another signature.
+        // Alissa:
+        'alt;c;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
+        'alt;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
+        'alt;alt_orig;c_nomen;chrom;chromosome;classification;effect;exon;gene;hgvs_normalized_vkgl;id;last_updated_by;last_updated_on;location;p_nomen;pos;ref;ref_orig;significance;start;stop;timestamp;transcript;type;variant_type' => 'alissa2',
+        // Apparently, Groningen used to edit the files and added the id and timestamp fields. Alissa files from the SFTP server don't have those fields.
+        'alt;c;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa',
+        // 2024-02 + 2024-04; Due to a personnel change at Alissa without a proper handover, manual exports are being generated with yet another signature.
+        'alt;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa',
+
+        // LUMC:
         'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc',
+
+        // Radboud/MUMC+:
         'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud',
+
+        // Parsed JSON formats:
+        'alt;annotation;build;cdna;chromosome;classification;gene;position;protein;ref;transcript' => 'JSON',
+    ),
+    'header_signatures_JSON' => array(
+        '_id;alternative;build;cNomen;category;chromosome;classification;date;description;display_id;effect;end;exon;gene_symbol;institute;location;maintainer;managed_variant_id;pNomen;position;reference;sub_category;type;variant_id;variant_info' => 'nki',
     ),
     'mutalyzer_URL' => 'https://v2.mutalyzer.nl/',
     'user' => array(
@@ -442,8 +452,11 @@ $nCentersFound = 0;
 
 foreach ($aFiles as $nKey => $sFile) {
     list($sName, $sExt) = explode('.', basename($sFile), 2);
-    $aCentersFound[] = $sName;
-    $nCentersFound ++;
+    // Allow multiple files per center.
+    if (!in_array($sName, $aCentersFound)) {
+        $aCentersFound[] = $sName;
+        $nCentersFound ++;
+    }
 
     // Make file key in array, so we can store metadata.
     $aFiles[$sFile] = $sName;
@@ -534,11 +547,10 @@ foreach ($aFiles as $sFile => $sCenter) {
 
     $aHeaders = array();
     $nHeaders = 0;
-    $nLine = 0;
     $sFileType = '';
 
-    $fInput = fopen($sFile, 'r');
-    if ($fInput === false) {
+    $aLines = file($sFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!$aLines) {
         lovd_printIfVerbose(VERBOSITY_LOW,
             'Error: Can not open file:' . $sFile . ".\n\n");
         die(EXIT_ERROR_INPUT_CANT_OPEN);
@@ -547,35 +559,118 @@ foreach ($aFiles as $sFile => $sCenter) {
     // The Radboud data doesn't have a header :(
     if ($sCenter == 'radboud_mumc') {
         // Invent the header.
-        $sLine = implode("\t", array(
-            'chromosome',
-            'start',
-            'stop',
-            'ref',
-            'alt',
-            'gene',
-            'transcript_or_dna',
-            'empty',
-            'empty',
-            'location',
-            'empty',
-            'classification',
-        ));
+        array_unshift(
+            $aLines,
+            implode("\t",
+                [
+                    'chromosome',
+                    'start',
+                    'stop',
+                    'ref',
+                    'alt',
+                    'gene',
+                    'transcript_or_dna',
+                    'empty',
+                    'empty',
+                    'location',
+                    'empty',
+                    'classification',
+                ]
+            )
+        );
+    }
 
-    } else {
-        // Loop through data until we get a header.
-        while ($sLine = fgets($fInput)) {
-            $nLine++;
-            $sLine = strtolower(rtrim($sLine));
-            if (!$sLine) {
-                continue;
+
+
+    if (strrchr($sFile, '.') == '.json') {
+        // The simplest way is to convert the JSON data into TSV data and then throw that into the parser.
+        // It means the TSV gets created and then parsed again, but that's fine for now.
+        // We should later probably handle this in a better (OOP) way, but for now, this works just fine.
+
+        // Parse the JSON data. Let's keep this simple.
+        $aJSON = json_decode(implode($aLines), true);
+        if (!$aJSON) {
+            lovd_printIfVerbose(VERBOSITY_LOW,
+                'Error: Can not parse file:' . $sFile . ".\n\n");
+            die(EXIT_ERROR_INPUT_CANT_OPEN);
+        }
+
+        // The keys of this array should all be numeric; it should be an array of objects.
+        if (array_filter(array_keys($aJSON), 'is_string') || !is_array(current($aJSON))
+            || !array_filter(array_keys(current($aJSON)), 'is_string')) {
+            // String keys in this array, first child is not an array, or first child does not have string keys.
+            lovd_printIfVerbose(VERBOSITY_LOW,
+                'Error: JSON data is not an array of objects:' . $sFile . ".\n\n");
+            die(EXIT_ERROR_INPUT_CANT_OPEN);
+        }
+
+        // OK, now collect the signature and figure out what format this is.
+        $aSignature = array_keys(current($aJSON));
+        sort($aSignature);
+        $sHeaderSignature = implode(';', $aSignature);
+        if (!isset($_CONFIG['header_signatures_JSON'][$sHeaderSignature])) {
+            lovd_printIfVerbose(VERBOSITY_LOW,
+                'Error: File does not conform to any known JSON format: ' . $sFile . ".\n({$sHeaderSignature})\n\n");
+            die(EXIT_ERROR_HEADER_FIELDS_INCORRECT);
+        } else {
+            $sFileType = $_CONFIG['header_signatures_JSON'][$sHeaderSignature];
+        }
+
+        // Build the header first, then loop the data and build the data file.
+        $aLines = [
+            implode("\t",
+                [
+                    'build',
+                    'chromosome',
+                    'position',
+                    'ref',
+                    'alt',
+                    'gene',
+                    'transcript',
+                    'cDNA',
+                    'protein',
+                    'classification',
+                    'annotation',
+                ]
+            )
+        ];
+        foreach ($aJSON as $aVariant) {
+            switch ($sFileType) {
+                case 'nki':
+                    $aVariant['classification'] = strtolower($aVariant['classification']);
+
+                    // Skip artefacts.
+                    if ($aVariant['classification'] == 'artefact') {
+                        continue 2;
+                    }
+
+                    // Build the data array. Keys aren't used, but it's useful for readability.
+                    $aLine = [
+                        'build' => 'GRCh' . $aVariant['build'],
+                        'chromosome' => $aVariant['chromosome'],
+                        'position' => $aVariant['position'],
+                        'ref' => $aVariant['reference'],
+                        'alt' => $aVariant['alternative'],
+                        'gene' => $aVariant['gene_symbol']['hgnc_symbol'],
+                        // I found two examples where the primary transcript had a different cDNA description than the
+                        //  MANE transcript, and that the cDNA description matched the primary transcript.
+                        //  So we'll use that.
+                        'transcript' => $aVariant['gene_symbol']['primary_transcripts'][0],
+                        'cDNA' => $aVariant['cNomen'],
+                        'protein' => $aVariant['pNomen'],
+                        'classification' => str_replace('vous', 'VUS', $aVariant['classification']),
+                        'annotation' => implode(',', $aVariant['maintainer']),
+                    ];
+                    $aLines[] = implode("\t", $aLine);
+                    break;
             }
-            break;
         }
     }
 
+
+
     // First line should be headers.
-    $aHeaders = explode("\t", $sLine);
+    $aHeaders = explode("\t", strtolower(array_shift($aLines)));
     $nHeaders = count($aHeaders);
     $aHeaders = array_map('trim', $aHeaders, array_fill(0, $nHeaders, '"'));
 
@@ -600,14 +695,9 @@ foreach ($aFiles as $sFile => $sCenter) {
 
 
 
-    while ($sLine = fgets($fInput)) {
+    foreach ($aLines as $nLine => $sLine) {
         $nLine++;
-        $sLine = rtrim($sLine);
-        if (!$sLine) {
-            continue;
-        }
-
-        $aDataLine = explode("\t", $sLine);
+        $aDataLine = explode("\t", rtrim($sLine));
         // Trim quotes off of the data.
         $aDataLine = array_map(function($sData) {
             return trim($sData, '"');
@@ -771,6 +861,23 @@ foreach ($aFiles as $sFile => $sCenter) {
                     $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['classification'],
                 );
                 break;
+
+            case 'JSON':
+                $sVariantKey = implode('|', array(
+                    $aDataLine['chromosome'],
+                    $aDataLine['position'],
+                    $aDataLine['ref'],
+                    $aDataLine['alt'],
+                    $aDataLine['gene'],
+                    $aDataLine['transcript'],
+                    $aDataLine['cdna'],
+                ));
+                $aValues = array(
+                    'protein' => $aDataLine['protein'],
+                    $sCenter => $aDataLine['classification'],
+                    $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['annotation'],
+                );
+                break;
         }
 
         if (!$sVariantKey) {
@@ -793,9 +900,11 @@ foreach ($aFiles as $sFile => $sCenter) {
         }
     }
 
-    // Also add center to headers for output.
-    $_CONFIG['columns_mandatory'][] = $sCenter;
-    $_CONFIG['columns_mandatory'][] = $sCenter . $_CONFIG['columns_center_suffix'];
+    // Also add center to headers for output, as long as it's not there already.
+    if (!in_array($sCenter, $_CONFIG['columns_mandatory'])) {
+        $_CONFIG['columns_mandatory'][] = $sCenter;
+        $_CONFIG['columns_mandatory'][] = $sCenter . $_CONFIG['columns_center_suffix'];
+    }
 
     lovd_printIfVerbose(VERBOSITY_MEDIUM,
         ' ' . date('H:i:s', time() - $tStart) . ' [' .

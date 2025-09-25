@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Created  : 2023-10-10
-# Modified : 2024-10-04
+# Modified : 2025-09-25
 
 # Because the crontab got too complex, better make this a script.
 
@@ -79,7 +79,7 @@ then
     echo "$(date '+%Y-%m-%d %H:%M:%S')    Formatting and grouping the files..." >> "${LOG}";
     tail -n 1 "${LOG}";
     # Also pipe STDERR to the log file so we can catch what went wrong.
-    ../format_raw_VKGL_files.php *.txt -y > "${OUTFILE}" 2>&1;
+    ../format_raw_VKGL_files.php *.txt *.json -y > "${OUTFILE}" 2>&1;
     if [ $? -ne 0 ];
     then
         # This failed.
