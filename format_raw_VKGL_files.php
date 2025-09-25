@@ -103,19 +103,23 @@ $_CONFIG = array(
     ),
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
     'header_signatures' => array(
-        'alt;c;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;' .
-            'ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
-        'alt;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;' .
-            'ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
-        'alt;alt_orig;c_nomen;chrom;chromosome;classification;effect;exon;gene;hgvs_normalized_vkgl;id;' .
-            'last_updated_by;last_updated_on;location;p_nomen;pos;ref;ref_orig;significance;start;stop;timestamp;' .
-            'transcript;type;variant_type' => 'alissa2',
-        'alt;c;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;' .
-            'ref;start;stop;transcript;variant_type' => 'alissa', // Apparently, Groningen used to edit the files and added the id and timestamp fields. Alissa files from the SFTP server don't have those fields.
-        'alt;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;' .
-            'ref;start;stop;transcript;variant_type' => 'alissa', // 2024-02 + 2024-04; Due to a personnel change at Alissa without a proper handover, manual exports are being generated with yet another signature.
+        // Alissa:
+        'alt;c;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
+        'alt;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
+        'alt;alt_orig;c_nomen;chrom;chromosome;classification;effect;exon;gene;hgvs_normalized_vkgl;id;last_updated_by;last_updated_on;location;p_nomen;pos;ref;ref_orig;significance;start;stop;timestamp;transcript;type;variant_type' => 'alissa2',
+        // Apparently, Groningen used to edit the files and added the id and timestamp fields. Alissa files from the SFTP server don't have those fields.
+        'alt;c;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa',
+        // 2024-02 + 2024-04; Due to a personnel change at Alissa without a proper handover, manual exports are being generated with yet another signature.
+        'alt;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa',
+
+        // LUMC:
         'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc',
+
+        // Radboud/MUMC+:
         'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud',
+
+        // Parsed JSON formats:
+        'alt;annotation;build;cdna;chromosome;classification;gene;position;protein;ref;transcript' => 'JSON',
     ),
     'header_signatures_JSON' => array(
         '_id;alternative;build;cNomen;category;chromosome;classification;date;description;display_id;effect;end;exon;gene_symbol;institute;location;maintainer;managed_variant_id;pNomen;position;reference;sub_category;type;variant_id;variant_info' => 'nki',
@@ -849,6 +853,23 @@ foreach ($aFiles as $sFile => $sCenter) {
                             'pathogenic',
                         ), strtolower($aDataLine['classification'])),
                     $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['classification'],
+                );
+                break;
+
+            case 'JSON':
+                $sVariantKey = implode('|', array(
+                    $aDataLine['chromosome'],
+                    $aDataLine['position'],
+                    $aDataLine['ref'],
+                    $aDataLine['alt'],
+                    $aDataLine['gene'],
+                    $aDataLine['transcript'],
+                    $aDataLine['cdna'],
+                ));
+                $aValues = array(
+                    'protein' => $aDataLine['protein'],
+                    $sCenter => $aDataLine['classification'],
+                    $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['annotation'],
                 );
                 break;
         }
