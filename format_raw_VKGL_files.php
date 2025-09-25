@@ -117,6 +117,9 @@ $_CONFIG = array(
         'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc',
         'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud',
     ),
+    'header_signatures_JSON' => array(
+        '_id;alternative;build;cNomen;category;chromosome;classification;date;description;display_id;effect;end;exon;gene_symbol;institute;location;maintainer;managed_variant_id;pNomen;position;reference;sub_category;type;variant_id;variant_info' => 'nki',
+    ),
     'mutalyzer_URL' => 'https://v2.mutalyzer.nl/',
     'user' => array(
         // Variables we will be asking the user.
@@ -589,6 +592,68 @@ foreach ($aFiles as $sFile => $sCenter) {
             lovd_printIfVerbose(VERBOSITY_LOW,
                 'Error: JSON data is not an array of objects:' . $sFile . ".\n\n");
             die(EXIT_ERROR_INPUT_CANT_OPEN);
+        }
+
+        // OK, now collect the signature and figure out what format this is.
+        $aSignature = array_keys(current($aJSON));
+        sort($aSignature);
+        $sHeaderSignature = implode(';', $aSignature);
+        if (!isset($_CONFIG['header_signatures_JSON'][$sHeaderSignature])) {
+            lovd_printIfVerbose(VERBOSITY_LOW,
+                'Error: File does not conform to any known JSON format: ' . $sFile . ".\n({$sHeaderSignature})\n\n");
+            die(EXIT_ERROR_HEADER_FIELDS_INCORRECT);
+        } else {
+            $sFileType = $_CONFIG['header_signatures_JSON'][$sHeaderSignature];
+        }
+
+        // Build the header first, then loop the data and build the data file.
+        $aLines = [
+            implode("\t",
+                [
+                    'build',
+                    'chromosome',
+                    'position',
+                    'ref',
+                    'alt',
+                    'gene',
+                    'transcript',
+                    'cDNA',
+                    'protein',
+                    'classification',
+                    'annotation',
+                ]
+            )
+        ];
+        foreach ($aJSON as $aVariant) {
+            switch ($sFileType) {
+                case 'nki':
+                    $aVariant['classification'] = strtolower($aVariant['classification']);
+
+                    // Skip artefacts.
+                    if ($aVariant['classification'] == 'artefact') {
+                        continue 2;
+                    }
+
+                    // Build the data array. Keys aren't used, but it's useful for readability.
+                    $aLine = [
+                        'build' => 'GRCh' . $aVariant['build'],
+                        'chromosome' => $aVariant['chromosome'],
+                        'position' => $aVariant['position'],
+                        'ref' => $aVariant['reference'],
+                        'alt' => $aVariant['alternative'],
+                        'gene' => $aVariant['gene_symbol']['hgnc_symbol'],
+                        // I found two examples where the primary transcript had a different cDNA description than the
+                        //  MANE transcript, and that the cDNA description matched the primary transcript.
+                        //  So we'll use that.
+                        'transcript' => $aVariant['gene_symbol']['primary_transcripts'][0],
+                        'cDNA' => $aVariant['cNomen'],
+                        'protein' => $aVariant['pNomen'],
+                        'classification' => str_replace('vous', 'VUS', $aVariant['classification']),
+                        'annotation' => implode(',', $aVariant['maintainer']),
+                    ];
+                    $aLines[] = implode("\t", $aLine);
+                    break;
+            }
         }
     }
 
