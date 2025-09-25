@@ -449,8 +449,11 @@ $nCentersFound = 0;
 
 foreach ($aFiles as $nKey => $sFile) {
     list($sName, $sExt) = explode('.', basename($sFile), 2);
-    $aCentersFound[] = $sName;
-    $nCentersFound ++;
+    // Allow multiple files per center.
+    if (!in_array($sName, $aCentersFound)) {
+        $aCentersFound[] = $sName;
+        $nCentersFound ++;
+    }
 
     // Make file key in array, so we can store metadata.
     $aFiles[$sFile] = $sName;
@@ -894,9 +897,11 @@ foreach ($aFiles as $sFile => $sCenter) {
         }
     }
 
-    // Also add center to headers for output.
-    $_CONFIG['columns_mandatory'][] = $sCenter;
-    $_CONFIG['columns_mandatory'][] = $sCenter . $_CONFIG['columns_center_suffix'];
+    // Also add center to headers for output, as long as it's not there already.
+    if (!in_array($sCenter, $_CONFIG['columns_mandatory'])) {
+        $_CONFIG['columns_mandatory'][] = $sCenter;
+        $_CONFIG['columns_mandatory'][] = $sCenter . $_CONFIG['columns_center_suffix'];
+    }
 
     lovd_printIfVerbose(VERBOSITY_MEDIUM,
         ' ' . date('H:i:s', time() - $tStart) . ' [' .
