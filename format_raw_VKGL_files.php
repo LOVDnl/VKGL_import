@@ -5,7 +5,7 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2025-09-19
+ * Modified    : 2025-09-25
  * Version     : 0.2.3
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
@@ -566,6 +566,33 @@ foreach ($aFiles as $sFile => $sCenter) {
             )
         );
     }
+
+
+
+    if (strrchr($sFile, '.') == '.json') {
+        // The simplest way is to convert the JSON data into TSV data and then throw that into the parser.
+        // It means the TSV gets created and then parsed again, but that's fine for now.
+        // We should later probably handle this in a better (OOP) way, but for now, this works just fine.
+
+        // Parse the JSON data. Let's keep this simple.
+        $aJSON = json_decode(implode($aLines), true);
+        if (!$aJSON) {
+            lovd_printIfVerbose(VERBOSITY_LOW,
+                'Error: Can not parse file:' . $sFile . ".\n\n");
+            die(EXIT_ERROR_INPUT_CANT_OPEN);
+        }
+
+        // The keys of this array should all be numeric; it should be an array of objects.
+        if (array_filter(array_keys($aJSON), 'is_string') || !is_array(current($aJSON))
+            || !array_filter(array_keys(current($aJSON)), 'is_string')) {
+            // String keys in this array, first child is not an array, or first child does not have string keys.
+            lovd_printIfVerbose(VERBOSITY_LOW,
+                'Error: JSON data is not an array of objects:' . $sFile . ".\n\n");
+            die(EXIT_ERROR_INPUT_CANT_OPEN);
+        }
+    }
+
+
 
     // First line should be headers.
     $aHeaders = explode("\t", strtolower(array_shift($aLines)));
