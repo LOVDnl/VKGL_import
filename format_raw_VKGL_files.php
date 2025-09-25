@@ -12,7 +12,10 @@
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.2.2  2025-08-11
+ * Changelog   : 0.2.3  2025-09-25
+ *               Allow processing JSON files, too. Currently, we only support
+ *               the JSON data from the NKI.
+ *               0.2.2  2025-08-11
  *               Allow for genomic variants starting with "m."; this is normal
  *               for mitochondrial genes.
  *             : 0.2.1  2025-05-01
