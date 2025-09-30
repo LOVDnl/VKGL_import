@@ -531,149 +531,97 @@ foreach ($aFiles as $sFile => $sCenter) {
         $sVariantKey = ''; // Chr,Start,Ref,Alt,Gene,Transcript,cDNA.
         $aValues = array(); // protein => ..., center => classification, center_link => ....
         switch ($sFileType) {
-            case 'alissa':
-                $sVariantKey = implode('|', array(
-                    $aDataLine['chromosome'],
-                    $aDataLine['start'],
-                    $aDataLine['ref'],
-                    $aDataLine['alt'],
-                    $aDataLine['gene'],
-                    $aDataLine['transcript'],
-                    $aDataLine['c_nomen'],
-                ));
-                $aValues = array(
-                    'protein' => str_replace('NULL', '', $aDataLine['p_nomen']),
-                    $sCenter => str_replace(array('_', 'vous'), array(' ', 'VUS'), strtolower($aDataLine['classification'])),
-                    $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['last_updated_by'],
-                );
-                break;
-
-            case 'alissa2':
-                $sVariantKey = implode('|', array(
-                    $aDataLine['chromosome'],
-                    $aDataLine['start'],
-                    $aDataLine['ref_orig'],
-                    $aDataLine['alt_orig'],
-                    $aDataLine['gene'],
-                    $aDataLine['transcript'],
-                    $aDataLine['c_nomen'],
-                ));
-                $aValues = array(
-                    'protein' => str_replace('NULL', '', $aDataLine['p_nomen']),
-                    $sCenter => str_replace(array('_', 'vous'), array(' ', 'VUS'), strtolower($aDataLine['classification'])),
-                    $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['last_updated_by'],
-                );
-                break;
-
             case 'lumc':
-                // Because all data is otherwise in (sort of) VCF fields and I don't want to pull the normalization code
-                //  into this script, I'm just creating the (sort of) VCF fields that VKGL is using. This would allow
-                //  for the least changes to the processing script, whilst allowing for some merging of LUMC variants
-                //  with the other centers.
-                $aVariant = lovd_HGVStoVCF($aDataLine['gdna_normalized']);
-                if ($aVariant === false) {
-                    // 2024-08-28 Since the July run, LUMC has WT variants (e.g., g.123456=). I guess they come from
-                    //  Moon. Nonetheless, we should get rid of them. Just skip them silently.
-                    if (substr($aDataLine['gdna_normalized'], -1) == '=') {
-                        // Yup, a WT variant. Silently skip it.
-                        continue 2;
-                    }
-                    lovd_printIfVerbose(VERBOSITY_LOW,
-                        'Error: Unhandled variant, could not generate VCF fields: ' .
-                        $aDataLine['gdna_normalized'] . ".\n\n");
-                    die(EXIT_ERROR_DATA_CONTENT_ERROR);
+                $sHomOrHet = '';
+                $sVariantType = '';
+
+                // Some data does not have a number of copies listed, but does have the "Genomic Nomenclature" column
+                //  set to "High Copy Gain", which we'll interpret as 4 copies.
+                if (!$aDataLine['number of copies / upd'] && $aDataLine['genomic nomenclature'] == 'High Copy Gain') {
+                    $aDataLine['number of copies / upd'] = 4;
                 }
 
-                // We allow for multiple transcript mappings to be sent. Let's just grab the first one.
-                list($aDataLine['transcript'], $aDataLine['cdna']) =
-                    explode(':', substr($aDataLine['cdna'], 0, strpos($aDataLine['cdna'] . ',', ',')), 2);
-                $aDataLine['protein'] = substr($aDataLine['protein'], 0, strpos($aDataLine['protein'] . ',', ','));
+                switch ($aDataLine['number of copies / upd']) {
+                    case 0:
+                        $sVariantType = 'del';
+                        $sHomOrHet = 'homozygote';
+                        break;
 
-                $sVariantKey = implode('|', array(
-                    $aVariant['chr'],
-                    $aVariant['pos'],
-                    $aVariant['ref'],
-                    $aVariant['alt'],
-                    $aDataLine['geneid'],
-                    $aDataLine['transcript'],
-                    $aDataLine['cdna'],
-                ));
-                $aValues = array(
-                    'protein' => str_replace('NULL', '', $aDataLine['protein']),
-                    $sCenter => str_replace(
-                        array(
-                            '-?',
-                            '-',
-                            '+?',
-                            '+',
-                            '?',
-                        ), array(
-                            'likely benign',
-                            'benign',
-                            'likely pathogenic',
-                            'pathogenic',
-                            'VUS',
-                        ), strtolower($aDataLine['variant_effect'])),
-                    $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['refseq_build'],
-                );
-                break;
+                    case 1:
+                        $sVariantType = 'del';
+                        $sHomOrHet = 'heterozygote';
+                        break;
 
-            case 'radboud':
-                // The transcript field is a bit of a mix.
-                $sTranscript = '';
-                $sDNA = '';
-                $sProtein = '';
-                $aTranscripts = array_map('trim', preg_split('/[,; ]/', $aDataLine['transcript_or_dna']));
-                foreach ($aTranscripts as $sDescription) {
-                    if (preg_match('/(NM_[0-9]{6,9}\.[0-9]+|ENST[0-9]+\.[0-9])(?:\(' .
-                            preg_quote($aDataLine['gene'], '/') .
-                            '\))?:(c\.[0-9_+-]+[A-Z>deldupins]+)/', $sDescription, $aRegs)) {
-                        // cDNA given; store separate fields.
-                        $sTranscript = $aRegs[1];
-                        $sDNA = $aRegs[2];
-                        continue;
-                    } elseif (preg_match('/p\.(\([A-Z][a-z]{2}[0-9]+[A-Z][a-z]{2}\)|[A-Z][a-z]{2}[0-9]+[A-Z][a-z]{2})/',
-                            $sDescription, $aRegs)) {
-                        // Protein given; store in protein field.
-                        $sProtein = $aRegs[0];
-                        continue;
-                    } elseif (preg_match('/^(Chr[0-9XYM]+\(GRCh[0-9]{2}\):)?g\.[0-9]+([A-Z]>[A-Z]|ins[ACGT]+)$/',
-                            $sDescription, $aRegs)) {
-                        // Genomic DNA given; store in DNA field.
-                        $sDNA = $aRegs[0];
-                        continue;
-                    }
+                    case 2:
+                        $sVariantType = '=';
+                        $sHomOrHet = 'homozygote';
+                        break;
+
+                    case 3:
+                        $sVariantType = 'dup';
+                        $sHomOrHet = 'heterozygote';
+                        break;
+
+                    case 4:
+                        $sVariantType = 'dup';
+                        $sHomOrHet = 'homozygote';
+                        break;
+
+                    case '':
+                        // We didn't get a copy number, so we'll have to guess it.
+                        // This only happens with chrX and chrY.
+                        // First, determine whether the del/dup is for the whole chromosome.
+                        // If so, those will be handled differently.
+                        $aLengths = [
+                            'GRCh37' => [
+                                'chrX' => 155270560,
+                                'chrY' => 59373566,
+                            ],
+                            'GRCh38' => [
+                                'chrX' => 156040895,
+                                'chrY' => 57227415,
+                            ]
+                        ];
+                        if ($aDataLine['start position'] != 1
+                            || !isset($aLengths[$aDataLine['genome build']][$aDataLine['chromosome']])
+                            || $aLengths[$aDataLine['genome build']][$aDataLine['chromosome']] != $aDataLine['end postition']) {
+                            $sHomOrHet = 'unknown';
+                            if ($aDataLine['type of cnv'] == 'gain') {
+                                $sVariantType = 'dup';
+                            } else {
+                                $sVariantType = 'del';
+                            }
+                            break;
+                        }
+
+                        // If we get here, we're dealing with a del/dup of the whole chromosome.
+                        switch ($aDataLine['type of cnv']) {
+                            case 'gain':
+                                if ($aDataLine['chromosome'] == 'chrX') {
+                                    $sVariantType = 'dup';
+                                    $sHomOrHet = 'Klinefelter(xxy) of triple x-syndroom(xxx)';
+                                } elseif ($aDataLine['chromosome'] == 'chrY') {
+                                    $sVariantType = 'dup';
+                                    $sHomOrHet = 'Klinefelter(xxy) of Jacobs(xyy)';
+                                }
+                                break;
+                            case 'loss':
+                                //alleen y is niet mogelijk.
+                                //Als iemand met orignieel xy een x kwijt raakt, kan deze persoon
+                                //niet levensvatbaar zijn met enkel y
+                                $sVariantType = 'del';
+                                $sHomOrHet = 'Turner (x)';
+                                break;
+                        }
                 }
 
-                $sVariantKey = implode('|', array(
-                    preg_replace('/^chr/', '', $aDataLine['chromosome']),
-                    $aDataLine['start'],
-                    $aDataLine['ref'],
-                    $aDataLine['alt'],
-                    $aDataLine['gene'],
-                    $sTranscript,
-                    $sDNA,
-                ));
+                $sVariantKey = $aDataLine['chromosome'].':g.'.$aDataLine['start position'].'_'.$aDataLine['end postition'].$sVariantType;
                 $aValues = array(
-                    'protein' => $sProtein,
-                    $sCenter => str_replace(
-                        array(
-                            'class 1',
-                            'class 2',
-                            'class 3',
-                            'class 4',
-                            'class 5',
-                        ), array(
-                            'benign',
-                            'likely benign',
-                            'VUS',
-                            'likely pathogenic',
-                            'pathogenic',
-                        ), strtolower($aDataLine['classification'])),
-                    $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['classification'],
+                        $sCenter => str_replace("vus", "VUS",strtolower($aDataLine['cnv classification'])),
+                        $sCenter . $_CONFIG['columns_center_suffix'] => $sHomOrHet,
                 );
-                break;
         }
+
 
         if (!$sVariantKey) {
             // Unhandled file type?
