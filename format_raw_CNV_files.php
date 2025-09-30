@@ -676,10 +676,9 @@ foreach ($aData as $sVariantKey => $aVariant) {
 
         // OK, there are multiple entries. Not neccessarily a problem yet.
         // Simplify storing the _link field.
-        $aData[$sVariantKey][$sCenter . $_CONFIG['columns_center_suffix']] = implode(
-            ', ',
-            array_unique($aVariant[$sCenter . $_CONFIG['columns_center_suffix']])
-        );
+        $aValues = array_unique($aVariant[$sCenter . $_CONFIG['columns_center_suffix']]);
+        sort($aValues);
+        $aData[$sVariantKey][$sCenter . $_CONFIG['columns_center_suffix']] = implode(', ', $aValues);
 
         // Now, check the classifications.
         $aClassifications = array_unique($aVariant[$sCenter]);
@@ -721,12 +720,6 @@ foreach ($aData as $sVariantKey => $aVariant) {
             }
         }
     }
-
-    // Drop the variant if now empty.
-    if (count($aData[$sVariantKey]) == 1) {
-        // We have only the protein field left, this variant is now empty.
-        unset($aData[$sVariantKey]);
-    }
 }
 
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
@@ -755,20 +748,9 @@ foreach ($aData as $sVariantKey => $aVariant) {
     // Decompose the key again to Chr, Pos, Ref, Alt, Gene, Transcript, cDNA.
     $aVariantKey = explode('|', $sVariantKey);
 
-    $aLine = array(
+    $aLine = array($sVariantKey);
         // https://github.com/molgenis/data-transform-vkgl/blob/master/src/main/java/org/molgenis/mappers/VkglTableMapper.java#L10
-        substr(hash('sha256',
-            $aVariantKey[0] . '_' . $aVariantKey[1] . '_' . $aVariantKey[2] . '_' . $aVariantKey[3] . '_' .
-            $aVariantKey[4]), 0, 10), // ID; sha256(chr + "_" + pos + "_" + ref + "_" + alt + "_" + gene).substr(0,10);
-        $aVariantKey[0], // Chr.
-        $aVariantKey[1], // Pos.
-        $aVariantKey[2], // Ref.
-        $aVariantKey[3], // Alt.
-        $aVariantKey[4], // Gene.
-        $aVariantKey[5], // Transcript.
-        $aVariantKey[6], // cDNA.
-        implode(', ', array_filter(array_unique($aVariant['protein']))),
-    );
+
 
     // Loop centers.
     foreach ($aCentersFound as $sCenter) {
