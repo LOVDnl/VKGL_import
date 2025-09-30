@@ -91,31 +91,11 @@ $_CONFIG = array(
     ),
     'columns_mandatory' => array(
         // These are the columns that need to be present in order for the file to get processed.
-        'id',
-        'chromosome',
-        'start',
-        'ref',
-        'alt',
-        'gene',
-        'transcript',
-        'c_dna',
-        'protein',
+        'dna',
     ),
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
     'header_signatures' => array(
-        'alt;c;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;' .
-            'ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
-        'alt;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;' .
-            'ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
-        'alt;alt_orig;c_nomen;chrom;chromosome;classification;effect;exon;gene;hgvs_normalized_vkgl;id;' .
-            'last_updated_by;last_updated_on;location;p_nomen;pos;ref;ref_orig;significance;start;stop;timestamp;' .
-            'transcript;type;variant_type' => 'alissa2',
-        'alt;c;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;' .
-            'ref;start;stop;transcript;variant_type' => 'alissa', // Apparently, Groningen used to edit the files and added the id and timestamp fields. Alissa files from the SFTP server don't have those fields.
-        'alt;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;' .
-            'ref;start;stop;transcript;variant_type' => 'alissa', // 2024-02 + 2024-04; Due to a personnel change at Alissa without a proper handover, manual exports are being generated with yet another signature.
-        'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc',
-        'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud',
+        'chromosome;clinical phenotypes;cnv classification;constitutional/acquired variant;end postition;flanking normals - pter;flanking normals - qter;genome build;genomic nomenclature;inheritance;internal identifier;international system for human cytogenomic nomenclature;lab upload date;list of overlapping genes (hgnc);number of copies / upd;parental origin;phenotype (hpo);start and end chromosome band;start position;timestamp last processed;type of cnv;type of platform;type of test' => 'lumc',
     ),
     'mutalyzer_URL' => 'https://v2.mutalyzer.nl/',
     'user' => array(
@@ -703,7 +683,7 @@ foreach ($aFiles as $sFile => $sCenter) {
         }
 
         if (!isset($aData[$sVariantKey])) {
-            $aData[$sVariantKey] = array('protein' => array());
+            $aData[$sVariantKey] = array();
         }
         // Everything will go into arrays now, and we'll sort it out later.
         if (!isset($aData[$sVariantKey][$sCenter])) {
