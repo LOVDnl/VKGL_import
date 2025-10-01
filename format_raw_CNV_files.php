@@ -241,7 +241,7 @@ function lovd_verifySettings ($sKeyName, $sMessage, $sVerifyType, $options)
                             $sInput .= '/src';
                         } else {
                             print('    Cannot locate config.ini.php in given path.' . "\n" .
-                                '    Please check that the given path is a correct path to an LOVD installation.' . "\n");
+                                  '    Please check that the given path is a correct path to an LOVD installation.' . "\n");
                             break;
                         }
                     }
@@ -276,6 +276,16 @@ $nArgsRequired = 1;
 $sScriptName = array_shift($aArgs);
 $nArgs --;
 $nWarningsOccurred = 0;
+
+// Determine ROOT_PATH. We need to load the LOVD HGVS library.
+define('ROOT_PATH', dirname($sScriptName));
+if (!file_exists(ROOT_PATH . '/libs/HGVS-syntax-checker/HGVS.php')) {
+    // This API requires the HGVS.php class file from https://github.com/LOVDnl/HGVS-syntax-checker.
+    // If not found, double-check if you ran `git submodule init && git submodule update`.
+    lovd_printIfVerbose(VERBOSITY_LOW,
+        'Error: Could not load the LOVD HGVS library. Please check the installation instructions in README.md.' . "\n\n");
+    die(EXIT_ERROR_CONNECTION_PROBLEM);
+}
 
 if ($nArgs < $nArgsRequired) {
     lovd_printIfVerbose(VERBOSITY_LOW,
