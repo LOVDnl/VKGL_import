@@ -286,6 +286,7 @@ if (!file_exists(ROOT_PATH . '/libs/HGVS-syntax-checker/HGVS.php')) {
         'Error: Could not load the LOVD HGVS library. Please check the installation instructions in README.md.' . "\n\n");
     die(EXIT_ERROR_CONNECTION_PROBLEM);
 }
+require ROOT_PATH . '/libs/HGVS-syntax-checker/HGVS.php';
 
 if ($nArgs < $nArgsRequired) {
     lovd_printIfVerbose(VERBOSITY_LOW,
