@@ -499,7 +499,6 @@ foreach ($aFiles as $sFile => $sCenter) {
     $aSignature = $aHeaders;
     sort($aSignature);
     $sHeaderSignature = implode(';', $aSignature);
-
     if (!isset($_CONFIG['header_signatures'][$sHeaderSignature])) {
         lovd_printIfVerbose(VERBOSITY_LOW,
             'Error: File does not conform to any known format: ' . $sFile . ".\n({$sHeaderSignature})\n\n");
