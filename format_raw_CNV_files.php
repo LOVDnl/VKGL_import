@@ -219,8 +219,6 @@ function lovd_verifySettings ($sKeyName, $sMessage, $sVerifyType, $options)
                 return true;
 
             case 'file':
-//Is het de bedoeling dat we hier nog iets meedoen, net als case 'lumc': en case 'radboud':
-//want hieronder if ($sVerifyType == 'lovd_path')
             case 'lovd_path':
             case 'path':
                 // Always accept the default (if non-empty) or the given options.
@@ -593,12 +591,12 @@ foreach ($aFiles as $sFile => $sCenter) {
                         // If so, those will be handled differently.
                         $aLengths = [
                             'GRCh37' => [
-                                'chrX' => 155270560,
-                                'chrY' => 59373566,
+                                'chrX' => 155270560, //gevonden 239242-239248
+                                'chrY' => 59373566, //gevonden 245907, 245908
                             ],
                             'GRCh38' => [
-                                'chrX' => 156040895,
-                                'chrY' => 57227415,
+                                'chrX' => 156040895, //niet gevonden
+                                'chrY' => 57227415, //niet gevonden
                             ]
                         ];
                         if ($aDataLine['start position'] != 1
