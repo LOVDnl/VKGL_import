@@ -618,17 +618,20 @@ foreach ($aFiles as $sFile => $sCenter) {
                                 if ($aDataLine['chromosome'] == 'chrX') {
                                     $sVariantType = 'dup';
                                     $sHomOrHet = 'Klinefelter(xxy) of triple x-syndroom(xxx)';
+                                    //line 239242
                                 } elseif ($aDataLine['chromosome'] == 'chrY') {
                                     $sVariantType = 'dup';
                                     $sHomOrHet = 'Klinefelter(xxy) of Jacobs(xyy)';
+                                    //line 245908
                                 }
                                 break;
                             case 'loss':
-                                //alleen y is niet mogelijk.
-                                //Als iemand met orignieel xy een x kwijt raakt, kan deze persoon
-                                //niet levensvatbaar zijn met enkel y
+                                //only Y chromosome isn't possible.
+                                //If someone who originally had XY chromosomes and loses the X chromosome, so they're left with only the Y chromosome.
+                                //This person isn't viable.
                                 $sVariantType = 'del';
                                 $sHomOrHet = 'Turner (x)';
+                                //line 239246
                                 break;
                         }
                 }
