@@ -935,14 +935,14 @@ foreach ($aData as $sVariantKey => $aVariant) {
             // Simple, just one classification.
             $aData[$sVariantKey][$sCenter] = current($aClassifications);
             // Do report.
-            lovd_printIfVerbose(VERBOSITY_HIGH,
-                '                   Warning: Center ' . $sCenter . ' has two entries for the same variant. ID: ' . $sVariantKey . "\n");
+//            lovd_printIfVerbose(VERBOSITY_HIGH,
+//                '                   Warning: Center ' . $sCenter . ' has two entries for the same variant. ID: ' . $sVariantKey . "\n");
 
         } else {
             // Now we're actually in trouble. Internal conflict.
             // First, report the issue.
-            lovd_printIfVerbose(VERBOSITY_MEDIUM,
-                '                   Warning: Center ' . $sCenter . ' has an internal conflict; ' . implode(', ', $aClassifications) . '. ID: ' . $sVariantKey . "\n");
+//            lovd_printIfVerbose(VERBOSITY_MEDIUM,
+//                '                   Warning: Center ' . $sCenter . ' has an internal conflict; ' . implode(', ', $aClassifications) . '. ID: ' . $sVariantKey . "\n");
 
             $bB   = in_array('benign', $aClassifications);
             $bLB  = in_array('likely benign', $aClassifications);
