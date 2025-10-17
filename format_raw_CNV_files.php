@@ -96,6 +96,7 @@ $_CONFIG = array(
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
     'header_signatures' => array(
         'chromosome;clinical phenotypes;cnv classification;constitutional/acquired variant;end postition;flanking normals - pter;flanking normals - qter;genome build;genomic nomenclature;inheritance;internal identifier;international system for human cytogenomic nomenclature;lab upload date;list of overlapping genes (hgnc);number of copies / upd;parental origin;phenotype (hpo);start and end chromosome band;start position;timestamp last processed;type of cnv;type of platform;type of test' => 'lumc',
+        'chromosome;classification;description;effect;genes;genome build;inside start;inside stop;location;outside start;outside stop;p/q arm;protocol;size' => 'radboud',
     ),
     'mutalyzer_URL' => 'https://v2.mutalyzer.nl/',
     'user' => array(
@@ -218,6 +219,8 @@ function lovd_verifySettings ($sKeyName, $sMessage, $sVerifyType, $options)
                 return true;
 
             case 'file':
+//Is het de bedoeling dat we hier nog iets meedoen, net als case 'lumc': en case 'radboud':
+//want hieronder if ($sVerifyType == 'lovd_path')
             case 'lovd_path':
             case 'path':
                 // Always accept the default (if non-empty) or the given options.
@@ -459,20 +462,22 @@ foreach ($aFiles as $sFile => $sCenter) {
 
     // The Radboud data doesn't have a header :(
     if ($sCenter == 'radboud_mumc') {
-        // Invent the header.
+        // Invent the header for radboud data.
         $sLine = implode("\t", array(
-            'chromosome',
-            'start',
-            'stop',
-            'ref',
-            'alt',
-            'gene',
-            'transcript_or_dna',
-            'empty',
-            'empty',
-            'location',
-            'empty',
-            'classification',
+            'description', //(0): seq[GRCh37] 11pterp15.5(0_926088)x3
+            'size', //(1): NC_000011.9:g.(0)_(926088_959436)dup
+            'genome build', //(2): GRCh37
+            'chromosome', //(3): chr11
+            'inside start', //(4): 1
+            'inside stop', //(5): 926088
+            'outside start', //(6): 1
+            'outside stop', //(7): 959436
+            'effect', //(8): DUPLICATION
+            'p/q arm', //(9): pter
+            'location', //(10): p15.5
+            'genes', //(11): ANO9,AP006621.5,AP2A2,ATHL1,B4GALNT4,BET1L,C11ORF35,CD151,CDHR5,CEND1,CHID1,DEAF1,DRD4,EFCAB4A,EPS8L2,HRAS,IFITM1,IFITM2,IFITM3,IFITM5,IRF7,LRRC56,NLRP6,ODF3,PDDC1,PHRF1,PIDD,PKP3,PNPLA2,POLR2L,PSMD13,PTDSS2,RASSF7,RIC8A,RNH1,RPLP2,SCGB1C1,SCT,SIGIRR,SIRT3,SLC25A22,TALDO1,TMEM80,TSPAN4
+            'classification', //(12): class 4
+            'protocol', //(13): Exome
         ));
 
     } else {
@@ -542,42 +547,45 @@ foreach ($aFiles as $sFile => $sCenter) {
         $sVariantKey = ''; // Chr,Start,Ref,Alt,Gene,Transcript,cDNA.
         $aValues = array(); // protein => ..., center => classification, center_link => ....
         switch ($sFileType) {
+            //For different files, there is different code to read the file.
+            //The case statement shows which file type is the input for the following code
             case 'lumc':
                 $sHomOrHet = '';
                 $sVariantType = '';
-
-                // Some data does not have a number of copies listed, but does have the "Genomic Nomenclature" column
+                $sChromosome = $aDataLine['chromosome'];
+                $sGenome_build = $aDataLine['genome build'];
+                $sNC = HGVS_Chromosome::check($sChromosome . '(' . $sGenome_build  . ')')->getCorrectedValue();
+                // Some data doesn't have a number of copies listed, but does have the "Genomic Nomenclature" column
                 //  set to "High Copy Gain", which we'll interpret as 4 copies.
                 if (!$aDataLine['number of copies / upd'] && $aDataLine['genomic nomenclature'] == 'High Copy Gain') {
                     $aDataLine['number of copies / upd'] = 4;
+                    //line 245941
                 }
 
                 switch ($aDataLine['number of copies / upd']) {
-                    case 0:
+                    case '0':
                         $sVariantType = 'del';
                         $sHomOrHet = 'homozygote';
+                        //line 246243
                         break;
 
-                    case 1:
+                    case '1':
                         $sVariantType = 'del';
                         $sHomOrHet = 'heterozygote';
+                        //line 192372
                         break;
 
-                    case 2:
-                        $sVariantType = '=';
-                        $sHomOrHet = 'homozygote';
-                        break;
-
-                    case 3:
+                    case '3':
                         $sVariantType = 'dup';
                         $sHomOrHet = 'heterozygote';
+                        //line 3752
                         break;
 
-                    case 4:
+                    case '4':
                         $sVariantType = 'dup';
                         $sHomOrHet = 'homozygote';
+                        //line 22196
                         break;
-
                     case '':
                         // We didn't get a copy number, so we'll have to guess it.
                         // This only happens with chrX and chrY.
@@ -598,9 +606,11 @@ foreach ($aFiles as $sFile => $sCenter) {
                             || $aLengths[$aDataLine['genome build']][$aDataLine['chromosome']] != $aDataLine['end postition']) {
                             $sHomOrHet = 'unknown';
                             if ($aDataLine['type of cnv'] == 'gain') {
+                                //line 241065
                                 $sVariantType = 'dup';
                             } else {
                                 $sVariantType = 'del';
+                                //line 246231
                             }
                             break;
                         }
@@ -685,7 +695,7 @@ foreach ($aData as $sVariantKey => $aVariant) {
             continue;
         }
 
-        // OK, there are multiple entries. Not neccessarily a problem yet.
+        // OK, there are multiple entries. Not necessarily a problem yet.
         // Simplify storing the _link field.
         $aValues = array_unique($aVariant[$sCenter . $_CONFIG['columns_center_suffix']]);
         sort($aValues);
