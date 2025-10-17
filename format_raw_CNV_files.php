@@ -644,6 +644,231 @@ foreach ($aFiles as $sFile => $sCenter) {
                         $sCenter => str_replace("vus", "VUS",strtolower($aDataLine['cnv classification'])),
                         $sCenter . $_CONFIG['columns_center_suffix'] => $sHomOrHet,
                 );
+                break;
+            case 'radboud':
+                $sVariantType = '';
+                $sHomOrHet = '';
+                $aChecking = array();
+                $sChromosome = $aDataLine['chromosome'];
+                $sGenome_build = $aDataLine['genome build'];
+                $sNC = HGVS_Chromosome::check($sChromosome . '(' . $sGenome_build  . ')')->getCorrectedValue();
+                if (preg_match('/^((seq|arr)\[GRCh(37|38)\])?([0-9XY]{1,2}).+\((pter|[0-9]+)_([0-9]+|qter)\)x([0-9o~]{1,3})/i', str_replace(" ","",$aDataLine['description']), $aRegs)) {
+                    list(,,,,$sChrom, $sStart, $sEnd, $sCount) = $aRegs;
+                    if ($sCount == '0' || $sCount == 'o') {
+                        //line 533
+                        //line 594
+                        $sVariantType = 'del';
+                        $sHomOrHet = 'homozygote';
+                    } elseif ($sCount == '1'){
+                        //line 733
+                        $sVariantType = 'del';
+                        $sHomOrHet = 'heterozygote';
+                    } elseif ($sCount == '2'){
+                        //line 665
+                        //Deciding the variant based on column I ('effect')
+                        if ($aDataLine['effect'] == 'DUPLICATION') {
+                            $sVariantType = 'dup';
+                            $sHomOrHet = 'heterozygote';
+                        } elseif ($aDataLine['effect'] == 'DELETION') {
+                            $sVariantType = 'del';
+                            $sHomOrHet = 'heterozygote';
+                        }elseif ($aDataLine['effect'] == 'INSERTION') {
+                            $sVariantType = 'ins';
+                            $sHomOrHet = 'homozygote';
+                        }
+                    } elseif ($sCount == '2~3' && strpos($aDataLine['description'],'pter')!==false && strpos($aDataLine['description'],'qter')!==false){
+                        //line 456
+                        //line 8
+                        $sVariantType = 'sup';
+                        $sHomOrHet = 'unknown';
+                    } elseif ($sCount == '3' || $sCount == '2~3'){
+                        //line 728 (1/2)
+                        $sVariantType = 'dup';
+                        $sHomOrHet = 'heterozygote';
+                    } elseif ($sCount == '4'){
+                        //line 677
+                        //line 268
+                        $sVariantType = 'dup';
+                        $sHomOrHet = 'homozygote';
+                    }
+                    //Using the information from column A to make a line with the required information
+                    //checking the information for mistakes (wrong order of numbers, value of -1, etc)
+                    $aChecking[] = HGVS::check($sNC.":g.".$aRegs[5]."_".$aRegs[6].$sVariantType)->getCorrectedValue();
+                } elseif (preg_match('/^(seq\[GRCh37\] )?seq\(([0-9XY]{1,2})\)x([0-9~]{1,3})(,\(([0-9XY]{1,2})\)x([0-9~]{1,3}))?/', $aDataLine['description'], $aRegs)) {
+                    //in this case it's possible that the array length is not consistent (some have a length of 4, some longer)
+                    //That's why there is an if loop installed
+                    $nAantal = count($aRegs);
+                    if ($nAantal <= '4') {
+                        list(,,$sChrom, $sCount) = $aRegs;
+                        if ($sCount == '0') {
+                            //There is no example
+                            $sVariantType = 'del';
+                            $sHomOrHet = 'homozygote';
+                        } elseif ($sCount == '1') {
+                            //line 10
+                            $sVariantType = 'del';
+                            $sHomOrHet = 'heterozygote';
+                        } elseif ($sCount == '2') {
+                            //There is no example
+                            $sVariantType = '=';
+                            $sHomOrHet = 'homozygote';
+                        } elseif ($sCount == '3') {
+                            //line 6
+                            $sVariantType = 'dup';
+                            $sHomOrHet = 'heterozygote';
+                        }
+                    } else {
+                        list(,,$sChrom1,$sCount1,,$sChrom2, $sCount2) = $aRegs;
+                        if ($sCount1 == '1' && $sCount2 == '1') {
+                            //There are no examples
+                            $sVariantType = '=';
+                            $sHomOrHet = 'homozygote';
+                        } elseif ($sCount1 == '2' && $sCount2 == '0') {
+                            //There are no examples
+                            $sVariantType = '=';
+                            $sHomOrHet = 'homozygote';
+                        } elseif ($sCount1 == '2' && $sCount2 == '1') {
+                            //line 9 (1/2)
+                            $sVariantType = 'sup';
+                            $sHomOrHet = 'Klinefelter(xxy)';
+                        }
+                    }
+                    $aChecking[] = $sNC.":g.pter_qter".$sVariantType;
+                } elseif (preg_match('/^(seq\[GRCh37\] )?(del|dup|trp)\(([0-9XY]{1,2})\)\(([0-9a-z]+.?)+\)/', $aDataLine['description'], $aRegs)) {
+                    //In this case there isn't enough information to create a line
+                    //it's possible to decide if there was a deletion or duplication, this information will be used
+                    list(,,$sVariantType,$schrom,) = $aRegs;
+                    if ($sVariantType == 'trp'){
+                        //Line 176
+                        $sVariantType = 'dup';
+                        $sHomOrHet = 'homozygote';
+                    }else {
+                        //Line 715
+                        $sHomOrHet = 'heterozygote';
+                    }
+                } elseif (preg_match('/^((Seq|arr)\[GRCh(37|38)\] )?([0-9a-z]{2,4}\.?)+\(([0-9]+)(x)[0-9],([0-9]+)_([0-9]+)(x)([0-9]),([0-9]+)(x)([0-9])\)/', $aDataLine['description'], $aRegs)) {
+                    //Line 38
+                    $sHomOrHet = 'homozygote';
+                    $sVariantType = 'del';
+                    $aChecking[] = HGVS::check($sNC.":g.(".$aRegs[5]."_".$aRegs[7].")_(".$aRegs[8]."_".$aRegs[11].")". $sVariantType)->getCorrectedValue();
+                } else {
+                    if (substr($aDataLine['size'],0,2)=='NC') {
+                        $sVariable = HGVS::checkVariant($aDataLine['size'])->getInfo();
+                        $aInfo = $sVariable["data"];
+                        if (!$aInfo["type"]) {
+                            //There are no examples
+                            continue 2;
+                        } else {
+                            //Line 718
+                            $sVariantType = $aInfo["type"];
+                            $sHomOrHet = 'heterozygote';
+                        }
+                    } else {
+                        //Line 271
+                        continue 2;
+                    }
+                }
+                if ($aDataLine['outside start']==1 && $aDataLine['inside start']==1) {
+                    //Line 190
+                    $aDataLine['outside start'] = 'pter';
+                } elseif ($aDataLine['outside start']==-1 || $aDataLine['outside start']==1) {
+                    //Line 728 (2/2)
+                    $aDataLine['outside start'] = '?';
+                }
+                if ($aDataLine['inside start']==1) {
+                    //Line 9 (2/2)
+                    $aDataLine['inside start'] = 'pter';
+                }
+                if ($aDataLine['outside stop']==-1) {
+                    //Line 722
+                    $aDataLine['outside stop'] = '?';
+                }
+                if ($aDataLine['size']!=""){
+                    //Line 732
+                    if (substr($aDataLine['size'],-3)=='trp') {
+                        $aDataLine['size'] = substr_replace($aDataLine['size'],'dup',-3);
+                    }
+                    $sVariant = HGVS::check($aDataLine['size'])->getCorrectedValue();
+                    $sVariant = preg_replace('/(:g\.)1_/','${1}pter_',$sVariant);
+                    $sVariant = preg_replace('/(:g\.\()(1|pter)_/','${1}?_',$sVariant);
+                    $sVariant = preg_replace('/_qter\)(del|dup|inv)$/','_?)${1}',$sVariant);
+                    $aChecking[] = $sVariant;
+                }
+                //There are some cases where the inside start and the outside start, the inside stop en the outside stop are the same, in this case
+                //there will be two locations, there's no need for () then
+                if ($aDataLine['outside start']== $aDataLine['inside start'] && $aDataLine['outside stop']== $aDataLine['inside stop']) {
+                    //Line 570
+                    $aChecking[] = HGVS::check($sNC.":g.".$aDataLine['inside start']. "_". $aDataLine['inside stop'].$sVariantType)->getCorrectedValue();
+                } else {
+                    //Line 731
+                    $aChecking[] = HGVS::check($sNC . ":g.(" . $aDataLine['outside start'] . "_" . $aDataLine['inside start'] . ")_(" . $aDataLine['inside stop'] . "_" . $aDataLine['outside stop'] . ")" . $sVariantType)->getCorrectedValue();
+                }
+                $aUnique = array_unique($aChecking);
+                //counting how many unique lines there are in the array
+                //If the amount is 1, the created lines are the same and correct
+                //they will be saved, otherwise they will be further inspected.
+                $nAmountUnique = count($aUnique);
+                if ($nAmountUnique == 1){
+                    //Line 652
+                    $sAddLine = $aUnique[0];
+                    $sVariantKey = $sAddLine;
+                } else {
+                    //This is where the arrays will be checked if there were more than one unique line.
+                    //Starting by checking the length by using '_'
+                    $nAmountTotal = count($aChecking);
+                    $nMax = max(array_map(function ($sHGVS){
+                        return substr_count($sHGVS,'_');
+                    }, $aUnique));
+                    $aHGVS = array_filter($aUnique, function ($sHGVS) use($nMax) {
+                        $n = substr_count($sHGVS,'_');
+                        return $nMax == $n;
+                    });
+                    //If there's more than one left, the amount of '?' will be checked
+                    //The lower the amount, the more know locations the line contains.
+                    if (count($aHGVS) > 1) {
+                        $nMin = min(array_map(function ($sHGVS){
+                            return substr_count($sHGVS,'?');
+                        }, $aHGVS));
+                        $aHGVS = array_filter($aHGVS, function ($sHGVS) use($nMin) {
+                            $n = substr_count($sHGVS,'?');
+                            return $nMin == $n;
+                        });
+                        $nAmountUnique = count($aHGVS);
+                        //If there's one line left after checking for '?'
+                        //This line will be added to the outcome file,
+                        if ($nAmountUnique == 1){
+                            $sAddLine = $aUnique[0];
+                            $sVariantKey = $sAddLine;
+                        } else {
+                            continue 2;
+                        }
+                    } else {
+                        //If there's one line left after checking for the longest line
+                        //This line will be added to the outcome file.
+                        $nAmountUnique = count($aHGVS);
+                        if ($nAmountUnique == 1){
+                            $sAddLine = $aUnique[0];
+                            $sVariantKey = $sAddLine;
+                        }
+                    }
+                }
+                if ($aDataLine['classification'] == 'class 1'){
+                    $sCNV_class = 'benign';
+                } elseif ($aDataLine['classification'] == 'class 2'){
+                    $sCNV_class = 'likely benign';
+                } elseif ($aDataLine['classification'] == 'class 3'){
+                    $sCNV_class = 'VUS';
+                } elseif ($aDataLine['classification'] == 'class 4'){
+                    $sCNV_class = 'likely pathogenic';
+                } elseif ($aDataLine['classification'] == 'class 5'){
+                    $sCNV_class = 'pathogenic';
+                }
+                $aValues = array(
+                        $sCenter => str_replace("vus","VUS",strtolower($sCNV_class)),
+                        $sCenter . $_CONFIG['columns_center_suffix'] => $sHomOrHet,
+                );
+
+                break;
         }
 
 
