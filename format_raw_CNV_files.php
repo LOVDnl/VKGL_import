@@ -636,8 +636,10 @@ foreach ($aFiles as $sFile => $sCenter) {
                         }
                         break;
                 }
-
-                $sVariantKey = $aDataLine['chromosome'].':g.'.$aDataLine['start position'].'_'.$aDataLine['end postition'].$sVariantType;
+                if ($aDataLine['start position'] == 1 ){
+                    $aDataLine['start position'] = 'pter';
+                }
+                $sVariantKey = $sNC.':g.'.$aDataLine['start position'].'_'.$aDataLine['end postition'].$sVariantType;
                 $aValues = array(
                         $sCenter => str_replace("vus", "VUS",strtolower($aDataLine['cnv classification'])),
                         $sCenter . $_CONFIG['columns_center_suffix'] => $sHomOrHet,
