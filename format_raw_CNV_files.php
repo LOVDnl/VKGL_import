@@ -634,6 +634,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                                 //line 239246
                                 break;
                         }
+                        break;
                 }
 
                 $sVariantKey = $aDataLine['chromosome'].':g.'.$aDataLine['start position'].'_'.$aDataLine['end postition'].$sVariantType;
