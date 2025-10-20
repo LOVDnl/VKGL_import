@@ -837,7 +837,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                         //If there's one line left after checking for '?'
                         //This line will be added to the outcome file,
                         if ($nAmountUnique == 1){
-                            $sAddLine = $aUnique[0];
+                            $sAddLine = implode($aHGVS);
                             $sVariantKey = $sAddLine;
                         } else {
                             continue 2;
@@ -847,7 +847,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                         //This line will be added to the outcome file.
                         $nAmountUnique = count($aHGVS);
                         if ($nAmountUnique == 1){
-                            $sAddLine = $aUnique[0];
+                            $sAddLine = implode($aHGVS);
                             $sVariantKey = $sAddLine;
                         }
                     }
