@@ -96,7 +96,7 @@ $_CONFIG = array(
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
     'header_signatures' => array(
         'chromosome;clinical phenotypes;cnv classification;constitutional/acquired variant;end postition;flanking normals - pter;flanking normals - qter;genome build;genomic nomenclature;inheritance;internal identifier;international system for human cytogenomic nomenclature;lab upload date;list of overlapping genes (hgnc);number of copies / upd;parental origin;phenotype (hpo);start and end chromosome band;start position;timestamp last processed;type of cnv;type of platform;type of test' => 'lumc',
-        'chromosome;classification;description;effect;genes;genome build;inside start;inside stop;location;outside start;outside stop;p/q arm;protocol;size' => 'radboud',
+        'chromosome;classification;description;effect;genes;genome build;hgvs;inside start;inside stop;location;outside start;outside stop;p/q arm;protocol' => 'radboud',
     ),
     'mutalyzer_URL' => 'https://v2.mutalyzer.nl/',
     'user' => array(
