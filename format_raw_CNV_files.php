@@ -557,9 +557,15 @@ foreach ($aFiles as $sFile => $sCenter) {
                 if (!$aDataLine['number of copies / upd'] && $aDataLine['genomic nomenclature'] == 'High Copy Gain') {
                     $aDataLine['number of copies / upd'] = 4;
                     //line 245941
+                    //This is an example line from file 'LUMC_2023-12.tsv' that goes through this statement.
+                    //Further in the script there are more of these examples
+                    //These are used in the test file to validate the script.
                 }
-
+                //This is where the information is decided to build the HGVS description.
                 switch ($aDataLine['number of copies / upd']) {
+                    //The number represents the amount of times is present, where 0 means it's a homozygote deletion, 1 means it's a
+                    //heterozygote deletion, 3 means it's a heterozygote duplication
+                    //, 4 means it's a homozygote duplication and no number means it affects the X/Y chromosome.
                     case '0':
                         $sVariantType = 'del';
                         $sHomOrHet = 'homozygote';
@@ -611,8 +617,8 @@ foreach ($aFiles as $sFile => $sCenter) {
                             }
                             break;
                         }
-
                         // If we get here, we're dealing with a del/dup of the whole chromosome.
+                        //Here $sHomOrHet stands for the syndrome that is created by the change.
                         switch ($aDataLine['type of cnv']) {
                             case 'gain':
                                 if ($aDataLine['chromosome'] == 'chrX') {
@@ -636,9 +642,11 @@ foreach ($aFiles as $sFile => $sCenter) {
                         }
                         break;
                 }
+                //If the starting position is 1, we translate it to pter.
                 if ($aDataLine['start position'] == 1 ){
                     $aDataLine['start position'] = 'pter';
                 }
+                //This is where the collected information gets put together to form the HGVS description.
                 $sVariantKey = $sNC.':g.'.$aDataLine['start position'].'_'.$aDataLine['end postition'].$sVariantType;
                 $aValues = array(
                         $sCenter => str_replace("vus", "VUS",strtolower($aDataLine['cnv classification'])),
@@ -649,14 +657,29 @@ foreach ($aFiles as $sFile => $sCenter) {
                 $sVariantType = '';
                 $sHomOrHet = '';
                 $aChecking = array();
+                $aPositions = array();
+                $aDelDup = array();
                 $sChromosome = $aDataLine['chromosome'];
                 $sGenome_build = $aDataLine['genome build'];
                 $sNC = HGVS_Chromosome::check($sChromosome . '(' . $sGenome_build  . ')')->getCorrectedValue();
+                //Because in this file there are multiple columns which contain the information to build an individual HGVS description,
+                //we're going to build a HGVS description for these columns.
+                //The first one is based on the column 'description'
+                //The second one is already build in column 'hgvs'
+                //The third one is build using multiple columns: 'inside start', 'inside stop', 'outside start','outside stop'
+                //These will be compared with eachother.
+
+                //This is where the first HGVS description is build.
+                //Because the information in this colomn is inconsisten, we're going to use
+                //preg_match to find all possibilities.
                 if (preg_match('/^((seq|arr)\[GRCh(37|38)\])?([0-9XY]{1,2}).+\((pter|[0-9]+)_([0-9]+|qter)\)x([0-9o~]{1,3})/i', str_replace(" ","",$aDataLine['description']), $aRegs)) {
                     list(,,,,$sChrom, $sStart, $sEnd, $sCount) = $aRegs;
                     if ($sCount == '0' || $sCount == 'o') {
                         //line 533
                         //line 594
+                        //This is an example line from file 'radboud_mumc.txt' that goes through this statement.
+                        //Further in the script there are more of these examples
+                        //These are used in the test file to validate the script.
                         $sVariantType = 'del';
                         $sHomOrHet = 'homozygote';
                     } elseif ($sCount == '1'){
@@ -816,6 +839,12 @@ foreach ($aFiles as $sFile => $sCenter) {
                     //Line 731
                     $aChecking[] = HGVS::check($sNC . ":g.(" . $aDataLine['outside start'] . "_" . $aDataLine['inside start'] . ")_(" . $aDataLine['inside stop'] . "_" . $aDataLine['outside stop'] . ")" . $sVariantType)->getCorrectedValue();
                 }
+                //This is a check on the build array for invalid values.
+                //If those are found, that line will not be used.
+                $aChecking = array_filter($aChecking, function ($sHGVS) {
+                    return HGVS::checkVariant($sHGVS)->isValid();
+                });
+                //
                 $aUnique = array_unique($aChecking);
                 //counting how many unique lines there are in the array
                 //If the amount is 1, the created lines are the same and correct
