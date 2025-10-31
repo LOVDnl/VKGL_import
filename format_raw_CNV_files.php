@@ -852,46 +852,78 @@ foreach ($aFiles as $sFile => $sCenter) {
                 $nAmountUnique = count($aUnique);
                 if ($nAmountUnique == 1){
                     //Line 652
-                    $sAddLine = $aUnique[0];
+                    $sAddLine = current($aUnique);
                     $sVariantKey = $sAddLine;
                 } else {
-                    //This is where the arrays will be checked if there were more than one unique line.
-                    //Starting by checking the length by using '_'
-                    $nAmountTotal = count($aChecking);
-                    $nMax = max(array_map(function ($sHGVS){
-                        return substr_count($sHGVS,'_');
-                    }, $aUnique));
-                    $aHGVS = array_filter($aUnique, function ($sHGVS) use($nMax) {
-                        $n = substr_count($sHGVS,'_');
-                        return $nMax == $n;
-                    });
-                    //If there's more than one left, the amount of '?' will be checked
-                    //The lower the amount, the more know locations the line contains.
-                    if (count($aHGVS) > 1) {
-                        $nMin = min(array_map(function ($sHGVS){
-                            return substr_count($sHGVS,'?');
-                        }, $aHGVS));
-                        $aHGVS = array_filter($aHGVS, function ($sHGVS) use($nMin) {
-                            $n = substr_count($sHGVS,'?');
-                            return $nMin == $n;
-                        });
-                        $nAmountUnique = count($aHGVS);
-                        //If there's one line left after checking for '?'
-                        //This line will be added to the outcome file,
-                        if ($nAmountUnique == 1){
-                            $sAddLine = implode($aHGVS);
-                            $sVariantKey = $sAddLine;
+                    //This check is to see if the created lines agree if there was an deletion, duplication or sup.
+                    //If they are different, this variant will not be used.
+                    foreach ($aUnique as $sEffect) {
+                        if (preg_match_all('/((del|dup|sup))/',$sEffect,$aMatches)){
+                            $aSaveString = $aMatches[0];
+                            $aDelDup[] = $aSaveString[0];
+                        }
+                    }
+                    $aUnEff = array_unique($aDelDup);
+                    $nUnDelDup = count($aUnEff);
+                    if ($nUnDelDup == 1) {
+                        //This check is to see if the whole chromosome is duplicated, deleted or sup.
+                        $sCheck = strstr($aChecking[0],'pter_qter');
+                        if ($sCheck == true && $aDataLine['inside start']=='pter') {
+                            $sVariantKey = $aChecking[0];
                         } else {
-                            continue 2;
+                            //This is where only the numbers are taken to compare them.
+                            //To see if there is only one line with the maximum amount of numbers.
+                            foreach ($aUnique as $sHGVS) {
+                                $sVariant = strstr($sHGVS, ':');
+                                preg_match_all('/([0-9]+)/', $sVariant, $aMatches);
+                                $aPositions[] = $aMatches[0];
+                            }
+                            $aPositionCounts = array_map('count', $aPositions);
+                            $nMaxPositions = max($aPositionCounts);
+                            $nWithMaxPositions = count(array_intersect($aPositionCounts, [$nMaxPositions]));
+                            //If there's only one line with the maximum amount of numbers, we'll continue
+                            if ($nWithMaxPositions == 1) {
+                                $iWithMaxPositions = array_search($nMaxPositions, $aPositionCounts);
+                                foreach ($aPositions as $i => $aPos) {
+                                    if ($i == $iWithMaxPositions) {
+                                        continue;
+                                    }
+                                    $aDiff = array_diff($aPos, $aPositions[$iWithMaxPositions]);
+                                    //Here we're going to check if the numbers in the shorter lines are present in
+                                    //the line with the most numbers. If they are, we'll continue.
+                                    if (empty($aDiff)) {
+                                        $aLongestPos = $aPositions[$iWithMaxPositions];
+                                        $aSafe = array_search($aLongestPos, $aPositions);
+                                        if ($aSafe == 1) {
+                                            //This is where the arrays will be checked if there were more than one unique line.
+                                            //Starting by checking the length by using '_'
+                                            $nMax = max(array_map(function ($sHGVS) {
+                                                return substr_count($sHGVS, '_');
+                                            }, $aUnique));
+                                            $aHGVS = array_filter($aUnique, function ($sHGVS) use ($nMax) {
+                                                $n = substr_count($sHGVS, '_');
+                                                return $nMax == $n;
+                                            });
+                                            $nAmountTotal = count($aHGVS);
+                                            if ($nAmountTotal == 1) {
+                                                $sAddLine = current($aHGVS);
+                                                $sVariantKey = $sAddLine;
+                                            } else {
+                                                continue 3;
+                                            }
+                                        } else {
+                                            continue 3;
+                                        }
+                                    } else {
+                                        continue 3;
+                                    }
+                                }
+                            } else {
+                                continue 2;
+                            }
                         }
                     } else {
-                        //If there's one line left after checking for the longest line
-                        //This line will be added to the outcome file.
-                        $nAmountUnique = count($aHGVS);
-                        if ($nAmountUnique == 1){
-                            $sAddLine = implode($aHGVS);
-                            $sVariantKey = $sAddLine;
-                        }
+                        continue 2;
                     }
                 }
                 if ($aDataLine['classification'] == 'class 1'){
