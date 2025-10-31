@@ -463,7 +463,7 @@ foreach ($aFiles as $sFile => $sCenter) {
         // Invent the header for radboud data.
         $sLine = implode("\t", array(
             'description', //(0): seq[GRCh37] 11pterp15.5(0_926088)x3
-            'size', //(1): NC_000011.9:g.(0)_(926088_959436)dup
+            'hgvs', //(1): NC_000011.9:g.(0)_(926088_959436)dup
             'genome build', //(2): GRCh37
             'chromosome', //(3): chr11
             'inside start', //(4): 1
@@ -752,8 +752,8 @@ foreach ($aFiles as $sFile => $sCenter) {
                     $sVariantType = 'del';
                     $aChecking[] = HGVS::check($sNC.":g.(".$aRegs[5]."_".$aRegs[7].")_(".$aRegs[8]."_".$aRegs[11].")". $sVariantType)->getCorrectedValue();
                 } else {
-                    if (substr($aDataLine['size'],0,2)=='NC') {
-                        $sVariable = HGVS::checkVariant($aDataLine['size'])->getInfo();
+                    if (substr($aDataLine['hgvs'],0,2)=='NC') {
+                        $sVariable = HGVS::checkVariant($aDataLine['hgvs'])->getInfo();
                         $aInfo = $sVariable["data"];
                         if (!$aInfo["type"]) {
                             //There are no examples
@@ -770,30 +770,43 @@ foreach ($aFiles as $sFile => $sCenter) {
                 }
                 if ($aDataLine['outside start']==1 && $aDataLine['inside start']==1) {
                     //Line 190
+                    //If both starting positions are 1, we translate it to pter.
                     $aDataLine['outside start'] = 'pter';
                 } elseif ($aDataLine['outside start']==-1 || $aDataLine['outside start']==1) {
+                    //If the outside start is -1 or outside start is 1, we translate to ?
+                    //The reason why here we translate outside start to ? instead of pter is because the
+                    //inside start contains a number. We know that the first base is present, after it were not sure.
+                    //So it's safer to use ? instead of pter.
                     //Line 728 (2/2)
                     $aDataLine['outside start'] = '?';
                 }
                 if ($aDataLine['inside start']==1) {
                     //Line 9 (2/2)
+//Is deze nog nodig
                     $aDataLine['inside start'] = 'pter';
                 }
                 if ($aDataLine['outside stop']==-1) {
                     //Line 722
                     $aDataLine['outside stop'] = '?';
                 }
-                if ($aDataLine['size']!=""){
+                //This is where the second HGVS description is build.
+                if ($aDataLine['hgvs']!=""){
                     //Line 732
-                    if (substr($aDataLine['size'],-3)=='trp') {
-                        $aDataLine['size'] = substr_replace($aDataLine['size'],'dup',-3);
+                    if (substr($aDataLine['hgvs'],-3)=='trp') {
+                        $aDataLine['hgvs'] = substr_replace($aDataLine['hgvs'],'dup',-3);
                     }
-                    $sVariant = HGVS::check($aDataLine['size'])->getCorrectedValue();
+                    $sVariant = HGVS::check($aDataLine['hgvs'])->getCorrectedValue();
                     $sVariant = preg_replace('/(:g\.)1_/','${1}pter_',$sVariant);
+                    //If the outside start position is pter or the outside stop position is qter, they will
+                    //be changed to ?. The reason for this is, is that it's known that the first or last position is present.
+                    //what it means is that the deletion/duplication takes place somewhere in between th known location and pter/qter.
+                    //So it's safer to use ? instead of pter/qter.
                     $sVariant = preg_replace('/(:g\.\()(1|pter)_/','${1}?_',$sVariant);
+                    //reason why qter is repalced by ?
                     $sVariant = preg_replace('/_qter\)(del|dup|inv)$/','_?)${1}',$sVariant);
                     $aChecking[] = $sVariant;
                 }
+                //This is where the third HGVS description is build.
                 //There are some cases where the inside start and the outside start, the inside stop en the outside stop are the same, in this case
                 //there will be two locations, there's no need for () then
                 if ($aDataLine['outside start']== $aDataLine['inside start'] && $aDataLine['outside stop']== $aDataLine['inside stop']) {
