@@ -561,10 +561,10 @@ foreach ($aFiles as $sFile => $sCenter) {
                     //Further in the script there are more of these examples
                     //These are used in the test file to validate the script.
                 }
-                //This is where the information is decided to build the HGVS description.
+                //This is where the information is set to be a part of the HGVS description that will be built.
                 switch ($aDataLine['number of copies / upd']) {
-                    //The number represents the amount of times is present, where 0 means it's a homozygote deletion, 1 means it's a
-                    //heterozygote deletion, 3 means it's a heterozygote duplication
+                    //The number (copy number) represents the amount of times the area is present, where 0 means it's a homozygote deletion,
+                    // 1 means it's a heterozygote deletion, 3 means it's a heterozygote duplication
                     //, 4 means it's a homozygote duplication and no number means it affects the X/Y chromosome.
                     case '0':
                         $sVariantType = 'del';
@@ -596,14 +596,15 @@ foreach ($aFiles as $sFile => $sCenter) {
                         // If so, those will be handled differently.
                         $aLengths = [
                             'GRCh37' => [
-                                'chrX' => 155270560, //gevonden 239242-239248
-                                'chrY' => 59373566, //gevonden 245907, 245908
+                                'chrX' => 155270560, // Line 239242
+                                'chrY' => 59373566, //Lines 245908
                             ],
                             'GRCh38' => [
-                                'chrX' => 156040895, //niet gevonden
-                                'chrY' => 57227415, //niet gevonden
+                                'chrX' => 156040895, //No examples
+                                'chrY' => 57227415, //No examples
                             ]
                         ];
+                        //Check if it's about the whole chromosome.
                         if ($aDataLine['start position'] != 1
                             || !isset($aLengths[$aDataLine['genome build']][$aDataLine['chromosome']])
                             || $aLengths[$aDataLine['genome build']][$aDataLine['chromosome']] != $aDataLine['end postition']) {
@@ -662,16 +663,23 @@ foreach ($aFiles as $sFile => $sCenter) {
                 $sChromosome = $aDataLine['chromosome'];
                 $sGenome_build = $aDataLine['genome build'];
                 $sNC = HGVS_Chromosome::check($sChromosome . '(' . $sGenome_build  . ')')->getCorrectedValue();
-                //Because in this file there are multiple columns which contain the information to build an individual HGVS description,
-                //we're going to build a HGVS description for these columns.
+                //Because in this file there are multiple columns which contain information to build an HGVS description,
+                //we're going to build an individual HGVS description for each of these columns, this results in an array
+                //with 1 to 3 descriptions. If there are less than 3, it means that 1 or 2 columns we're unusable.
+                //If there are 3 descriptions, they're created using the following columns.
                 //The first one is based on the column 'description'
                 //The second one is already build in column 'hgvs'
                 //The third one is build using multiple columns: 'inside start', 'inside stop', 'outside start','outside stop'
                 //These will be compared with eachother.
 
                 //This is where the first HGVS description is build.
-                //Because the information in this colomn is inconsisten, we're going to use
-                //preg_match to find all possibilities.
+                //Because the information in this column is inconsistent, we're going to use
+                //regular expressions to find all possibilities.
+                //The goal is to use as little regular expressions as possible, so that one regular expression covers multiple variants
+                //After a while there are only variants left that are too unique, they would need a regular expression for each variant
+                //In these cases we're going to check if column B ('hgvs') starts with 'NC'. If the answer is yes, the next step is to
+                //see if there is information if the area of the variant got deleted or duplicated. Then the HGVS description will be built,
+                //else, we're going to skip this column and will have 1 description in the array, the third one.
                 if (preg_match('/^((seq|arr)\[GRCh(37|38)\])?([0-9XY]{1,2}).+\((pter|[0-9]+)_([0-9]+|qter)\)x([0-9o~]{1,3})/i', str_replace(" ","",$aDataLine['description']), $aRegs)) {
                     list(,,,,$sChrom, $sStart, $sEnd, $sCount) = $aRegs;
                     if ($sCount == '0' || $sCount == 'o') {
@@ -714,12 +722,12 @@ foreach ($aFiles as $sFile => $sCenter) {
                         $sVariantType = 'dup';
                         $sHomOrHet = 'homozygote';
                     }
-                    //Using the information from column A to make a line with the required information
+                    //Using the information from column A to make a HGVS description with the required information
                     //checking the information for mistakes (wrong order of numbers, value of -1, etc)
                     $aChecking[] = HGVS::check($sNC.":g.".$aRegs[5]."_".$aRegs[6].$sVariantType)->getCorrectedValue();
                 } elseif (preg_match('/^(seq\[GRCh37\] )?seq\(([0-9XY]{1,2})\)x([0-9~]{1,3})(,\(([0-9XY]{1,2})\)x([0-9~]{1,3}))?/', $aDataLine['description'], $aRegs)) {
                     //in this case it's possible that the array length is not consistent (some have a length of 4, some longer)
-                    //That's why there is an if loop installed
+                    //That's why there is an if statement installed
                     $nAantal = count($aRegs);
                     if ($nAantal <= '4') {
                         list(,,$sChrom, $sCount) = $aRegs;
@@ -758,8 +766,8 @@ foreach ($aFiles as $sFile => $sCenter) {
                     }
                     $aChecking[] = $sNC.":g.pter_qter".$sVariantType;
                 } elseif (preg_match('/^(seq\[GRCh37\] )?(del|dup|trp)\(([0-9XY]{1,2})\)\(([0-9a-z]+.?)+\)/', $aDataLine['description'], $aRegs)) {
-                    //In this case there isn't enough information to create a line
-                    //it's possible to decide if there was a deletion or duplication, this information will be used
+                    //In this case there isn't enough information to create a HGVS description
+                    //it's possible to decide if there was a deletion or a duplication, this information will be used to build the third HGVS description
                     list(,,$sVariantType,$schrom,) = $aRegs;
                     if ($sVariantType == 'trp'){
                         //Line 176
@@ -797,8 +805,8 @@ foreach ($aFiles as $sFile => $sCenter) {
                     $aDataLine['outside start'] = 'pter';
                 } elseif ($aDataLine['outside start']==-1 || $aDataLine['outside start']==1) {
                     //If the outside start is -1 or outside start is 1, we translate to ?
-                    //The reason why here we translate outside start to ? instead of pter is because the
-                    //inside start contains a number. We know that the first base is present, after it were not sure.
+                    //The reason why we translate outside start to ? instead of pter is because the
+                    //inside start contains a position. We know that the first base is present, after that we're not sure.
                     //So it's safer to use ? instead of pter.
                     //Line 728 (2/2)
                     $aDataLine['outside start'] = '?';
@@ -821,17 +829,17 @@ foreach ($aFiles as $sFile => $sCenter) {
                     $sVariant = HGVS::check($aDataLine['hgvs'])->getCorrectedValue();
                     $sVariant = preg_replace('/(:g\.)1_/','${1}pter_',$sVariant);
                     //If the outside start position is pter or the outside stop position is qter, they will
-                    //be changed to ?. The reason for this is, is that it's known that the first or last position is present.
-                    //what it means is that the deletion/duplication takes place somewhere in between th known location and pter/qter.
+                    //be changed to ?. The reason for this, is that it's known that the first and/or last position is present.
+                    //which means that the deletion/duplication takes place somewhere in between the known position and pter/qter.
                     //So it's safer to use ? instead of pter/qter.
                     $sVariant = preg_replace('/(:g\.\()(1|pter)_/','${1}?_',$sVariant);
-                    //reason why qter is repalced by ?
                     $sVariant = preg_replace('/_qter\)(del|dup|inv)$/','_?)${1}',$sVariant);
                     $aChecking[] = $sVariant;
                 }
                 //This is where the third HGVS description is build.
                 //There are some cases where the inside start and the outside start, the inside stop en the outside stop are the same, in this case
-                //there will be two locations, there's no need for () then
+                //there will be two locations, there is no need for () then.
+                //Example (1000_1000)_(3000_3000) will become 1000_3000.
                 if ($aDataLine['outside start']== $aDataLine['inside start'] && $aDataLine['outside stop']== $aDataLine['inside stop']) {
                     //Line 570
                     $aChecking[] = HGVS::check($sNC.":g.".$aDataLine['inside start']. "_". $aDataLine['inside stop'].$sVariantType)->getCorrectedValue();
@@ -840,14 +848,14 @@ foreach ($aFiles as $sFile => $sCenter) {
                     $aChecking[] = HGVS::check($sNC . ":g.(" . $aDataLine['outside start'] . "_" . $aDataLine['inside start'] . ")_(" . $aDataLine['inside stop'] . "_" . $aDataLine['outside stop'] . ")" . $sVariantType)->getCorrectedValue();
                 }
                 //This is a check on the build array for invalid values.
-                //If those are found, that line will not be used.
+                //If those are found, that HGVS description will not be used.
                 $aChecking = array_filter($aChecking, function ($sHGVS) {
                     return HGVS::checkVariant($sHGVS)->isValid();
                 });
                 //
                 $aUnique = array_unique($aChecking);
-                //counting how many unique lines there are in the array
-                //If the amount is 1, the created lines are the same and correct
+                //counting how many unique HGVS descriptions there are in the array
+                //If the amount is 1, the created HGVS descriptions are the same and correct
                 //they will be saved, otherwise they will be further inspected.
                 $nAmountUnique = count($aUnique);
                 if ($nAmountUnique == 1){
@@ -855,7 +863,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                     $sAddLine = current($aUnique);
                     $sVariantKey = $sAddLine;
                 } else {
-                    //This check is to see if the created lines agree if there was an deletion, duplication or sup.
+                    //This check is to see if the created HGVS descriptions agree if there was a deletion or duplication.
                     //If they are different, this variant will not be used.
                     foreach ($aUnique as $sEffect) {
                         if (preg_match_all('/((del|dup|sup))/',$sEffect,$aMatches)){
@@ -866,13 +874,13 @@ foreach ($aFiles as $sFile => $sCenter) {
                     $aUnEff = array_unique($aDelDup);
                     $nUnDelDup = count($aUnEff);
                     if ($nUnDelDup == 1) {
-                        //This check is to see if the whole chromosome is duplicated, deleted or sup.
+                        //This check is to see if the whole chromosome is duplicated or deleted.
                         $sCheck = strstr($aChecking[0],'pter_qter');
                         if ($sCheck == true && $aDataLine['inside start']=='pter') {
                             $sVariantKey = $aChecking[0];
                         } else {
-                            //This is where only the numbers are taken to compare them.
-                            //To see if there is only one line with the maximum amount of numbers.
+                            //This is where only the numbered positions are taken to compare them.
+                            //To see if there is only one HGVS description with the maximum amount of numbers.
                             foreach ($aUnique as $sHGVS) {
                                 $sVariant = strstr($sHGVS, ':');
                                 preg_match_all('/([0-9]+)/', $sVariant, $aMatches);
@@ -881,7 +889,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                             $aPositionCounts = array_map('count', $aPositions);
                             $nMaxPositions = max($aPositionCounts);
                             $nWithMaxPositions = count(array_intersect($aPositionCounts, [$nMaxPositions]));
-                            //If there's only one line with the maximum amount of numbers, we'll continue
+                            //If there is only one HGVS description with the maximum amount of positions, we will continue
                             if ($nWithMaxPositions == 1) {
                                 $iWithMaxPositions = array_search($nMaxPositions, $aPositionCounts);
                                 foreach ($aPositions as $i => $aPos) {
@@ -889,14 +897,15 @@ foreach ($aFiles as $sFile => $sCenter) {
                                         continue;
                                     }
                                     $aDiff = array_diff($aPos, $aPositions[$iWithMaxPositions]);
-                                    //Here we're going to check if the numbers in the shorter lines are present in
-                                    //the line with the most numbers. If they are, we'll continue.
+                                    //Here we are going to check if the positions in the shorter HGVS description are present in
+                                    //the HGVS description with the maximum positions. If they are, we will continue.
                                     if (empty($aDiff)) {
                                         $aLongestPos = $aPositions[$iWithMaxPositions];
                                         $aSafe = array_search($aLongestPos, $aPositions);
                                         if ($aSafe == 1) {
-                                            //This is where the arrays will be checked if there were more than one unique line.
-                                            //Starting by checking the length by using '_'
+                                            //This is where the arrays will be checked if there were more than one unique HGVS description.
+                                            //Starting by checking the length by counting the symbol: '_', this symbol is used because it is
+                                            //an indicator for the length.
                                             $nMax = max(array_map(function ($sHGVS) {
                                                 return substr_count($sHGVS, '_');
                                             }, $aUnique));
