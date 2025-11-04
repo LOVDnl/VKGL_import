@@ -824,8 +824,11 @@ foreach ($aFiles as $sFile => $sCenter) {
                         //NC_000001.10:g.(227504883_227751395)_(249152520_qter)dup
                         //We expect that the output says dup heterozygote
                         $sVariable = HGVS::checkVariant($aDataLine['HGVS'])->getInfo();
-                        $aInfo = $sVariable["data"];
-                        if (!$aInfo["type"]) {
+                        $aInfo = $sVariable['data'];
+                        if (empty($aInfo['type'])) {
+                            // E.g., NC_000023.10:g.[pter_qter]del^NC_000024.9:g.[pter_qter]del.
+                            // This is recognized as a reference sequence, and then we don't have a variant type.
+                            // Just drop the entire line.
                             continue 2;
                         } else {
                             $sVariantType = $aInfo["type"];
