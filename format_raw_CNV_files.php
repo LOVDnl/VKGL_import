@@ -620,7 +620,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                         }
 
                         // If we get here, we're dealing with a del/dup of the whole chromosome.
-                        //Here $sHomOrHet stands for the syndrome that is created by the change.
+                        // Here, $sHomOrHet is given the name of the syndrome that is created by the change.
                         switch ($aDataLine['type of cnv']) {
                             case 'gain':
                                 //In this statement we're going to be looking at the columns 'type of cnv','chromosome','start position', 'end position'
@@ -632,17 +632,16 @@ foreach ($aFiles as $sFile => $sCenter) {
                                 //To validate this data we're checking if the output matches with our expectation
                                 //In this case we're checking if the output says dup Klinefelter(xxy) or triple x-syndrome(xxx)
                                 if ($aDataLine['chromosome'] == 'chrX') {
-                                    $sHomOrHet = 'Klinefelter(xxy) of triple x-syndrome(xxx)';
+                                    $sHomOrHet = 'Klinefelter syndrome (47,XXY) or triple-x syndrome (47,XXX)';
                                 } elseif ($aDataLine['chromosome'] == 'chrY') {
-                                    $sHomOrHet = 'Klinefelter(xxy) of Jacobs(xyy)';
+                                    $sHomOrHet = 'Jacobs syndrome (47,XYY)';
                                 }
                                 break;
 
                             case 'loss':
-                                //only Y chromosome isn't possible.
-                                //If someone who originally had XY chromosomes and loses the X chromosome, so they're left with only the Y chromosome.
-                                //This person isn't viable.
-                                $sHomOrHet = 'Turner (x)';
+                                // Only complete loss of chrX has been reported. Only 45,X is viable, 45,Y is not.
+                                // So the genotype must be 45,X here.
+                                $sHomOrHet = 'Turner syndrome (45,X)';
                                 break;
                         }
                         break;
