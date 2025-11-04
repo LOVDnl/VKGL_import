@@ -281,7 +281,7 @@ $nWarningsOccurred = 0;
 // Determine ROOT_PATH. We need to load the LOVD HGVS library.
 define('ROOT_PATH', dirname($sScriptName));
 if (!file_exists(ROOT_PATH . '/libs/HGVS-syntax-checker/HGVS.php')) {
-    // This API requires the HGVS.php class file from https://github.com/LOVDnl/HGVS-syntax-checker.
+    // This script requires the HGVS.php class file from https://github.com/LOVDnl/HGVS-syntax-checker.
     // If not found, double-check if you ran `git submodule init && git submodule update`.
     lovd_printIfVerbose(VERBOSITY_LOW,
         'Error: Could not load the LOVD HGVS library. Please check the installation instructions in README.md.' . "\n\n");
@@ -356,6 +356,10 @@ $nCentersFound = 0;
 
 foreach ($aFiles as $nKey => $sFile) {
     list($sName, $sExt) = explode('.', basename($sFile), 2);
+    // If the name contains a date, take that off.
+    if (preg_match('/^([^0-9]+)[_-][0-9-]+$/', $sName, $aRegs)) {
+        $sName = strtolower($aRegs[1]);
+    }
     $aCentersFound[] = $sName;
     $nCentersFound ++;
 
@@ -460,7 +464,7 @@ foreach ($aFiles as $sFile => $sCenter) {
 
     // The Radboud data doesn't have a header :(
     if ($sCenter == 'radboud_mumc') {
-        // Invent the header for radboud data.
+        // Invent the header for the Radboud/MUMC+ data.
         $sLine = implode("\t", array(
             'description', //(0): seq[GRCh37] 11pterp15.5(0_926088)x3
             'hgvs', //(1): NC_000011.9:g.(0)_(926088_959436)dup
@@ -499,6 +503,7 @@ foreach ($aFiles as $sFile => $sCenter) {
     $aSignature = $aHeaders;
     sort($aSignature);
     $sHeaderSignature = implode(';', $aSignature);
+
     if (!isset($_CONFIG['header_signatures'][$sHeaderSignature])) {
         lovd_printIfVerbose(VERBOSITY_LOW,
             'Error: File does not conform to any known format: ' . $sFile . ".\n({$sHeaderSignature})\n\n");
@@ -572,6 +577,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                         $sVariantType = 'del';
                         $sHomOrHet = 'homozygote';
                         break;
+
                     case '1':
                         $sVariantType = 'del';
                         $sHomOrHet = 'heterozygote';
@@ -586,6 +592,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                         $sVariantType = 'dup';
                         $sHomOrHet = 'homozygote';
                         break;
+
                     case '':
                         // We didn't get a copy number, so we'll have to guess it.
                         // This only happens with chrX and chrY.
@@ -624,6 +631,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                             }
                             break;
                         }
+
                         // If we get here, we're dealing with a del/dup of the whole chromosome.
                         //Here $sHomOrHet stands for the syndrome that is created by the change.
                         switch ($aDataLine['type of cnv']) {
@@ -644,6 +652,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                                     $sHomOrHet = 'Klinefelter(xxy) of Jacobs(xyy)';
                                 }
                                 break;
+
                             case 'loss':
                                 //only Y chromosome isn't possible.
                                 //If someone who originally had XY chromosomes and loses the X chromosome, so they're left with only the Y chromosome.
@@ -658,13 +667,15 @@ foreach ($aFiles as $sFile => $sCenter) {
                 if ($aDataLine['start position'] == 1 ){
                     $aDataLine['start position'] = 'pter';
                 }
-                //This is where the collected information gets put together to form the HGVS description.
+
+                // This is where the collected information gets put together to form the HGVS description.
                 $sVariantKey = $sNC.':g.'.$aDataLine['start position'].'_'.$aDataLine['end postition'].$sVariantType;
                 $aValues = array(
                         $sCenter => str_replace("vus", "VUS",strtolower($aDataLine['cnv classification'])),
                         $sCenter . $_CONFIG['columns_center_suffix'] => $sHomOrHet,
                 );
                 break;
+
             case 'radboud':
                 $sVariantType = '';
                 $sHomOrHet = '';
@@ -980,8 +991,8 @@ foreach ($aFiles as $sFile => $sCenter) {
                     $sCNV_class = 'pathogenic';
                 }
                 $aValues = array(
-                        $sCenter => str_replace("vus","VUS",strtolower($sCNV_class)),
-                        $sCenter . $_CONFIG['columns_center_suffix'] => $sHomOrHet,
+                    $sCenter => str_replace("vus","VUS",strtolower($sCNV_class)),
+                    $sCenter . $_CONFIG['columns_center_suffix'] => $sHomOrHet,
                 );
 
                 break;
@@ -1113,9 +1124,8 @@ foreach ($aData as $sVariantKey => $aVariant) {
     // Decompose the key again to Chr, Pos, Ref, Alt, Gene, Transcript, cDNA.
     $aVariantKey = explode('|', $sVariantKey);
 
+    // For CNVs, the only thing we'll store is the HGVS description and each center's classification.
     $aLine = array($sVariantKey);
-        // https://github.com/molgenis/data-transform-vkgl/blob/master/src/main/java/org/molgenis/mappers/VkglTableMapper.java#L10
-
 
     // Loop centers.
     foreach ($aCentersFound as $sCenter) {
