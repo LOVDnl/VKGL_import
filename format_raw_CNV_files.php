@@ -568,6 +568,48 @@ foreach ($aFiles as $sFile => $sCenter) {
                     //To validate this data we're checking if the output matches with our expectation
                     //In this case we're checking if the output says dup homozygote.
                 }
+
+                // If the starting position is 1, we translate it to pter.
+                if ($aDataLine['start position'] == 1) {
+                    $aDataLine['start position'] = 'pter';
+                }
+
+                // If the end position is the end of the chromosome, we translate it to qter.
+                // Source: https://ldh.clinicalgenome.org/redmine/projects/clingen-allele-registry/wiki/VCF_Header_GRCh37
+                $aLengths = [
+                    'GRCh37' => [
+                        'chr1' => 249250621,
+                        'chr2' => 243199373,
+                        'chr3' => 198022430,
+                        'chr4' => 191154276,
+                        'chr5' => 180915260,
+                        'chr6' => 171115067,
+                        'chr7' => 159138663,
+                        'chr8' => 146364022,
+                        'chr9' => 141213431,
+                        'chr10' => 135534747,
+                        'chr11' => 135006516,
+                        'chr12' => 133851895,
+                        'chr13' => 115169878,
+                        'chr14' => 107349540,
+                        'chr15' => 102531392,
+                        'chr16' => 90354753,
+                        'chr17' => 81195210,
+                        'chr18' => 78077248,
+                        'chr19' => 59128983,
+                        'chr20' => 63025520,
+                        'chr21' => 48129895,
+                        'chr22' => 51304566,
+                        'chrX' => 155270560,
+                        'chrY' => 59373566,
+                        'chrM' => 16569,
+                    ],
+                ];
+                if (isset($aLengths[$aDataLine['genome build']][$aDataLine['chromosome']])
+                    && $aLengths[$aDataLine['genome build']][$aDataLine['chromosome']] == $aDataLine['end postition']) {
+                    $aDataLine['end postition'] = 'qter';
+                }
+
                 //This is where the information is set to be a part of the HGVS description that will be built.
                 switch ($aDataLine['number of copies / upd']) {
                     //The number (copy number) represents the amount of times the area is present, where 0 means it's a homozygote deletion,
@@ -600,22 +642,9 @@ foreach ($aFiles as $sFile => $sCenter) {
                         $sVariantType = ($aDataLine['type of cnv'] == 'gain'? 'dup' : 'del');
 
                         // First, determine whether the del/dup is for the whole chromosome.
-                        // If so, those will be handled differently.
-                        $aLengths = [
-                            'GRCh37' => [
-                                'chrX' => 155270560, // Line 239242
-                                'chrY' => 59373566, //Lines 245908
-                            ],
-                            'GRCh38' => [
-                                'chrX' => 156040895, //No examples
-                                'chrY' => 57227415, //No examples
-                            ]
-                        ];
-                        //Check if it's about the whole chromosome.
-                        if ($aDataLine['start position'] != 1
-                            || !isset($aLengths[$aDataLine['genome build']][$aDataLine['chromosome']])
-                            || $aLengths[$aDataLine['genome build']][$aDataLine['chromosome']] != $aDataLine['end postition']) {
-                            $sHomOrHet = 'unknown';
+                        // If so, those will be handled differently. Handle first all *other* cases.
+                        if ($aDataLine['start position'] != 'pter' || $aDataLine['end postition'] != 'qter') {
+                            $sHomOrHet = 'unknown'; // We have no copy number, so we can't tell.
                             break;
                         }
 
@@ -645,10 +674,6 @@ foreach ($aFiles as $sFile => $sCenter) {
                                 break;
                         }
                         break;
-                }
-                //If the starting position is 1, we translate it to pter.
-                if ($aDataLine['start position'] == 1 ){
-                    $aDataLine['start position'] = 'pter';
                 }
 
                 // A dup of an entire chromosome is a "sup" (supernumerary chromosome).
