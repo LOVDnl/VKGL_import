@@ -640,38 +640,23 @@ foreach ($aFiles as $sFile => $sCenter) {
                         // This only happens with chrX and chrY.
                         // Take the variant type from a different field.
                         $sVariantType = ($aDataLine['type of cnv'] == 'gain'? 'dup' : 'del');
+                        $sHomOrHet = 'unknown'; // The default.
 
                         // First, determine whether the del/dup is for the whole chromosome.
-                        // If so, those will be handled differently. Handle first all *other* cases.
-                        if ($aDataLine['start position'] != 'pter' || $aDataLine['end postition'] != 'qter') {
-                            $sHomOrHet = 'unknown'; // We have no copy number, so we can't tell.
-                            break;
-                        }
-
-                        // If we get here, we're dealing with a del/dup of the whole chromosome.
-                        // Here, $sHomOrHet is given the name of the syndrome that is created by the change.
-                        switch ($aDataLine['type of cnv']) {
-                            case 'gain':
-                                //In this statement we're going to be looking at the columns 'type of cnv','chromosome','start position', 'end position'
-                                //In line 239242 from 'LUMC_2023-12.tsv' these columns contain the following information:
-                                //chromosome: chrX
-                                //start position: 1
-                                //end position: 155270560
-                                //type of cnv: gain
-                                //To validate this data we're checking if the output matches with our expectation
-                                //In this case we're checking if the output says dup Klinefelter(xxy) or triple x-syndrome(xxx)
+                        if ($aDataLine['start position'] == 'pter' && $aDataLine['end postition'] == 'qter') {
+                            // Here, $sHomOrHet is given the name of the syndrome that is created by the change.
+                            if ($aDataLine['type of cnv'] == 'gain') {
                                 if ($aDataLine['chromosome'] == 'chrX') {
                                     $sHomOrHet = 'Klinefelter syndrome (47,XXY) or triple-x syndrome (47,XXX)';
                                 } elseif ($aDataLine['chromosome'] == 'chrY') {
                                     $sHomOrHet = 'Jacobs syndrome (47,XYY)';
                                 }
-                                break;
 
-                            case 'loss':
+                            } elseif ($aDataLine['type of cnv'] == 'loss') {
                                 // Only complete loss of chrX has been reported. Only 45,X is viable, 45,Y is not.
                                 // So the genotype must be 45,X here.
                                 $sHomOrHet = 'Turner syndrome (45,X)';
-                                break;
+                            }
                         }
                         break;
                 }
