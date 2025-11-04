@@ -651,6 +651,11 @@ foreach ($aFiles as $sFile => $sCenter) {
                     $aDataLine['start position'] = 'pter';
                 }
 
+                // A dup of an entire chromosome is a "sup" (supernumerary chromosome).
+                if ($aDataLine['start position'] == 'pter' && $aDataLine['end postition'] == 'qter' && $sVariantType == 'dup') {
+                    $sVariantType = 'sup';
+                }
+
                 // This is where the collected information gets put together to form the HGVS description.
                 $sVariantKey = $sNC.':g.'.$aDataLine['start position'].'_'.$aDataLine['end postition'].$sVariantType;
                 $aValues = array(
