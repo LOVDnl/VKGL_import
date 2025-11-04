@@ -556,10 +556,12 @@ foreach ($aFiles as $sFile => $sCenter) {
                 //  set to "High Copy Gain", which we'll interpret as 4 copies.
                 if (!$aDataLine['number of copies / upd'] && $aDataLine['genomic nomenclature'] == 'High Copy Gain') {
                     $aDataLine['number of copies / upd'] = 4;
-                    //line 245941
-                    //This is an example line from file 'LUMC_2023-12.tsv' that goes through this statement.
-                    //Further in the script there are more of these examples
-                    //These are used in the test file to validate the script.
+                    //In this statement we're going to be looking at the columns 'genomic nomenclature' and 'number of copies / upd'
+                    //In line 245941 from 'LUMC_2023-12.tsv' these columns contain the following information:
+                    //genomic nomenclature: High Copy Gain
+                    //number of copies / upd: empty
+                    //To validate this data we're checking if the output matches with our expectation
+                    //In this case we're checking if the output says dup homozygote.
                 }
                 //This is where the information is set to be a part of the HGVS description that will be built.
                 switch ($aDataLine['number of copies / upd']) {
@@ -610,7 +612,16 @@ foreach ($aFiles as $sFile => $sCenter) {
                             || $aLengths[$aDataLine['genome build']][$aDataLine['chromosome']] != $aDataLine['end postition']) {
                             $sHomOrHet = 'unknown';
                             if ($aDataLine['type of cnv'] == 'gain') {
-                                //line 241065
+                                //In this statement we're going to be looking at the columns 'start position','genome build','chromosome','end position','type of cnv'
+                                //In line 241065 from 'LUMC_2023-12.tsv' these columns contain the following information:
+                                //chromosome: chrX
+                                //start position: 49208455
+                                //end position:	49453815
+                                //genome build: GRCh37
+                                //type of cnv: gain
+                                //To validate this data we're checking if the output matches with our expectation
+                                //In this case we're checking if the output says dup unknown
+                                //The reason that it's unknown, is because it's about the X/Y chromosomes.
                                 $sVariantType = 'dup';
                             } else {
                                 $sVariantType = 'del';
@@ -622,14 +633,20 @@ foreach ($aFiles as $sFile => $sCenter) {
                         //Here $sHomOrHet stands for the syndrome that is created by the change.
                         switch ($aDataLine['type of cnv']) {
                             case 'gain':
+                                //In this statement we're going to be looking at the columns 'type of cnv','chromosome','start position', 'end position'
+                                //In line 239242 from 'LUMC_2023-12.tsv' these columns contain the following information:
+                                //chromosome: chrX
+                                //start position: 1
+                                //end position: 155270560
+                                //type of cnv: gain
+                                //To validate this data we're checking if the output matches with our expectation
+                                //In this case we're checking if the output says dup Klinefelter(xxy) or triple x-syndrome(xxx)
                                 if ($aDataLine['chromosome'] == 'chrX') {
                                     $sVariantType = 'dup';
-                                    $sHomOrHet = 'Klinefelter(xxy) of triple x-syndroom(xxx)';
-                                    //line 239242
+                                    $sHomOrHet = 'Klinefelter(xxy) of triple x-syndrome(xxx)';
                                 } elseif ($aDataLine['chromosome'] == 'chrY') {
                                     $sVariantType = 'dup';
                                     $sHomOrHet = 'Klinefelter(xxy) of Jacobs(xyy)';
-                                    //line 245908
                                 }
                                 break;
                             case 'loss':
@@ -666,7 +683,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                 //Because in this file there are multiple columns which contain information to build an HGVS description,
                 //we're going to build an individual HGVS description for each of these columns, this results in an array
                 //with 1 to 3 descriptions. If there are less than 3, it means that 1 or 2 columns we're unusable.
-                //If there are 3 descriptions, they're created using the following columns.
+                //If there are 3 descriptions, they're created using the following columns:
                 //The first one is based on the column 'description'
                 //The second one is already build in column 'hgvs'
                 //The third one is build using multiple columns: 'inside start', 'inside stop', 'outside start','outside stop'
@@ -768,6 +785,17 @@ foreach ($aFiles as $sFile => $sCenter) {
                 } elseif (preg_match('/^(seq\[GRCh37\] )?(del|dup|trp)\(([0-9XY]{1,2})\)\(([0-9a-z]+.?)+\)/', $aDataLine['description'], $aRegs)) {
                     //In this case there isn't enough information to create a HGVS description
                     //it's possible to decide if there was a deletion or a duplication, this information will be used to build the third HGVS description
+                    //The description of line 176 (radboud_mumc.txt)is as follows:
+                    //seq[GRCh37] trp(22)(q11.1q11.21)
+                    //To validate this data we're checking if the output matches with our expectation
+                    //description is used to see if the line goes through this statement.
+                    //In this case we're dealing with a trp, this means that the area on one
+                    //chromosome is tripled, which results in a homozygote duplication because
+                    //there will be 4 examples in the 2 chromosomes.
+                    //we expect that the output will say dup homozygote.
+                    //If it's not trp, we're going to use the one given (del/dup)
+                    //In this case there is no possibility for a homozygote deletion, because
+                    //we haven't encountered it.
                     list(,,$sVariantType,$schrom,) = $aRegs;
                     if ($sVariantType == 'trp'){
                         //Line 176
@@ -778,12 +806,40 @@ foreach ($aFiles as $sFile => $sCenter) {
                         $sHomOrHet = 'heterozygote';
                     }
                 } elseif (preg_match('/^((Seq|arr)\[GRCh(37|38)\] )?([0-9a-z]{2,4}\.?)+\(([0-9]+)(x)[0-9],([0-9]+)_([0-9]+)(x)([0-9]),([0-9]+)(x)([0-9])\)/', $aDataLine['description'], $aRegs)) {
-                    //Line 38
-                    $sHomOrHet = 'homozygote';
+                    //The description of line 38 (radboud_mumc.txt)is as follows:
+                    //Seq[GRCh37] 4p16.3p15.33(299172x2,331699_13339187x1,13370153x2)
+                    //To validate this data we're checking if the output matches with our expectation
+                    //description is used to see if the line goes through this statement.
+                    //In this case it's visible which area is unchanged , because the x2 after the positions,
+                    //The area that is changed has the positions with x1 behind it.
+                    //we expect that the output will say del heterozygote.
+                    $sHomOrHet = 'heterozygote';
                     $sVariantType = 'del';
                     $aChecking[] = HGVS::check($sNC.":g.(".$aRegs[5]."_".$aRegs[7].")_(".$aRegs[8]."_".$aRegs[11].")". $sVariantType)->getCorrectedValue();
                 } else {
+                    //The description of line 176 (radboud_mumc.txt)is as follows:
+                    //seq[GRCh37] trp(22)(q11.1q11.21)
+                    //To validate this data we're checking if the output matches with our expectation
+                    //description is used to see if the line goes through this statement.
+                    //In this case we're dealing with a trp, this means that the area on one
+                    //chromosome is tripled, which results in a homozygote duplication because
+                    //there will be 4 examples in the 2 chromosomes.
+                    //we expect that the output will say dup homozygote.
+                    //If it's not trp, we're going to use the one given (del/dup)
+                    //In this case there is no possibility for a homozygote deletion, because
+                    //we haven't encountered it.
                     if (substr($aDataLine['hgvs'],0,2)=='NC') {
+                        //The description of line 718 (radboud)mumc.txt) is as follows:
+                        //seq[GRCh37] 1q42.13qter227751395_249152520)x3
+                        //The description of the lines that end up here are unusable.
+                        //Whether it's spelling mistakes, incorrect information or that the description
+                        //doesn't fall under the earlier regular expressions, and they would need
+                        //a unique regular expression for each description.
+                        //In these cases we're going to look at a different column.
+                        //We're looking at the column hgvs, but only the ones that start with NC.
+                        //The hgvs of lin 718 is as follows:
+                        //NC_000001.10:g.(227504883_227751395)_(249152520_qter)dup
+                        //We expect that the output says dup heterozygote
                         $sVariable = HGVS::checkVariant($aDataLine['hgvs'])->getInfo();
                         $aInfo = $sVariable["data"];
                         if (!$aInfo["type"]) {
