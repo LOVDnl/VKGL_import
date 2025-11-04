@@ -96,7 +96,7 @@ $_CONFIG = array(
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
     'header_signatures' => array(
         'chromosome;clinical phenotypes;cnv classification;constitutional/acquired variant;end postition;flanking normals - pter;flanking normals - qter;genome build;genomic nomenclature;inheritance;internal identifier;international system for human cytogenomic nomenclature;lab upload date;list of overlapping genes (hgnc);number of copies / upd;parental origin;phenotype (hpo);start and end chromosome band;start position;timestamp last processed;type of cnv;type of platform;type of test' => 'lumc',
-        'chromosome;classification;description;effect;genes;genome build;hgvs;inside start;inside stop;location;outside start;outside stop;p/q arm;protocol' => 'radboud',
+        'HGVS;build;chromosome;classification;description;genes;inside start;inside stop;location;outside start;outside stop;p/q arm;protocol;type' => 'radboud',
     ),
     'mutalyzer_URL' => 'https://v2.mutalyzer.nl/',
     'user' => array(
@@ -466,20 +466,20 @@ foreach ($aFiles as $sFile => $sCenter) {
     if ($sCenter == 'radboud_mumc') {
         // Invent the header for the Radboud/MUMC+ data.
         $sLine = implode("\t", array(
-            'description', //(0): seq[GRCh37] 11pterp15.5(0_926088)x3
-            'hgvs', //(1): NC_000011.9:g.(0)_(926088_959436)dup
-            'genome build', //(2): GRCh37
-            'chromosome', //(3): chr11
-            'inside start', //(4): 1
-            'inside stop', //(5): 926088
-            'outside start', //(6): 1
-            'outside stop', //(7): 959436
-            'effect', //(8): DUPLICATION
-            'p/q arm', //(9): pter
-            'location', //(10): p15.5
-            'genes', //(11): ANO9,AP006621.5,AP2A2,ATHL1,B4GALNT4,BET1L,C11ORF35,CD151,CDHR5,CEND1,CHID1,DEAF1,DRD4,EFCAB4A,EPS8L2,HRAS,IFITM1,IFITM2,IFITM3,IFITM5,IRF7,LRRC56,NLRP6,ODF3,PDDC1,PHRF1,PIDD,PKP3,PNPLA2,POLR2L,PSMD13,PTDSS2,RASSF7,RIC8A,RNH1,RPLP2,SCGB1C1,SCT,SIGIRR,SIRT3,SLC25A22,TALDO1,TMEM80,TSPAN4
-            'classification', //(12): class 4
-            'protocol', //(13): Exome
+            'description',    // seq[GRCh37] 11pterp15.5(0_926088)x3
+            'HGVS',           // NC_000011.9:g.(0)_(926088_959436)dup
+            'build',          // GRCh37
+            'chromosome',     // chr11
+            'inside start',   // 1
+            'inside stop',    // 926088
+            'outside start',  // 1
+            'outside stop',   // 959436
+            'type',           // DUPLICATION
+            'p/q arm',        // pter
+            'location',       // p15.5
+            'genes',          // ANO9,AP006621.5,AP2A2,ATHL1,B4GALNT4,BET1L,C11ORF35,CD151,CDHR5,CEND1,CHID1,DEAF1,DRD4,EFCAB4A,EPS8L2,HRAS,IFITM1,IFITM2,IFITM3,IFITM5,IRF7,LRRC56,NLRP6,ODF3,PDDC1,PHRF1,PIDD,PKP3,PNPLA2,POLR2L,PSMD13,PTDSS2,RASSF7,RIC8A,RNH1,RPLP2,SCGB1C1,SCT,SIGIRR,SIRT3,SLC25A22,TALDO1,TMEM80,TSPAN4
+            'classification', // class 4
+            'protocol',       // Exome
         ));
 
     } else {
@@ -555,8 +555,8 @@ foreach ($aFiles as $sFile => $sCenter) {
                 $sHomOrHet = '';
                 $sVariantType = '';
                 $sChromosome = $aDataLine['chromosome'];
-                $sGenome_build = $aDataLine['genome build'];
-                $sNC = HGVS_Chromosome::check($sChromosome . '(' . $sGenome_build  . ')')->getCorrectedValue();
+                $sBuild = $aDataLine['genome build'];
+                $sNC = HGVS_Chromosome::check($sChromosome . '(' . $sBuild  . ')')->getCorrectedValue();
                 // Some data doesn't have a number of copies listed, but does have the "Genomic Nomenclature" column
                 //  set to "High Copy Gain", which we'll interpret as 4 copies.
                 if (!$aDataLine['number of copies / upd'] && $aDataLine['genomic nomenclature'] == 'High Copy Gain') {
@@ -683,14 +683,14 @@ foreach ($aFiles as $sFile => $sCenter) {
                 $aPositions = array();
                 $aDelDup = array();
                 $sChromosome = $aDataLine['chromosome'];
-                $sGenome_build = $aDataLine['genome build'];
-                $sNC = HGVS_Chromosome::check($sChromosome . '(' . $sGenome_build  . ')')->getCorrectedValue();
+                $sBuild = $aDataLine['build'];
+                $sNC = HGVS_Chromosome::check($sChromosome . '(' . $sBuild  . ')')->getCorrectedValue();
                 //Because in this file there are multiple columns which contain information to build an HGVS description,
                 //we're going to build an individual HGVS description for each of these columns, this results in an array
                 //with 1 to 3 descriptions. If there are less than 3, it means that 1 or 2 columns we're unusable.
                 //If there are 3 descriptions, they're created using the following columns:
                 //The first one is based on the column 'description'
-                //The second one is already build in column 'hgvs'
+                //The second one is already build in column 'HGVS'
                 //The third one is build using multiple columns: 'inside start', 'inside stop', 'outside start','outside stop'
                 //These will be compared with eachother.
 
@@ -699,7 +699,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                 //regular expressions to find all possibilities.
                 //The goal is to use as little regular expressions as possible, so that one regular expression covers multiple variants
                 //After a while there are only variants left that are too unique, they would need a regular expression for each variant
-                //In these cases we're going to check if column B ('hgvs') starts with 'NC'. If the answer is yes, the next step is to
+                //In these cases we're going to check if column B ('HGVS') starts with 'NC'. If the answer is yes, the next step is to
                 //see if there is information if the area of the variant got deleted or duplicated. Then the HGVS description will be built,
                 //else, we're going to skip this column and will have 1 description in the array, the third one.
                 if (preg_match('/^((seq|arr)\[GRCh(37|38)\])?([0-9XY]{1,2}).+\((pter|[0-9]+)_([0-9]+|qter)\)x([0-9o~]{1,3})/i', str_replace(" ","",$aDataLine['description']), $aRegs)) {
@@ -718,14 +718,14 @@ foreach ($aFiles as $sFile => $sCenter) {
                         $sVariantType = 'del';
                         $sHomOrHet = 'heterozygote';
                     } elseif ($sCount == '2'){
-                        //Deciding the variant based on column I ('effect')
-                        if ($aDataLine['effect'] == 'DUPLICATION') {
+                        //Deciding the variant based on column I ('type')
+                        if ($aDataLine['type'] == 'DUPLICATION') {
                             $sVariantType = 'dup';
                             $sHomOrHet = 'heterozygote';
-                        } elseif ($aDataLine['effect'] == 'DELETION') {
+                        } elseif ($aDataLine['type'] == 'DELETION') {
                             $sVariantType = 'del';
                             $sHomOrHet = 'heterozygote';
-                        }elseif ($aDataLine['effect'] == 'INSERTION') {
+                        }elseif ($aDataLine['type'] == 'INSERTION') {
                             $sVariantType = 'ins';
                             $sHomOrHet = 'homozygote';
                         }
@@ -827,7 +827,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                     //If it's not trp, we're going to use the one given (del/dup)
                     //In this case there is no possibility for a homozygote deletion, because
                     //we haven't encountered it.
-                    if (substr($aDataLine['hgvs'],0,2)=='NC') {
+                    if (substr($aDataLine['HGVS'],0,2)=='NC') {
                         //The description of line 718 (radboud)mumc.txt) is as follows:
                         //seq[GRCh37] 1q42.13qter227751395_249152520)x3
                         //The description of the lines that end up here are unusable.
@@ -839,7 +839,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                         //The hgvs of lin 718 is as follows:
                         //NC_000001.10:g.(227504883_227751395)_(249152520_qter)dup
                         //We expect that the output says dup heterozygote
-                        $sVariable = HGVS::checkVariant($aDataLine['hgvs'])->getInfo();
+                        $sVariable = HGVS::checkVariant($aDataLine['HGVS'])->getInfo();
                         $aInfo = $sVariable["data"];
                         if (!$aInfo["type"]) {
                             continue 2;
@@ -868,12 +868,12 @@ foreach ($aFiles as $sFile => $sCenter) {
                     $aDataLine['outside stop'] = '?';
                 }
                 //This is where the second HGVS description is build.
-                if ($aDataLine['hgvs']!=""){
+                if ($aDataLine['HGVS'] != "") {
                     //Line 732
-                    if (substr($aDataLine['hgvs'],-3)=='trp') {
-                        $aDataLine['hgvs'] = substr_replace($aDataLine['hgvs'],'dup',-3);
+                    if (substr($aDataLine['HGVS'], -3) == 'trp') {
+                        $aDataLine['HGVS'] = substr_replace($aDataLine['HGVS'],'dup',-3);
                     }
-                    $sVariant = HGVS::check($aDataLine['hgvs'])->getCorrectedValue();
+                    $sVariant = HGVS::check($aDataLine['HGVS'])->getCorrectedValue();
                     $sVariant = preg_replace('/(:g\.)1_/','${1}pter_',$sVariant);
                     //If the outside start position is pter or the outside stop position is qter, they will
                     //be changed to ?. The reason for this, is that it's known that the first and/or last position is present.
