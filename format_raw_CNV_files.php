@@ -571,25 +571,20 @@ foreach ($aFiles as $sFile => $sCenter) {
                     case '0':
                         $sVariantType = 'del';
                         $sHomOrHet = 'homozygote';
-                        //line 246243
                         break;
-
                     case '1':
                         $sVariantType = 'del';
                         $sHomOrHet = 'heterozygote';
-                        //line 192372
                         break;
 
                     case '3':
                         $sVariantType = 'dup';
                         $sHomOrHet = 'heterozygote';
-                        //line 3752
                         break;
 
                     case '4':
                         $sVariantType = 'dup';
                         $sHomOrHet = 'homozygote';
-                        //line 22196
                         break;
                     case '':
                         // We didn't get a copy number, so we'll have to guess it.
@@ -655,7 +650,6 @@ foreach ($aFiles as $sFile => $sCenter) {
                                 //This person isn't viable.
                                 $sVariantType = 'del';
                                 $sHomOrHet = 'Turner (x)';
-                                //line 239246
                                 break;
                         }
                         break;
@@ -708,11 +702,9 @@ foreach ($aFiles as $sFile => $sCenter) {
                         $sVariantType = 'del';
                         $sHomOrHet = 'homozygote';
                     } elseif ($sCount == '1'){
-                        //line 733
                         $sVariantType = 'del';
                         $sHomOrHet = 'heterozygote';
                     } elseif ($sCount == '2'){
-                        //line 665
                         //Deciding the variant based on column I ('effect')
                         if ($aDataLine['effect'] == 'DUPLICATION') {
                             $sVariantType = 'dup';
@@ -725,17 +717,12 @@ foreach ($aFiles as $sFile => $sCenter) {
                             $sHomOrHet = 'homozygote';
                         }
                     } elseif ($sCount == '2~3' && strpos($aDataLine['description'],'pter')!==false && strpos($aDataLine['description'],'qter')!==false){
-                        //line 456
-                        //line 8
                         $sVariantType = 'sup';
                         $sHomOrHet = 'unknown';
                     } elseif ($sCount == '3' || $sCount == '2~3'){
-                        //line 728 (1/2)
                         $sVariantType = 'dup';
                         $sHomOrHet = 'heterozygote';
                     } elseif ($sCount == '4'){
-                        //line 677
-                        //line 268
                         $sVariantType = 'dup';
                         $sHomOrHet = 'homozygote';
                     }
@@ -749,34 +736,27 @@ foreach ($aFiles as $sFile => $sCenter) {
                     if ($nAantal <= '4') {
                         list(,,$sChrom, $sCount) = $aRegs;
                         if ($sCount == '0') {
-                            //There is no example
                             $sVariantType = 'del';
                             $sHomOrHet = 'homozygote';
                         } elseif ($sCount == '1') {
-                            //line 10
                             $sVariantType = 'del';
                             $sHomOrHet = 'heterozygote';
                         } elseif ($sCount == '2') {
-                            //There is no example
                             $sVariantType = '=';
                             $sHomOrHet = 'homozygote';
                         } elseif ($sCount == '3') {
-                            //line 6
                             $sVariantType = 'dup';
                             $sHomOrHet = 'heterozygote';
                         }
                     } else {
                         list(,,$sChrom1,$sCount1,,$sChrom2, $sCount2) = $aRegs;
                         if ($sCount1 == '1' && $sCount2 == '1') {
-                            //There are no examples
                             $sVariantType = '=';
                             $sHomOrHet = 'homozygote';
                         } elseif ($sCount1 == '2' && $sCount2 == '0') {
-                            //There are no examples
                             $sVariantType = '=';
                             $sHomOrHet = 'homozygote';
                         } elseif ($sCount1 == '2' && $sCount2 == '1') {
-                            //line 9 (1/2)
                             $sVariantType = 'sup';
                             $sHomOrHet = 'Klinefelter(xxy)';
                         }
@@ -798,11 +778,9 @@ foreach ($aFiles as $sFile => $sCenter) {
                     //we haven't encountered it.
                     list(,,$sVariantType,$schrom,) = $aRegs;
                     if ($sVariantType == 'trp'){
-                        //Line 176
                         $sVariantType = 'dup';
                         $sHomOrHet = 'homozygote';
                     }else {
-                        //Line 715
                         $sHomOrHet = 'heterozygote';
                     }
                 } elseif (preg_match('/^((Seq|arr)\[GRCh(37|38)\] )?([0-9a-z]{2,4}\.?)+\(([0-9]+)(x)[0-9],([0-9]+)_([0-9]+)(x)([0-9]),([0-9]+)(x)([0-9])\)/', $aDataLine['description'], $aRegs)) {
@@ -843,20 +821,16 @@ foreach ($aFiles as $sFile => $sCenter) {
                         $sVariable = HGVS::checkVariant($aDataLine['hgvs'])->getInfo();
                         $aInfo = $sVariable["data"];
                         if (!$aInfo["type"]) {
-                            //There are no examples
                             continue 2;
                         } else {
-                            //Line 718
                             $sVariantType = $aInfo["type"];
                             $sHomOrHet = 'heterozygote';
                         }
                     } else {
-                        //Line 271
                         continue 2;
                     }
                 }
                 if ($aDataLine['outside start']==1 && $aDataLine['inside start']==1) {
-                    //Line 190
                     //If both starting positions are 1, we translate it to pter.
                     $aDataLine['outside start'] = 'pter';
                 } elseif ($aDataLine['outside start']==-1 || $aDataLine['outside start']==1) {
@@ -864,16 +838,12 @@ foreach ($aFiles as $sFile => $sCenter) {
                     //The reason why we translate outside start to ? instead of pter is because the
                     //inside start contains a position. We know that the first base is present, after that we're not sure.
                     //So it's safer to use ? instead of pter.
-                    //Line 728 (2/2)
                     $aDataLine['outside start'] = '?';
                 }
                 if ($aDataLine['inside start']==1) {
-                    //Line 9 (2/2)
-//Is deze nog nodig
                     $aDataLine['inside start'] = 'pter';
                 }
                 if ($aDataLine['outside stop']==-1) {
-                    //Line 722
                     $aDataLine['outside stop'] = '?';
                 }
                 //This is where the second HGVS description is build.
@@ -897,10 +867,8 @@ foreach ($aFiles as $sFile => $sCenter) {
                 //there will be two locations, there is no need for () then.
                 //Example (1000_1000)_(3000_3000) will become 1000_3000.
                 if ($aDataLine['outside start']== $aDataLine['inside start'] && $aDataLine['outside stop']== $aDataLine['inside stop']) {
-                    //Line 570
                     $aChecking[] = HGVS::check($sNC.":g.".$aDataLine['inside start']. "_". $aDataLine['inside stop'].$sVariantType)->getCorrectedValue();
                 } else {
-                    //Line 731
                     $aChecking[] = HGVS::check($sNC . ":g.(" . $aDataLine['outside start'] . "_" . $aDataLine['inside start'] . ")_(" . $aDataLine['inside stop'] . "_" . $aDataLine['outside stop'] . ")" . $sVariantType)->getCorrectedValue();
                 }
                 //This is a check on the build array for invalid values.
@@ -915,7 +883,6 @@ foreach ($aFiles as $sFile => $sCenter) {
                 //they will be saved, otherwise they will be further inspected.
                 $nAmountUnique = count($aUnique);
                 if ($nAmountUnique == 1){
-                    //Line 652
                     $sAddLine = current($aUnique);
                     $sVariantKey = $sAddLine;
                 } else {
