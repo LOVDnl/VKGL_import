@@ -596,6 +596,9 @@ foreach ($aFiles as $sFile => $sCenter) {
                     case '':
                         // We didn't get a copy number, so we'll have to guess it.
                         // This only happens with chrX and chrY.
+                        // Take the variant type from a different field.
+                        $sVariantType = ($aDataLine['type of cnv'] == 'gain'? 'dup' : 'del');
+
                         // First, determine whether the del/dup is for the whole chromosome.
                         // If so, those will be handled differently.
                         $aLengths = [
@@ -613,22 +616,6 @@ foreach ($aFiles as $sFile => $sCenter) {
                             || !isset($aLengths[$aDataLine['genome build']][$aDataLine['chromosome']])
                             || $aLengths[$aDataLine['genome build']][$aDataLine['chromosome']] != $aDataLine['end postition']) {
                             $sHomOrHet = 'unknown';
-                            if ($aDataLine['type of cnv'] == 'gain') {
-                                //In this statement we're going to be looking at the columns 'start position','genome build','chromosome','end position','type of cnv'
-                                //In line 241065 from 'LUMC_2023-12.tsv' these columns contain the following information:
-                                //chromosome: chrX
-                                //start position: 49208455
-                                //end position:	49453815
-                                //genome build: GRCh37
-                                //type of cnv: gain
-                                //To validate this data we're checking if the output matches with our expectation
-                                //In this case we're checking if the output says dup unknown
-                                //The reason that it's unknown, is because it's about the X/Y chromosomes.
-                                $sVariantType = 'dup';
-                            } else {
-                                $sVariantType = 'del';
-                                //line 246231
-                            }
                             break;
                         }
 
@@ -645,10 +632,8 @@ foreach ($aFiles as $sFile => $sCenter) {
                                 //To validate this data we're checking if the output matches with our expectation
                                 //In this case we're checking if the output says dup Klinefelter(xxy) or triple x-syndrome(xxx)
                                 if ($aDataLine['chromosome'] == 'chrX') {
-                                    $sVariantType = 'dup';
                                     $sHomOrHet = 'Klinefelter(xxy) of triple x-syndrome(xxx)';
                                 } elseif ($aDataLine['chromosome'] == 'chrY') {
-                                    $sVariantType = 'dup';
                                     $sHomOrHet = 'Klinefelter(xxy) of Jacobs(xyy)';
                                 }
                                 break;
@@ -657,7 +642,6 @@ foreach ($aFiles as $sFile => $sCenter) {
                                 //only Y chromosome isn't possible.
                                 //If someone who originally had XY chromosomes and loses the X chromosome, so they're left with only the Y chromosome.
                                 //This person isn't viable.
-                                $sVariantType = 'del';
                                 $sHomOrHet = 'Turner (x)';
                                 break;
                         }
