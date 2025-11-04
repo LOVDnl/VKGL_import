@@ -694,11 +694,13 @@ foreach ($aFiles as $sFile => $sCenter) {
                 if (preg_match('/^((seq|arr)\[GRCh(37|38)\])?([0-9XY]{1,2}).+\((pter|[0-9]+)_([0-9]+|qter)\)x([0-9o~]{1,3})/i', str_replace(" ","",$aDataLine['description']), $aRegs)) {
                     list(,,,,$sChrom, $sStart, $sEnd, $sCount) = $aRegs;
                     if ($sCount == '0' || $sCount == 'o') {
-                        //line 533
-                        //line 594
-                        //This is an example line from file 'radboud_mumc.txt' that goes through this statement.
-                        //Further in the script there are more of these examples
-                        //These are used in the test file to validate the script.
+                        //The description of line 533 (radboud_mumc.txt)is as follows:
+                        //seq[GRCh37] 16q24.2(87969910_87970060)x0
+
+                        //To validate this data we're checking if the output matches with our expectation
+                        //description is used to see if the line goes through this statement, and then looking at the number
+                        //at the end of description. In this case this is 0.
+                        //Because it's 0, we expect that the output will say del homozygote.
                         $sVariantType = 'del';
                         $sHomOrHet = 'homozygote';
                     } elseif ($sCount == '1'){
@@ -731,7 +733,15 @@ foreach ($aFiles as $sFile => $sCenter) {
                     $aChecking[] = HGVS::check($sNC.":g.".$aRegs[5]."_".$aRegs[6].$sVariantType)->getCorrectedValue();
                 } elseif (preg_match('/^(seq\[GRCh37\] )?seq\(([0-9XY]{1,2})\)x([0-9~]{1,3})(,\(([0-9XY]{1,2})\)x([0-9~]{1,3}))?/', $aDataLine['description'], $aRegs)) {
                     //in this case it's possible that the array length is not consistent (some have a length of 4, some longer)
-                    //That's why there is an if statement installed
+                    //That's why there is an if statement installed.
+                    //The description of line 6 (radboud_mumc.txt)is as follows:
+                    //seq[GRCh37] seq(18)x3
+
+                    //To validate this data we're checking if the output matches with our expectation
+                    //description is used to see if the line goes through this statement. In this case it's possible that
+                    //the length of the array varies, so we're checking that the line goes through the right statement.
+                    //Then we're going to look at the number at the end of description. In this case this is 3.
+                    //Because the length is 4 and the last number is 3, we expect that the output will say dup heterozygote.
                     $nAantal = count($aRegs);
                     if ($nAantal <= '4') {
                         list(,,$sChrom, $sCount) = $aRegs;
