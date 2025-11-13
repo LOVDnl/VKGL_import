@@ -509,7 +509,7 @@ $_SERVER = array_merge($_SERVER, array(
 ini_set('display_errors', '0');
 ini_set('log_errors', '0'); // CLI logs errors to the screen, apparently.
 // Let the LOVD believe we're accessing it through SSL. LOVDs that demand this, will otherwise block us.
-// We have error messages surpressed anyway, as the LOVD in question will complain when it tries to define "SSL" as well.
+// We have error messages suppressed anyway, as the LOVD in question will complain when it tries to define "SSL" as well.
 define('SSL', true);
 require ROOT_PATH . 'inc-init.php';
 require ROOT_PATH . 'inc-lib-form.php';
