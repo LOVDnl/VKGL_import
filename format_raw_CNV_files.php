@@ -649,6 +649,9 @@ foreach ($aFiles as $sFile => $sCenter) {
                                 if ($aDataLine['chromosome'] == 'chrX') {
                                     $sHomOrHet = 'Klinefelter syndrome (47,XXY) or triple-x syndrome (47,XXX)';
                                 } elseif ($aDataLine['chromosome'] == 'chrY') {
+                                    // Only duplication of chrY has been reported, That's why it's not possible
+                                    // to have Klinefelter syndrome (47, XXY). There needs to be a Y to be able
+                                    //to duplicate it.
                                     $sHomOrHet = 'Jacobs syndrome (47,XYY)';
                                 }
 
