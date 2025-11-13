@@ -664,20 +664,106 @@ foreach ($aData as $nKey => $aVariant) {
     $aVariant['classifications'] = array();
     $aVariant['genes'] = array();
     $aVariant['gene'] = ''; // FIXME: Stub.
+    //var_dump($aVariant);
+//!$aVariant['genes'], $aVariant['gene'] zijn denk ik niet nodig
+//!zijn leeg in array.
+//Voorbeeld output
+    //array(6) {
+    //  ["dna"]=> string(28) "NC_000001.10:g.pter_69209del"
+    //  ["lumc"]=> string(6) "benign"
+    //  ["radboud_mumc"]=> string(0) ""
+    //  ["classifications"]=>
+    //  array(0) {
+    //  }
+    //  ["gene"]=> string(0) ""
+    //}
     foreach ($aCentersFound as $sCenter) {
         if ($aVariant[$sCenter]) {
             $aVariant['classifications'][$sCenter] = str_replace(array('likely ', 'benign', 'pathogenic', 'vus'),
                 array('L', 'B', 'P', 'VUS'), strtolower($aVariant[$sCenter]));
             $aVariant['genes'][$sCenter] = $aVariant['gene'];
+            //var_dump($aVariant);
+//Voorbeeld output
+            //array(6) {
+            //  ["dna"]=> string(28) "NC_000001.10:g.pter_69209del"
+            //  ["lumc"]=> string(6) "benign"
+            //  ["radboud_mumc"]=> string(0) ""
+            //  ["classifications"]=>
+//!classification wordt hier gevuld ↓
+//nieuw stukje ↓
+            //  array(1) {
+            //      ["lumc"]=> string(1) "B"
+            //  }
+//eind nieuw
+            //  ["genes"]=>
+            //  array(1) {
+            //      ["lumc"]=> string (0) ""
+            //  }
+            //  ["gene"]=> string(0) ""
+            //}
         }
         unset($aVariant[$sCenter]);
+        //var_dump($aVariant);
+//Voorbeeld output
+        //array(5) {
+        //  ["dna"]=> string(28) "NC_000001.10:g.pter_69209del"
+//!Stukje verwijderd hier (["lumc"]=> string(6) "benign")
+//!Radboud nog niet verwijderd, wordt bij volgende stukje verwijderd, misschien te combineren
+//!dat beide tegelijk worden verrwijderd.
+        //  ["radboud_mumc"]=> string(0) ""
+        //  ["classification"]=>
+        //  array(1) {
+        //      ["lumc"]=> string(1) "B"
+        //  }
+        //  ["genes"]=>
+        //  array(1) {
+        //      ["lumc"]=> string(0) ""
+        //  }
+        //  ["gene"]=> string(0) ""
+
     }
 
     // Store corrected variant description.
     $aVariant['VariantOnGenome/DNA'] = $aVariant['dna'];
+    //var_dump($aVariant);
+//Voorbeeld output
+    //array(5) {
+    //  ["dna"]=> string(28) "NC_000001.10:g.pter_69209del"
+//Stukje verwijderd hier (["radboud_mumc"]=> string(0) "")
+//!Misschien te combineren met hierboven
+    //  ["classifications"]=>
+    //  array(1) {
+    //      ["lumc"]=> string(1) "B"
+    //  }
+    //  ["genes"]=>
+    //  array(1) {
+    //      ["lumc"]=> string(0) ""
+    //  }
+    //  ["gene"]=> string(0) ""
+//nieuw vanaf hier ↓
+//!Informatie is dubbel, beide nodig?
+    //  ["VariantOnGenome/DNA"]=> string(28) "NC_000001.10:g.pter_69209del"
+    //}
 
     // Store new information, dropping some excess information.
     unset($aVariant['start'], $aVariant['ref'], $aVariant['alt']); // We're done using VCF now.
+//!Geen veranderingen
+//!Wel nodig?
+    //var_dump($aVariant);
+//Voorbeeld output
+    //array(5) {
+    //  ["dna"]=> string(28) "NC_000001.10:g.pter_6909del"
+    //  ["classifications"]=>
+    //  array(1) {
+    //      ["lumc"]=> string(1) "B"
+    //  }
+    //  ["genes"]=>
+    //  array(1) {
+    //      ["lumc"]=> string(0) ""
+    //  }
+    //  ["gene"]=> string(0) ""
+    //  ["VariantOnGenome/DNA"]=> string(28) "NC_000001.10:g.pter_69209del"
+    //}
     $aData[$nKey] = $aVariant;
 
     // Print update, for every percentage changed.
@@ -711,16 +797,38 @@ $nVariantsMerged = 0;
 foreach ($aData as $nKey => $aVariant) {
     // Merging makes reconstructing some fields much harder, so link them now.
     $aVariant['published_as'] = '';
+    //var_dump($aVariant);
+//Voorbeeld output
+    //array(6) {
+    //  ["dna"]=> NC_000001.10:g.pter_69209del"
+    //  ["classifications"]=>
+    //  array(1) {
+    //      ["lumc"]=> string(1) "B"
+    //  }
+    //  ["genes"]=>
+    //  array(1) {
+    //      ["lumc"]=> string(0) ""
+    //  }
+    //  ["gene"]=> string(0) ""
+    //  ["VariantOnGenome/DNA"]=> string(28) "NC_000001.10:g.pter_69209del"
+//nieuw vanaf hier ↓
+//!Is het al nodig hier, aangezien er heel lang niks mee gedaan wordt
+//!Wordt pas later gevuld, bij regel 1757, misschien aanpassen?
+    //  ["published_as"]=> string(0) ""
+    //}
 
     // Simple merge.
+//Hier wordt $aVariant niet aangepast
     if (!isset($aData[$aVariant['VariantOnGenome/DNA']])) {
         $aData[$aVariant['VariantOnGenome/DNA']] = $aVariant;
+        //var_dump($aVariant);
     } else {
         // Variant has already been seen before.
         $aData[$aVariant['VariantOnGenome/DNA']] = array_merge_recursive($aData[$aVariant['VariantOnGenome/DNA']], $aVariant);
         // Enable the line below to log which variants are reported as duplicates.
         // print($aVariant['id'] . "\t" . $aVariant['gene'] . "\t" . 'Equal to:' . "\t" . $aData[$aVariant['VariantOnGenome/DNA']]['id'][0] . "\t" . $aData[$aVariant['VariantOnGenome/DNA']]['gene'][0] . "\t" . $aVariant['VariantOnGenome/DNA'] . "\n");
         $nVariantsMerged ++;
+        //var_dump($aVariant);
     }
 
     // Get rid of the old data.
@@ -746,14 +854,61 @@ $aStatusCounts = array(
     'opposite' => 0,
 );
 foreach ($aData as $sVariant => $aVariant) {
-    // Per center, first make sure we only have one classification left.
+    // Per center, first make sure we only have one classification left per variant.
     $bInternalConflict = false;
+    //var_dump($aVariant);
+//Voorbeeld output
+//Omdat er 2 classificaties zijn voor 1 variant in een center (lumc)
+//zijn er dubbele regels aanwezig.
+    //array(6) {
+    //  ["dna"]=>
+    //  array(2) {
+    //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+    //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+    //  }
+    //  ["classification"]=>
+    //  array(1) {
+    //      ["lumc"]=>
+    //      array(2) {
+    //          [0]=> string(1) "B"
+    //          [1]=> string(1) "B"
+    //      }
+    //  }
+    //  ["genes"]=>
+    //  array(1) {
+    //      ["lumc"]=>
+    //      array(2) {
+    //          [0]=> string(0) ""
+    //          [1]=> string(0) ""
+    //      }
+    //  }
+    //  ["gene"]=>
+    //  array(2) {
+    //      [0]=> string90) ""
+    //      [1]=> string(0) ""
+    //  }
+    //  ["VariantOnGenome/DNA"]=>
+    //  array(2) {
+    //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+    //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+    //  }
+    //  ["published_as"]=>
+    //  array(2) {
+    //      [0]=> string(0) ""
+    //      [1]=> string(0) ""
+    //  }
+    //}
     foreach ($aVariant['classifications'] as $sCenter => $Classification) {
         if (is_array($Classification)) {
+            //var_dump($aVariant);
+//Geen verschil
             // This center has multiple classifications for this variant.
             // First collect all classifications per gene. Only then can you fully compare.
             $aGenesClassified = array(); // Classification per gene.
             foreach ($aVariant['genes'][$sCenter] as $nKey => $sGene) {
+                //var_dump($aVariant);
+//Geen verschil
+//!Genes is leeg, is deze nodig? ↑
                 if (!isset($aGenesClassified[$sGene])) {
                     $aGenesClassified[$sGene] = array($Classification[$nKey]);
                 } elseif (!in_array($Classification[$nKey], $aGenesClassified[$sGene])) {
@@ -821,6 +976,45 @@ foreach ($aData as $sVariant => $aVariant) {
                 foreach (array('P', 'LP', 'VUS', 'LB', 'B') as $sClassification) {
                     if (in_array($sClassification, $aGenesClassified)) {
                         $aVariant['classifications'][$sCenter] = $sClassification;
+                        //var_dump($aVariant);
+//Voorbeeld output
+                        //array(6) {
+                        //  ["dna"]=>
+                        //  array(2) {
+                        //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+                        //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+                        //  }
+//Deze is niet meer dubbel ↓
+//!Voor allemaal doen?
+                        //  ["classification"]=>
+                        //  array(1) {
+                        //      ["lumc"]=> string(1) "B"
+                        //  }
+                        //  ["genes"]=>
+                        //  array(1) {
+                        //      ["lumc"]=>
+                        //      array(2) {
+                        //          [0]=> string(0) ""
+                        //          [1]=> string(0) ""
+                        //      }
+                        //  }
+                        //  ["gene"]=>
+                        //  array(2) {
+                        //      [0]=> string(0) ""
+                        //      [1]=> string(0) ""
+                        //  }
+                        //  ["VariantOnGenome/DNA"]=>
+                        //  array(2) {
+                        //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+                        //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+                        //  }
+                        //  ["published_as"]=>
+                        //  array(2) {
+                        //      [0]=> string(0) ""
+                        //      [1]=> string(0) ""
+                        //  }
+                        //}
+
                         // FIXME: We could here identify the genes that we're ignoring, and remove their annotation.
                         break;
                     }
@@ -828,6 +1022,44 @@ foreach ($aData as $sVariant => $aVariant) {
             } else {
                 // Conflict, pass on the imploded classification set.
                 $aVariant['classifications'][$sCenter] = implode(',', $aGenesClassified);
+                //var_dump($aVariant);
+//Internal conflict, ik heb een regel toegevoegd aan Process_dataset.xlsx
+//die een internal conflict vormt
+//Voorbeeld output
+                //array(6) {
+                //  ["dna"]=>
+                //  array(2) {
+                //      [0]=> string(29) "NC_000013.11:g.pter_345678del"
+                //      [1]=> string(29) "NC_000013.11:g.pter_345678del"
+                //  }
+                //  ["classification"]=>
+                //  array(1) {
+                //      ["lumc"]=> string(3) "B,P"
+                //  }
+                //  ["genes"]=>
+                //  array(1) {
+                //      ["lumc"]=>
+                //      array(2) {
+                //          [0]=> string(0) ""
+                //          [1]=> string(0) ""
+                //      }
+                //  }
+                //  ["gene"]=>
+                //  array(2) {
+                //      [0]=> string(0) ""
+                //      [1]=> string(0) ""
+                //  }
+                //  ["VariantOnGenome/DNA"]=>
+                //  array(2) {
+                //      [0]=> string(29) "NC_000013.11:g.pter_345678del"
+                //      [1]=> string(29) "NC_000013.11:g.pter_345678del"
+                //  }
+                //  ["published_as"]=>
+                //  array(2) {
+                //      [0]=> string(0) ""
+                //      [1]=> string(0) ""
+                //  }
+                //}
             }
         }
     }
@@ -836,14 +1068,128 @@ foreach ($aData as $sVariant => $aVariant) {
 
     // Determine consensus (opposite, non-consensus, consensus, single-lab).
     $aVariant['status'] = '';
+    //var_dump($aVariant);
+    //Voorbeeld output
+    //array(7) {
+    //  ["dna"]=>
+    //  array(2) {
+    //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+    //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+    //  }
+    //  ["classification"]=>
+    //  array(1) {
+    //      ["lumc"]=> string(1) "B"
+    //  }
+    //  ["genes"]=>
+    //  array(1) {
+    //      ["lumc"]=>
+    //      array(2) {
+    //          [0]=> string(0) ""
+    //          [1]=> string(0) ""
+    //      }
+    //  }
+    //  ["gene"]=>
+    //  array(2) {
+    //      [0]=> string(0) ""
+    //      [1]=> string(0) ""
+    //  }
+    //  ["variantOnGenome/DNA"]=>
+    //  array(2) {
+    //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+    //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+    //  }
+    //  ["published_as"]=>
+    //  array(2) {
+    //      [0]=> string(0) ""
+    //      [1]=> string(0) ""
+    //  }
+//!Nieuw stukje ↓ (hier wordt status aangemaakt, bij volgende stap gevuld.
+    //  ["status"]=> string(0) ""
+    //}
     if ($bInternalConflict) {
         // One center had a conflict, so we all have a conflict.
         $aVariant['status'] = 'opposite';
         $aStatusCounts['opposite'] ++;
+        //var_dump($aVariant);
+//Voorbeeld output
+        //array(7) {
+        //  ["dna"]=>
+        //  array(2) {
+        //      [0]=> string(29) "NC_000013.11:g.pter_345678del"
+        //      [1]=> string(29) "NC_000013.11:g.pter_345678del"
+        //  }
+        //  ["classifications"]=>
+        //  array(1) {
+        //      ["lumc"]=> string(3) "B,P"
+        //  }
+        //  ["genes"]=>
+        //  array(1) {
+        //      ["lumc"]=>
+        //      array(2) {
+        //          [0]=> string(0) ""
+        //          [1]=> string(0) ""
+        //      }
+        //  }
+        //  ["gene"]=>
+        //  array(2) {
+        //      [0]=> string(0) ""
+        //      [1]=> string(0) ""
+        //  }
+        //  ["VariantOnGenome/DNA"]=>
+        //  array(2) {
+        //      [0]=> string(29) "NC_000013.11:g.pter_345678del"
+        //      [1]=> string(29) "NC_000013.11:g.pter_345678del"
+        //  }
+        //  ["published_as"]=>
+        //  array(2) {
+        //      [0]=> string(0) ""
+        //      [1]=> string(0) ""
+        //  }
+//!Aangepast stukje, wordt gevuld
+        //  ["status"]=> string(8) "opposite"
+        //}
 
     } elseif (count($aVariant['classifications']) == 1) {
         $aVariant['status'] = 'single-lab';
         $aStatusCounts['single-lab'] ++;
+        //var_dump($aVariant);
+//Voorbeeld output
+        //array(7) {
+        //  ["dna"]=>
+        //  array(2) {
+        //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+        //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+        //  }
+        //  ["classifications"]=>
+        //  array(1) {
+        //      ["lumc"]=> string(1) "B"
+        //  }
+        //  ["genes"]=>
+        //  array(1) {
+        //      ["lumc"]=>
+        //      array(2) {
+        //          [0]=> string(0) ""
+        //          [1]=> string(0) ""
+        //      }
+        //  }
+        //  ["gene"]=>
+        //  array(2) {
+        //      [0]=> string(0) ""
+        //      [1]=> string(0) ""
+        //  }
+        //  ["VariantOnGenome/DNA"]=>
+        //  array(2) {
+        //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+        //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+        //  }
+        //  ["published_as"]=>
+        //  array(2) {
+        //      [0]=> string(0) ""
+        //      [1]=> string(0) ""
+        //  }
+//!Aangepast stukje, wordt gevuld
+        //  ["status"]=> string(10) "single-lab"
+        //}
 
     } else {
         // We should have clean, one-classification values.
@@ -857,34 +1203,168 @@ foreach ($aData as $sVariant => $aVariant) {
             // One unique value, everybody agrees.
             $aVariant['status'] = 'consensus';
             $aStatusCounts['consensus'] ++;
+            //var_dump($aVariant);
+//Voorbeeld output
+            //array(7) {
+            //  ["dna"]=>
+            //  array(2) {
+            //      [0]=> string(29) "NC_000008.10:g.pter_356528del"
+            //      [1]=> string(29) "NC_000008.10:g.pter_356528del"
+            //  }
+//!Doordat informatie twee centra, twee regels in array
+            //  ["classifications"]=>
+            //  array(2) {
+            //      ["lumc"]=> string(1) "P"
+            //      ["radboud_mumc"]=> string(1) "P"
+            //  }
+            //  ["genes"]=>
+            //  array(2) {
+            //      ["lumc"]=> string(0) ""
+            //      ["radboud_mumc"]=> string(0) ""
+            //  }
+            //  ["gene"]=>
+            //  array(2) {
+            //      [0]=> string(0) ""
+            //      [1]=> string(0) ""
+            //  }
+            //  ["VariantOnGenome/DNA"]=>
+            //  array(2) {
+            //      [0]=> string(29) "NC_000008.10:g.pter_356528del"
+            //      [1]=> string(29) "NC_000008.10:g.pter_356528del"
+            //  }
+            //  ["published_as"]=>
+            //  array(2) {
+            //      [0]=> string(0) ""
+            //      [1]=> string(0) ""
+            //  }
+//!Aangepast stukje, wordt gevuld
+            //  ["status"]=> string(9) "consensus"
+            //}
 
         } elseif ((isset($aClassifications['B']) || isset($aClassifications['LB']))
             && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
             // Opposite.
             $aVariant['status'] = 'opposite';
             $aStatusCounts['opposite'] ++;
+            //var_dump($aVariant);
+//Voorbeeld output
+            //array(7) {
+            //  ["dna"]=>
+            //  array(2) {
+            //      [0]=> string(28) "NC_000005.9:g.59082_61206del"
+            //      [1]=> string(28) "NC_000005.9:g.59082_61206del"
+            //  }
+//!Doordat informatie twee centra, twee regels in array
+            //  ["classifications"]=>
+            //  array(2) {
+            //      ["lumc"]=> string(1) "B"
+            //      ["radboud_mumc"]=> string(1) "P"
+            //  }
+            //  ["genes"]=>
+            //  array(2) {
+            //      ["lumc"]=> string(0) ""
+            //      ["radboud_mumc"]=> string(0) ""
+            //  }
+            //  ["gene"]=>
+            //  array(2) {
+            //      [0]=> string(0) ""
+            //      [1]=> string(0) ""
+            //  }
+            //  ["VariantOnGenome/DNA"]=>
+            //  array(2) {
+            //      [0]=> string(28) "NC_000005.9:g.59082_61206del"
+            //      [1]=> string(28) "NC_000005.9:g.59082_61206del"
+            //  }
+            //  ["published_as"]=>
+            //  array(2) {
+            //      [0]=> string(0) ""
+            //      [1]=> string(0) ""
+            //  }
+//!Aangepast stukje, wordt gevuld
+            //  ["status"]=> string(9) "opposite"
+            //}
 
         } elseif (isset($aClassifications['VUS'])) {
             // VUS and something else, not a conflict, but no consensus either.
             $aVariant['status'] = 'non-consensus';
             $aStatusCounts['non-consensus'] ++;
+            //var_dump($aVariant);
+//Voorbeeld output
+            //array(7) {
+            //  ["dna"]=>
+            //  array(2) {
+            //      [0]=> string(29) "NC_000020.11:g.12336_20543dup"
+            //      [1]=> string(29) "NC_000020.11:g.12336_20543dup"
+            //  }
+//!Doordat informatie twee centra, twee regels in array
+            //  ["classifications"]=>
+            //  array(2) {
+            //      ["lumc"]=> string(1) "VUS"
+            //      ["radboud_mumc"]=> string(1) "B"
+            //  }
+            //  ["genes"]=>
+            //  array(2) {
+            //      ["lumc"]=> string(0) ""
+            //      ["radboud_mumc"]=> string(0) ""
+            //  }
+            //  ["gene"]=>
+            //  array(2) {
+            //      [0]=> string(0) ""
+            //      [1]=> string(0) ""
+            //  }
+            //  ["VariantOnGenome/DNA"]=>
+            //  array(2) {
+            //      [0]=> string(29) "NC_000020.11:g.12336_20543dup"
+            //      [1]=> string(29) "NC_000020.11:g.12336_20543dup"
+            //  }
+            //  ["published_as"]=>
+            //  array(2) {
+            //      [0]=> string(0) ""
+            //      [1]=> string(0) ""
+            //  }
+//!Aangepast stukje, wordt gevuld
+            //  ["status"]=> string(13) "non-consensus"
+            //}
 
         } else {
             // Rest is consensus (possible LP/P or LB/B differences are ignored.
             $aVariant['status'] = 'consensus';
             $aStatusCounts['consensus'] ++;
+            //var_dump($aVariant);
+            //Voorbeeld output
+            //array(7) {
+            //  ["dna"]=> string(34) "NC_000011.9:g.60999183-61015582del"
+//!Doordat informatie twee centra, twee regels in array
+            //  ["classifications"]=>
+            //  array(2) {
+            //      ["lumc"]=> string(1) "B"
+            //      ["radboud_mumc"]=> string(1) "LB"
+            //  }
+            //  ["genes"]=>
+            //  array(2) {
+            //      ["lumc"]=> string(0) ""
+            //      ["radboud_mumc"]=> string(0) ""
+            //  }
+            //  ["gene"]=> string(0) ""
+            //  ["VariantOnGenome/DNA"]=> string(34) "NC_000011.9:g.60999183_61015582del"
+            //  ["published_as"]=> string(0) ""
+//!Aangepast stukje, wordt gevuld
+            //  ["status"]=> string(9) "consensus"
+            //}
         }
     }
 
 
 
     // Do some cleaning up.
+//!OP DIT MOMENT KOMEN WE NIET IN DEZE IF STATEMENT, AANPASSEN OF WEG
     // FIXME: Best kans dat we hier naar "dna" kunnen kijken, maar ik weet niet 100% zeker of dat ook een array kan zijn...
     if (false && is_array($aVariant['chromosome'])) {
         // Multiple variants have been merged, but much information is duplicated.
 
         // Chromosome can't really be different.
         $aVariant['chromosome'] = current($aVariant['chromosome']);
+        //var_dump($aVariant);
 
         // Since we're grouping on variant, the gene doesn't have to be unique anymore.
         // We can get case-differences here, and I don't like that. array_unique() however, is case-sensitive.
@@ -893,17 +1373,58 @@ foreach ($aData as $sVariant => $aVariant) {
         $aVariant['gene'] = array_intersect_key(
             $aVariant['gene'],
             array_unique(array_map('strtoupper', $aVariant['gene'])));
+        //var_dump($aVariant);
 
         // Published as.
         $aVariant['published_as'] = array_diff(array_unique($aVariant['published_as']), array(''));
+        //var_dump($aVariant);
 
         // VariantOnGenome/DNA, we grouped on this, so just remove.
         $aVariant['VariantOnGenome/DNA'] = current($aVariant['VariantOnGenome/DNA']);
+        //var_dump($aVariant);
 
     } else {
+//!HIER KOMEN ZE ALLEMAAL TERECHT OMDAT ZE NIET DE IF STATEMENT INGAAN.
         // Better always have arrays here, which makes the code simpler.
         $aVariant['gene'] = array($aVariant['gene']);
         $aVariant['published_as'] = array($aVariant['published_as']);
+        //var_dump($aVariant);
+//Voorbeeld output
+        //array(7) {
+        //  ["dna"]=>
+        //  array(2) {
+        //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+        //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+        //  }
+        //  ["classifications"]=>
+        //  array(1) {
+        //      ["lumc"]=> string(1) "B"
+        //  }
+        //  ["genes"]=>
+        //  array(1) {
+        //      ["lumc"]=>
+        //      array(2) {
+        //          [0]=> string(0) ""
+        //          [1]=> string(0) ""
+        //      }
+        //  }
+        //  ["gene"]=>
+        //  array(2) {
+        //      [0]=> string(0) ""
+        //      [1]=> string(0) ""
+        //  }
+        //  ["VariantOnGenome/DNA"]=>
+        //  array(2) {
+        //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+        //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+        //  }
+        //  ["published_as"]=>
+        //  array(2) {
+        //      [0]=> string(0) ""
+        //      [1]=> string(0) ""
+        //  }
+        //  ["status"]=> string(10) "single-lab"
+        //}
     }
 
     // Report opposites.
@@ -1148,12 +1669,115 @@ foreach ($aData as $sVariant => $aVariant) {
         $aVariant,
         lovd_getVariantInfo($sDNA)
     );
+    //var_dump($aVariant);
+//Voorbeeld output
+    //array(13) {
+    //  ["dna"]=>
+    //  array(2) {
+    //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+    //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+    //  }
+    //  ["classifications"]=>
+    //  array(1) {
+    //      ["lumc"]=> string(1) "B"
+    //  }
+    //  ["genes"]=>
+    //  array(1) {
+    //      ["lumc"]=>
+    //      array(2) {
+    //          [0]=> string(0) ""
+    //          [1]=> string(0) ""
+    //      }
+    //  }
+    //  ["gene"]=>
+    //  array(2) {
+    //      [0]=> string(0) ""
+    //      [1]=> string(0) ""
+    //  }
+    //  ["VariantOnGenome/DNA"]=>
+    //  array(2) {
+    //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+    //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+    //  }
+    //  ["published_as"]=>
+    //  array(2) {
+    //      [0]=> string(0) ""
+    //      [1]=> string(0) ""
+    //  }
+    //  ["status"]=> string(10) "single-lab"
+//!Aangepast stukje
+    //  ["position_start"]=> int(0)
+    //  ["position_end"]=> int(0)
+    //  ["type"]=> string(0) ""
+    //  ["range"]=> bool(true)
+    //  ["warnings"]=>
+    //  array(0) {}
+//!OPVALLEND
+    //  ["errors"]=>
+    //  array(1) {
+    //      ["ENOTSUPPORTED"]=> string(133) "Currently, variant descriptions
+    //          using 'pter' are not yet supported. This does not necessarily mean
+    //          the description is not valid HGVS."
+    //  }
+    //}
 
     // We've built the "Published as" field before merging the entries, which made it much easier.
     sort($aVariant['published_as']);
     $aVariant['published_as'] = implode(', ', $aVariant['published_as']);
+    //var_dump($aVariant);
+//Voorbeeld output
+    //array(13) {
+    //  ["dna"]=>
+    //  array(2) {
+    //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+    //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+    //  }
+    //  ["classifications"]=>
+    //  array(1) {
+    //      ["lumc"]=> string(1) "B"
+    //  }
+    //  ["genes"]=>
+    //  array(1) {
+    //      ["lumc"]=>
+    //      array(2) {
+    //          [0]=> string(0) ""
+    //          [1]=> string(0) ""
+    //      }
+    //  }
+    //  ["gene"]=>
+    //  array(2) {
+    //      [0]=> string(0) ""
+    //      [1]=> string(0) ""
+    //  }
+    //  ["VariantOnGenome/DNA"]=>
+    //  array(2) {
+    //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+    //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+    //  }
+//!Published_as gevuld ↓, misschien eerder aangezien het bij regel 815 al
+//is aangemaakt?
+    //  ["published_as"]=> string(5) "Array"
+    //  ["status"]=> string(10) "single-lab"
+//Aangepast stukje
+    //  ["position_start"]=> int(0)
+    //  ["position_end"]=> int(0)
+    //  ["type"]=> string(0) ""
+    //  ["range"]=> bool(true)
+    //  ["warnings"]=>
+    //  array(0) {}
+//OPVALLEND
+    //  ["errors"]=>
+    //  array(1) {
+    //      ["ENOTSUPPORTED"]=> string(133) "Currently, variant descriptions
+    //          using 'pter' are not yet supported. This does not necessarily mean
+    //          the description is not valid HGVS."
+    //  }
+    //}
     // Do limit the input a bit, 150 should be enough.
     $aVariant['published_as'] = lovd_shortenString($aVariant['published_as'], 150);
+    //var_dump($aVariant);
+//!Is dit nog nodig, aangezien er niet veel in published_as staat,
+// tenminste niet zo lang.
 
     // Loop through centers who found this variant.
     foreach ($aVariant['classifications'] as $sCenter => $sClassification) {
@@ -1190,6 +1814,7 @@ foreach ($aData as $sVariant => $aVariant) {
                 'updates' => array(),
             ),
         );
+        //var_dump($aVariant);
 
         // Some of these columns are optional.
         if (!$bClassification) {
@@ -1207,6 +1832,51 @@ foreach ($aData as $sVariant => $aVariant) {
         if (!$bRemarksNonPublic) {
             unset($aVOGEntry['VariantOnGenome/Remarks_Non_Public']);
         }
+        //var_dump($aVariant);
+//Voorbeeld output
+        //array(13) {
+        //  ["dna"]=>
+        //  array(2) {
+        //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+        //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+        //  }
+        //  ["classifications"]=>
+        //  array(1) {
+        //      ["lumc"]=> string(1) "B"
+        //  }
+        //  ["genes"]=>
+        //  array(1) {
+        //      ["lumc"]=>
+        //      array(2) {
+        //          [0]=> string(0) ""
+        //          [1]=> string(0) ""
+        //      }
+        //  }
+        //  ["gene"]=>
+        //  array(2) {
+        //      [0]=> string(0) ""
+        //      [1]=> string(0) ""
+        //  }
+        //  ["VariantOnGenome/DNA"]=>
+        //  array(2) {
+        //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
+        //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
+        //  }
+        //  ["published_as"]=> string(5) "Array"
+        //  ["status"]=> string(10) "single-lab"
+        //  ["position_start"]=> int(0)
+        //  ["position_end"]=> int(0)
+        //  ["type"]=> string(0) ""
+        //  ["range"]=> bool(true)
+        //  ["warnings"]=>
+        //  array(0) {}
+        //  ["errors"]=>
+        //  array(1) {
+        //      ["ENOTSUPPORTED"]=> string(133) "Currently, variant descriptions
+        //          using 'pter' are not yet supported. This does not necessarily mean
+        //          the description is not valid HGVS."
+        //  }
+        //}
 
         // If this entry already exists, simply update the record when needed.
         if (isset($aDataLOVD[$sLOVDKey])) {
@@ -1237,6 +1907,9 @@ foreach ($aData as $sVariant => $aVariant) {
                 );
                 // But still store the new ID, if not yet included.
                 foreach ($aVariant['id'] as $sNewID) {
+                    //var_dump($aVariant);
+//!WE HEBBEN GEEN ID
+//!WE KOMEN NIET IN DE STATEMENT
                     if (!in_array($sNewID, $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'])) {
                         $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'][] = $sNewID;
                     }
