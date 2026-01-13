@@ -908,6 +908,7 @@ foreach ($aData as $sVariant => $aVariant) {
             //foreach ($aGenesClassified as $sGene => $aClassifications) {
                 // Flipping the array makes the values unique and makes it easier to work with the values;
                 //  isset()s are faster than array_search() and in_array().
+                //$aClassifications = array_flip($aClassifications);
                 $aClassifications = array_flip($aClassifications);
 
                 if (count($aClassifications) > 1) {
@@ -921,8 +922,8 @@ foreach ($aData as $sVariant => $aVariant) {
                             ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                                 floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                                 5, ' ', STR_PAD_LEFT) .
-                            '%] Warning: Internal conflict in center ' . $sCenter . ' (' . $sGene . '): ' . implode(', ', array_keys($aClassifications)) . ".\n" .
-                            '                   IDs: ' . implode("\n                        ", $aVariant['id']) . "\n");
+                            '%] Warning: Internal conflict in center ' . $sCenter . ' (' . $sGene . '): ' . implode(', ', array_keys($aClassifications)) . ".\n");
+                      #      '                   IDs: ' . implode("\n                        ", $aVariant['id']) . "\n");
                         // Reduce to one string, we want to store the conflict to report this in LOVD in a non-public entry.
                         $aClassifications = array(implode(',', array_keys($aClassifications)) => 1);
                         $bInternalConflict = true; // This'll make the consensus code a lot cleaner.
@@ -1559,7 +1560,8 @@ foreach ($aData as $sVariant => $aVariant) {
     }
 
     // Add some needed fields; (type, position_start, position_end).
-    $aVariant = array_merge(
+    //i.p.v deze functie HGVS library gebruiken om daar de needed fields uit te halen
+        $aVariant = array_merge(
         $aVariant,
         lovd_getVariantInfo($sDNA)
     );
