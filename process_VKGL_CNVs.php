@@ -662,8 +662,8 @@ foreach ($aData as $nKey => $aVariant) {
     // I need this cleaned up here already, so I can report which centers cause problems.
     // Also store the genes per center, as the classification is specific for this gene.
     $aVariant['classifications'] = array();
-    $aVariant['genes'] = array();
-    $aVariant['gene'] = ''; // FIXME: Stub.
+    //$aVariant['genes'] = array();
+    //$aVariant['gene'] = ''; // FIXME: Stub.
     //var_dump($aVariant);
 //!$aVariant['genes'], $aVariant['gene'] zijn denk ik niet nodig
 //!zijn leeg in array.
@@ -681,8 +681,10 @@ foreach ($aData as $nKey => $aVariant) {
         if ($aVariant[$sCenter]) {
             $aVariant['classifications'][$sCenter] = str_replace(array('likely ', 'benign', 'pathogenic', 'vus'),
                 array('L', 'B', 'P', 'VUS'), strtolower($aVariant[$sCenter]));
-            $aVariant['genes'][$sCenter] = $aVariant['gene'];
+            //$aVariant['genes'][$sCenter] = $aVariant['gene'];
             //var_dump($aVariant);
+            //TO DO: See if it works correctly for the Radboud data
+            //GENES CAN BE REMOVED, FISRT WHERE IT'S USED THEN HERE
 //Voorbeeld output
             //array(6) {
             //  ["dna"]=> string(28) "NC_000001.10:g.pter_69209del"
@@ -746,24 +748,8 @@ foreach ($aData as $nKey => $aVariant) {
     //}
 
     // Store new information, dropping some excess information.
-    unset($aVariant['start'], $aVariant['ref'], $aVariant['alt']); // We're done using VCF now.
-//!Geen veranderingen
-//!Wel nodig?
-    //var_dump($aVariant);
-//Voorbeeld output
-    //array(5) {
-    //  ["dna"]=> string(28) "NC_000001.10:g.pter_6909del"
-    //  ["classifications"]=>
-    //  array(1) {
-    //      ["lumc"]=> string(1) "B"
-    //  }
-    //  ["genes"]=>
-    //  array(1) {
-    //      ["lumc"]=> string(0) ""
-    //  }
-    //  ["gene"]=> string(0) ""
-    //  ["VariantOnGenome/DNA"]=> string(28) "NC_000001.10:g.pter_69209del"
-    //}
+    //dna is not needed anymore.
+    unset($aVariant['dna']);
     $aData[$nKey] = $aVariant;
 
     // Print update, for every percentage changed.
@@ -796,7 +782,8 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
 $nVariantsMerged = 0;
 foreach ($aData as $nKey => $aVariant) {
     // Merging makes reconstructing some fields much harder, so link them now.
-    $aVariant['published_as'] = '';
+    //$aVariant['published_as'] = '';
+    //TO DO: Published_as CAN BE REMOVED. FIRST WHERE IT IS USED, THEN HERE.
     //var_dump($aVariant);
 //Voorbeeld output
     //array(6) {
@@ -904,20 +891,24 @@ foreach ($aData as $sVariant => $aVariant) {
 //Geen verschil
             // This center has multiple classifications for this variant.
             // First collect all classifications per gene. Only then can you fully compare.
-            $aGenesClassified = array(); // Classification per gene.
-            foreach ($aVariant['genes'][$sCenter] as $nKey => $sGene) {
-                //var_dump($aVariant);
-//Geen verschil
-//!Genes is leeg, is deze nodig? ↑
-                if (!isset($aGenesClassified[$sGene])) {
-                    $aGenesClassified[$sGene] = array($Classification[$nKey]);
-                } elseif (!in_array($Classification[$nKey], $aGenesClassified[$sGene])) {
-                    $aGenesClassified[$sGene][] = $Classification[$nKey];
-                }
-            }
+            //$aGenesClassified = array(); // Classification per gene.
+            $aCentrumClassified = array();
+//            foreach ($aVariant['genes'][$sCenter] as $nKey => $sGene) {
+//                //var_dump($aVariant);
+////Geen verschil
+////!Genes is leeg, is deze nodig? ↑
+//                if (!isset($aGenesClassified[$sGene])) {
+//                    $aGenesClassified[$sGene] = array($Classification[$nKey]);
+//                } elseif (!in_array($Classification[$nKey], $aGenesClassified[$sGene])) {
+//                    $aGenesClassified[$sGene][] = $Classification[$nKey];
+//                }
+//            }
 
             // Then, loop genes; make sure we have only one classification per gene.
-            foreach ($aGenesClassified as $sGene => $aClassifications) {
+            //kijkt nu per gen, moet kijken per centrum, dan interne conflicten afgehandeld
+            //dan kijken of code die externe code regelt ook moet worden aangepast
+            foreach ($aVariant['classifications'] as $sCenter => $aClassifications) {
+            //foreach ($aGenesClassified as $sGene => $aClassifications) {
                 // Flipping the array makes the values unique and makes it easier to work with the values;
                 //  isset()s are faster than array_search() and in_array().
                 $aClassifications = array_flip($aClassifications);
@@ -959,107 +950,12 @@ foreach ($aData as $sVariant => $aVariant) {
                             ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                                 floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                                 5, ' ', STR_PAD_LEFT) .
-                            '%] Warning: Failed to resolve classification string for center ' . $sCenter . ' (' . $sGene . '): ' . implode(', ', $Classification) . ".\n" .
-                            '                   IDs: ' . implode("\n                        ", $aVariant['id']) . "\n");
+                            '%] Warning: Failed to resolve classification string for center ' . $sCenter . ': ' . implode(', ', $Classification) . ".\n");
                     }
                 }
 
                 // Store string value.
-                $aGenesClassified[$sGene] = key($aClassifications); // Should of course have one value.
-            }
-
-            // Per gene, we now have one classification only. If there is no internal conflict, but there's still
-            //  multiple classifications, resolve by picking the most severe.
-            // This solves cases where a center classifies a variant on two genes as P and B at the same time.
-            if (!$bInternalConflict) {
-                // Loop classifications and pick the most severe.
-                foreach (array('P', 'LP', 'VUS', 'LB', 'B') as $sClassification) {
-                    if (in_array($sClassification, $aGenesClassified)) {
-                        $aVariant['classifications'][$sCenter] = $sClassification;
-                        //var_dump($aVariant);
-//Voorbeeld output
-                        //array(6) {
-                        //  ["dna"]=>
-                        //  array(2) {
-                        //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
-                        //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
-                        //  }
-//Deze is niet meer dubbel ↓
-//!Voor allemaal doen?
-                        //  ["classification"]=>
-                        //  array(1) {
-                        //      ["lumc"]=> string(1) "B"
-                        //  }
-                        //  ["genes"]=>
-                        //  array(1) {
-                        //      ["lumc"]=>
-                        //      array(2) {
-                        //          [0]=> string(0) ""
-                        //          [1]=> string(0) ""
-                        //      }
-                        //  }
-                        //  ["gene"]=>
-                        //  array(2) {
-                        //      [0]=> string(0) ""
-                        //      [1]=> string(0) ""
-                        //  }
-                        //  ["VariantOnGenome/DNA"]=>
-                        //  array(2) {
-                        //      [0]=> string(28) "NC_000001.10:g.pter_69209del"
-                        //      [1]=> string(28) "NC_000001.10:g.pter_69209del"
-                        //  }
-                        //  ["published_as"]=>
-                        //  array(2) {
-                        //      [0]=> string(0) ""
-                        //      [1]=> string(0) ""
-                        //  }
-                        //}
-
-                        // FIXME: We could here identify the genes that we're ignoring, and remove their annotation.
-                        break;
-                    }
-                }
-            } else {
-                // Conflict, pass on the imploded classification set.
-                $aVariant['classifications'][$sCenter] = implode(',', $aGenesClassified);
-                //var_dump($aVariant);
-//Internal conflict, ik heb een regel toegevoegd aan Process_dataset.xlsx
-//die een internal conflict vormt
-//Voorbeeld output
-                //array(6) {
-                //  ["dna"]=>
-                //  array(2) {
-                //      [0]=> string(29) "NC_000013.11:g.pter_345678del"
-                //      [1]=> string(29) "NC_000013.11:g.pter_345678del"
-                //  }
-                //  ["classification"]=>
-                //  array(1) {
-                //      ["lumc"]=> string(3) "B,P"
-                //  }
-                //  ["genes"]=>
-                //  array(1) {
-                //      ["lumc"]=>
-                //      array(2) {
-                //          [0]=> string(0) ""
-                //          [1]=> string(0) ""
-                //      }
-                //  }
-                //  ["gene"]=>
-                //  array(2) {
-                //      [0]=> string(0) ""
-                //      [1]=> string(0) ""
-                //  }
-                //  ["VariantOnGenome/DNA"]=>
-                //  array(2) {
-                //      [0]=> string(29) "NC_000013.11:g.pter_345678del"
-                //      [1]=> string(29) "NC_000013.11:g.pter_345678del"
-                //  }
-                //  ["published_as"]=>
-                //  array(2) {
-                //      [0]=> string(0) ""
-                //      [1]=> string(0) ""
-                //  }
-                //}
+                $aVariant['classifications'][$sCenter] = key($aClassifications); // Should of course have one value.
             }
         }
     }
@@ -1359,25 +1255,21 @@ foreach ($aData as $sVariant => $aVariant) {
     // Do some cleaning up.
 //!OP DIT MOMENT KOMEN WE NIET IN DEZE IF STATEMENT, AANPASSEN OF WEG
     // FIXME: Best kans dat we hier naar "dna" kunnen kijken, maar ik weet niet 100% zeker of dat ook een array kan zijn...
-    if (false && is_array($aVariant['chromosome'])) {
+    if (is_array($aVariant['VariantOnGenome/DNA'])) {
         // Multiple variants have been merged, but much information is duplicated.
 
         // Chromosome can't really be different.
-        $aVariant['chromosome'] = current($aVariant['chromosome']);
         //var_dump($aVariant);
 
         // Since we're grouping on variant, the gene doesn't have to be unique anymore.
         // We can get case-differences here, and I don't like that. array_unique() however, is case-sensitive.
         // This trick solves that problem.
         // https://stackoverflow.com/questions/2276349/case-insensitive-array-unique
-        $aVariant['gene'] = array_intersect_key(
-            $aVariant['gene'],
-            array_unique(array_map('strtoupper', $aVariant['gene'])));
-        //var_dump($aVariant);
-
-        // Published as.
-        $aVariant['published_as'] = array_diff(array_unique($aVariant['published_as']), array(''));
-        //var_dump($aVariant);
+         //var_dump($aVariant);
+//
+//        // Published as.
+//        $aVariant['published_as'] = array_diff(array_unique($aVariant['published_as']), array(''));
+//        //var_dump($aVariant);
 
         // VariantOnGenome/DNA, we grouped on this, so just remove.
         $aVariant['VariantOnGenome/DNA'] = current($aVariant['VariantOnGenome/DNA']);
@@ -1386,8 +1278,8 @@ foreach ($aData as $sVariant => $aVariant) {
     } else {
 //!HIER KOMEN ZE ALLEMAAL TERECHT OMDAT ZE NIET DE IF STATEMENT INGAAN.
         // Better always have arrays here, which makes the code simpler.
-        $aVariant['gene'] = array($aVariant['gene']);
-        $aVariant['published_as'] = array($aVariant['published_as']);
+        //$aVariant['gene'] = array($aVariant['gene']);
+        //$aVariant['published_as'] = array($aVariant['published_as']);
         //var_dump($aVariant);
 //Voorbeeld output
         //array(7) {
@@ -1433,22 +1325,24 @@ foreach ($aData as $sVariant => $aVariant) {
             ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                     floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                 5, ' ', STR_PAD_LEFT) .
-            '%] Conflict: ' . implode(', ', array_map(function ($key, $val) { return $key . ': ' . $val; }, array_keys($aVariant['classifications']), $aVariant['classifications'])) . ' (' . implode(', ', array_unique($aVariant['gene'])) . ").\n" .
-            '                   IDs: ' . implode(', ', array_unique($aVariant['id'])) . ".\n" .
+            '%] Conflict: ' . implode(', ', array_map(function ($key, $val) { return $key . ': ' . $val; }, array_keys($aVariant['classifications']), $aVariant['classifications'])) . ".\n" .
             '                   DNA: ' . $aVariant['VariantOnGenome/DNA'] . "\n");
         // Also report in a structured manner which we can extract from the output to report.
-        $sReport = '{Conflict|' . $aVariant['VariantOnGenome/DNA'] . '|' . implode(',', $aVariant['gene']);
-        foreach (array_keys($aCenterIDs) as $sCenter) {
-            // This is called a "Null coalescing operator" (PHP7) and doesn't emit a notice.
-            $sReport .= '|' . ($aVariant['classifications'][$sCenter] ?? '');
-        }
-        lovd_printIfVerbose(VERBOSITY_MEDIUM,
-            '                   ' . $sReport . "}\n");
+        //Checking where the array changes into a string and why an error is curated here
+        #var_dump($aVariant['VariantOnGenome/DNA']);
+//        $sReport = '{Conflict|' . $aVariant['VariantOnGenome/DNA'];#. implode(',', $aVariant['gene']);
+//        foreach (array_keys($aCenterIDs) as $sCenter) {
+//            // This is called a "Null coalescing operator" (PHP7) and doesn't emit a notice.
+//            $sReport .= '|' . ($aVariant['classifications'][$sCenter] ?? '');
+//        }
+//        lovd_printIfVerbose(VERBOSITY_MEDIUM,
+//            '                   ' . $sReport . "}\n");
     }
 
     $aData[$sVariant] = $aVariant;
     $nVariantsDone ++;
 }
+file_put_contents('output.' . time() . '.txt', print_r($aData, true));exit;
 
 $lPadding = max(array_map('strlen', array_keys($aStatusCounts)));
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
@@ -1480,19 +1374,19 @@ foreach ($aData as $sVariant => $aVariant) {
     foreach ($aCentersFound as $sCenter) {
         $aLine[] = ($aVariant['classifications'][$sCenter] ?? '');
     }
-    $aGenes = [];
-    foreach ($aVariant['genes'] as $Gene) {
-        if (is_array($Gene)) {
-            $aGenes = array_merge($aGenes, $Gene);
-        } else {
-            $aGenes[] = $Gene;
-        }
-    }
-    $aGenes = array_unique($aGenes);
-    sort($aGenes);
-    $aLine[] = implode(';', $aGenes);
-    $aLine[] = implode(', ', $aVariant['published_as']);
-    fputs($fOutput, implode("\t", $aLine) . "\n");
+//    $aGenes = [];
+//    foreach ($aVariant['genes'] as $Gene) {
+//        if (is_array($Gene)) {
+//            $aGenes = array_merge($aGenes, $Gene);
+//        } else {
+//            $aGenes[] = $Gene;
+//        }
+//    }
+//    $aGenes = array_unique($aGenes);
+//    sort($aGenes);
+//    $aLine[] = implode(';', $aGenes);
+//    //$aLine[] = implode(', ', $aVariant['published_as']);
+//    fputs($fOutput, implode("\t", $aLine) . "\n");
 }
 fclose($fOutput);
 
@@ -1722,8 +1616,8 @@ foreach ($aData as $sVariant => $aVariant) {
     //}
 
     // We've built the "Published as" field before merging the entries, which made it much easier.
-    sort($aVariant['published_as']);
-    $aVariant['published_as'] = implode(', ', $aVariant['published_as']);
+    //sort($aVariant['published_as']);
+    //$aVariant['published_as'] = implode(', ', $aVariant['published_as']);
     //var_dump($aVariant);
 //Voorbeeld output
     //array(13) {
@@ -1774,7 +1668,7 @@ foreach ($aData as $sVariant => $aVariant) {
     //  }
     //}
     // Do limit the input a bit, 150 should be enough.
-    $aVariant['published_as'] = lovd_shortenString($aVariant['published_as'], 150);
+    //$aVariant['published_as'] = lovd_shortenString($aVariant['published_as'], 150);
     //var_dump($aVariant);
 //!Is dit nog nodig, aangezien er niet veel in published_as staat,
 // tenminste niet zo lang.
@@ -1806,7 +1700,7 @@ foreach ($aData as $sVariant => $aVariant) {
             'VariantOnGenome/DNA' => $sDNA, // Can actually also update, if the LOVD data is not correct.
             'VariantOnGenome/DBID' => '', // FIXME: Will be filled in later for records to be created!
             'VariantOnGenome/Genetic_origin' => 'CLASSIFICATION record',
-            'VariantOnGenome/Published_as' => $aVariant['published_as'],
+            //'VariantOnGenome/Published_as' => $aVariant['published_as'],
             'VariantOnGenome/Remarks' => 'VKGL data sharing initiative Nederland' . ($aVariant['status'] != 'opposite'? '' : '; Variant classification is in conflict with a different center.'),
             'VariantOnGenome/Remarks_Non_Public' => array(
                 'warning' => 'Do not remove or edit this field!',
