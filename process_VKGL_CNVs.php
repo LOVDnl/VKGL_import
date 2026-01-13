@@ -740,10 +740,11 @@ foreach ($aData as $nKey => $aVariant) {
     //  }
     //  ["gene"]=> string(0) ""
 //nieuw vanaf hier ↓
-//!Informatie is dubbel, beide nodig?
+//!Information is double, are both needed?
     //  ["VariantOnGenome/DNA"]=> string(28) "NC_000001.10:g.pter_69209del"
     //}
-
+    #var_dump($aVariant);
+    //Here every line is still seperated, they aren't merged yet
     // Store new information, dropping some excess information.
     //dna is not needed anymore.
     unset($aVariant['dna']);
@@ -796,8 +797,9 @@ foreach ($aData as $nKey => $aVariant) {
     //  ["gene"]=> string(0) ""
     //  ["VariantOnGenome/DNA"]=> string(28) "NC_000001.10:g.pter_69209del"
 //nieuw vanaf hier ↓
-//!Is het al nodig hier, aangezien er heel lang niks mee gedaan wordt
-//!Wordt pas later gevuld, bij regel 1757, misschien aanpassen?
+//published_as is the subject here
+//!Is it needed here, it stays empty for a long time
+//!It gets filled later, maybe we should adjust the order?
     //  ["published_as"]=> string(0) ""
     //}
 
@@ -837,7 +839,8 @@ $aStatusCounts = array(
     'opposite' => 0,
 );
 foreach ($aData as $sVariant => $aVariant) {
-    // Per center, first make sure we only have one classification left per variant.
+    // Per center, first make sure we only have one classification left per variant. Het voorbeeld is van lumc
+    //De double ones get removed later
     $bInternalConflict = false;
 //Voorbeeld output
 //Omdat er 2 classificaties zijn voor 1 variant in een center (lumc)
@@ -996,6 +999,9 @@ foreach ($aData as $sVariant => $aVariant) {
 //!Nieuw stukje ↓ (hier wordt status aangemaakt, bij volgende stap gevuld.
     //  ["status"]=> string(0) ""
     //}
+    //Here is checked if there is a conflict, if they are different (opposite) or from the same lab, or if the only difference
+    //is if it's likely or not
+    //Here it is checkeed if there is 1 centrum and if there is an conflict in this centrum.
     if ($bInternalConflict) {
         // One center had a conflict, so we all have a conflict.
         $aVariant['status'] = 'opposite';
@@ -1035,10 +1041,10 @@ foreach ($aData as $sVariant => $aVariant) {
         //      [0]=> string(0) ""
         //      [1]=> string(0) ""
         //  }
-//!Aangepast stukje, wordt gevuld
+//!This is adjusted, if we get here there is a conflict.
         //  ["status"]=> string(8) "opposite"
         //}
-
+    //We get here if there's no conflict within a centrum.
     } elseif (count($aVariant['classifications']) == 1) {
         $aVariant['status'] = 'single-lab';
         $aStatusCounts['single-lab'] ++;
@@ -1077,10 +1083,10 @@ foreach ($aData as $sVariant => $aVariant) {
         //      [0]=> string(0) ""
         //      [1]=> string(0) ""
         //  }
-//!Aangepast stukje, wordt gevuld
+//!Changed piece, there is no conflict. The information comes from 1 centrum.
         //  ["status"]=> string(10) "single-lab"
         //}
-
+    //We get here if there are multiple centra
     } else {
         // We should have clean, one-classification values.
         // Handle it similarly as we did within the labs. Take unique values only and look at the combos.
@@ -1088,7 +1094,7 @@ foreach ($aData as $sVariant => $aVariant) {
         // Flipping the array makes the values unique and makes it easier to work with the values
         // (isset()s are faster than array_search() and in_array()).
         $aClassifications = array_flip($aVariant['classifications']);
-
+        //If the classifications align, we get here
         if (count($aClassifications) == 1) {
             // One unique value, everybody agrees.
             $aVariant['status'] = 'consensus';
@@ -1130,7 +1136,7 @@ foreach ($aData as $sVariant => $aVariant) {
 //!Aangepast stukje, wordt gevuld
             //  ["status"]=> string(9) "consensus"
             //}
-
+            //We get here if the classifications are different between centra
         } elseif ((isset($aClassifications['B']) || isset($aClassifications['LB']))
             && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
             // Opposite.
@@ -1173,7 +1179,7 @@ foreach ($aData as $sVariant => $aVariant) {
 //!Aangepast stukje, wordt gevuld
             //  ["status"]=> string(9) "opposite"
             //}
-
+            //VUS
         } elseif (isset($aClassifications['VUS'])) {
             // VUS and something else, not a conflict, but no consensus either.
             $aVariant['status'] = 'non-consensus';
@@ -1215,7 +1221,7 @@ foreach ($aData as $sVariant => $aVariant) {
 //!Aangepast stukje, wordt gevuld
             //  ["status"]=> string(13) "non-consensus"
             //}
-
+            //likely or not
         } else {
             // Rest is consensus (possible LP/P or LB/B differences are ignored.
             $aVariant['status'] = 'consensus';
