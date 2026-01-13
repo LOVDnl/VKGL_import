@@ -710,8 +710,6 @@ foreach ($aData as $nKey => $aVariant) {
         //array(5) {
         //  ["dna"]=> string(28) "NC_000001.10:g.pter_69209del"
 //!Stukje verwijderd hier (["lumc"]=> string(6) "benign")
-//!Radboud nog niet verwijderd, wordt bij volgende stukje verwijderd, misschien te combineren
-//!dat beide tegelijk worden verrwijderd.
         //  ["radboud_mumc"]=> string(0) ""
         //  ["classification"]=>
         //  array(1) {
@@ -732,7 +730,6 @@ foreach ($aData as $nKey => $aVariant) {
     //array(5) {
     //  ["dna"]=> string(28) "NC_000001.10:g.pter_69209del"
 //Stukje verwijderd hier (["radboud_mumc"]=> string(0) "")
-//!Misschien te combineren met hierboven
     //  ["classifications"]=>
     //  array(1) {
     //      ["lumc"]=> string(1) "B"
@@ -805,7 +802,6 @@ foreach ($aData as $nKey => $aVariant) {
     //}
 
     // Simple merge.
-//Hier wordt $aVariant niet aangepast
     if (!isset($aData[$aVariant['VariantOnGenome/DNA']])) {
         $aData[$aVariant['VariantOnGenome/DNA']] = $aVariant;
         //var_dump($aVariant);
@@ -843,7 +839,6 @@ $aStatusCounts = array(
 foreach ($aData as $sVariant => $aVariant) {
     // Per center, first make sure we only have one classification left per variant.
     $bInternalConflict = false;
-    //var_dump($aVariant);
 //Voorbeeld output
 //Omdat er 2 classificaties zijn voor 1 variant in een center (lumc)
 //zijn er dubbele regels aanwezig.
@@ -887,7 +882,6 @@ foreach ($aData as $sVariant => $aVariant) {
     //}
     foreach ($aVariant['classifications'] as $sCenter => $Classification) {
         if (is_array($Classification)) {
-            //var_dump($aVariant);
 //Geen verschil
             // This center has multiple classifications for this variant.
             // First collect all classifications per gene. Only then can you fully compare.
