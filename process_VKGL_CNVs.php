@@ -382,12 +382,12 @@ if (!$aHeaders) {
 
 
 // Now we have the headers, and all required ones are there.
-// Parse the rest, ignore everything we don't care about, assume the rest must be centers.
+// Parse the rest, ignore everything we don't care about, assume the rest must be centra.
 // Verify these and store.
 $aCentersFound = array();
 $nCentersFound = 0;
 $aHeadersSorted = array_diff($aHeaders, $_CONFIG['columns_mandatory'], $_CONFIG['columns_ignore']);
-sort($aHeadersSorted); // This makes it easier to find the centers and their *_link column.
+sort($aHeadersSorted); // This makes it easier to find the centra and their *_link column.
 foreach ($aHeadersSorted as $sHeader) {
     // Are we a center name?
     if (in_array($sHeader . $_CONFIG['columns_center_suffix'], $aHeadersSorted)) {
@@ -457,7 +457,7 @@ if (!$_CONFIG['flags']['y']) {
     }
     lovd_verifySettings('vkgl_generic_id', 'The LOVD user ID for the generic VKGL account', 'int', '1,99999');
 
-    // Verify all centers.
+    // Verify all centra.
     $aCenterIDs = array(); // Make sure IDs are unique.
     foreach ($aCentersFound as $sCenter) {
         while (true) {
@@ -503,7 +503,7 @@ $_SERVER = array_merge($_SERVER, array(
     'QUERY_STRING' => '',
     'REQUEST_METHOD' => 'GET',
 ));
-// If I put a require here, I can't nicely handle errors, because PHP will die if something is wrong.
+// If I put a requirement here, I can't nicely handle errors, because PHP will die if something is wrong.
 // However, I need to get rid of the "headers already sent" warnings from inc-init.php.
 // So, sadly if there is a problem connecting to LOVD, the script will die here without any output whatsoever.
 ini_set('display_errors', '0');
@@ -562,7 +562,7 @@ if (!$bFound) {
     $_CONFIG['user']['vkgl_generic_id'] = str_pad($_CONFIG['user']['vkgl_generic_id'], 5, '0', STR_PAD_LEFT);
 }
 
-// The other centers that we have collected from the input file.
+// The other centra that we have collected from the input file.
 foreach ($aCentersFound as $sCenter) {
     // If the user was changing settings, then print the center's name, and user name from LOVD.
     // If not found, reset the ID so it doesn't get saved.
@@ -659,8 +659,7 @@ $nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you 
 $tProgressReported = microtime(true); // Don't report progress again within a certain amount of time.
 foreach ($aData as $nKey => $aVariant) {
     // Translate all classification values to easier values.
-    // I need this cleaned up here already, so I can report which centers cause problems.
-    // Also store the genes per center, as the classification is specific for this gene.
+    // I need this cleaned up here already, so I can report which centra cause problems.
     $aVariant['classifications'] = array();
     foreach ($aCentersFound as $sCenter) {
         if ($aVariant[$sCenter]) {
@@ -827,12 +826,12 @@ foreach ($aData as $sVariant => $aVariant) {
     $aVariant['status'] = '';
     //Here is checked if there is a conflict, if they are different (opposite) or from the same lab, or if the only difference
     //is if it's likely or not
-    //Here it is checkeed if there is 1 centrum and if there is an conflict in this centrum.
+    //Here it is checked if there is 1 center and if there is a conflict in this center.
     if ($bInternalConflict) {
         // One center had a conflict, so we all have a conflict.
         $aVariant['status'] = 'opposite';
         $aStatusCounts['opposite'] ++;
-    //We get here if there's no conflict within a centre.
+    //We get here if there's no conflict within a center.
     } elseif (count($aVariant['classifications']) == 1) {
         $aVariant['status'] = 'single-lab';
         $aStatusCounts['single-lab'] ++;
@@ -1142,7 +1141,7 @@ foreach ($aData as $sVariant => $aVariant) {
         lovd_getVariantInfo($sDNA)
     );
 
-    // Loop through centers who found this variant.
+    // Loop through centra who found this variant.
     foreach ($aVariant['classifications'] as $sCenter => $sClassification) {
         // Build variant entry.
         $sLOVDKey = $aCenterIDs[$sCenter] . ':' . $sVariant;
