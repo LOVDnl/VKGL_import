@@ -522,6 +522,7 @@ lovd_printIfVerbose(VERBOSITY_HIGH,
 
 
 // Check given refseq build.
+//!!Says $_DB is undefined, is probably not the case if we open a database
 $sRefSeqBuild = $_DB->q('SELECT refseq_build FROM ' . TABLE_CONFIG)->fetchColumn();
 $bRefSeqBuildOK = ($_CONFIG['user']['refseq_build'] == $sRefSeqBuild);
 
@@ -610,6 +611,7 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM, "\n" .
 $aData = array();
 // 'disease' is currently empty. When we'll start using it, then add it to the mandatory columns and copy it here.
 // 'comments' is currently the same as 'id'.
+//!!We don't have these columns mentioned above this line
 $aColumnsToUse = array_merge($_CONFIG['columns_mandatory'], $aCentersFound);
 while ($sLine = fgets($fInput)) {
     $nLine++;
@@ -714,11 +716,10 @@ foreach ($aData as $nKey => $aVariant) {
     } else {
         // Variant has already been seen before.
         $aData[$aVariant['VariantOnGenome/DNA']] = array_merge_recursive($aData[$aVariant['VariantOnGenome/DNA']], $aVariant);
-        // Enable the line below to log which variants are reported as duplicates.
-        // print($aVariant['id'] . "\t" . $aVariant['gene'] . "\t" . 'Equal to:' . "\t" . $aData[$aVariant['VariantOnGenome/DNA']]['id'][0] . "\t" . $aData[$aVariant['VariantOnGenome/DNA']]['gene'][0] . "\t" . $aVariant['VariantOnGenome/DNA'] . "\n");
+        // !!Enable the line below to log which variants are reported as duplicates. This comment can be removed I think
+        //The line that was here is removed
         $nVariantsMerged ++;
     }
-
     // Get rid of the old data.
     unset($aData[$nKey]);
 }
@@ -904,15 +905,7 @@ foreach ($aData as $sVariant => $aVariant) {
             '%] Conflict: ' . implode(', ', array_map(function ($key, $val) { return $key . ': ' . $val; }, array_keys($aVariant['classifications']), $aVariant['classifications'])) . ".\n" .
             '                   DNA: ' . $aVariant['VariantOnGenome/DNA'] . "\n");
         // Also report in a structured manner which we can extract from the output to report.
-        //Checking where the array changes into a string and why an error is curated here
-        #var_dump($aVariant['VariantOnGenome/DNA']);
-//        $sReport = '{Conflict|' . $aVariant['VariantOnGenome/DNA'];#. implode(',', $aVariant['gene']);
-//        foreach (array_keys($aCenterIDs) as $sCenter) {
-//            // This is called a "Null coalescing operator" (PHP7) and doesn't emit a notice.
-//            $sReport .= '|' . ($aVariant['classifications'][$sCenter] ?? '');
-//        }
-//        lovd_printIfVerbose(VERBOSITY_MEDIUM,
-//            '                   ' . $sReport . "}\n");
+        //!!Is the line above this still needed
     }
 
     $aData[$sVariant] = $aVariant;
@@ -950,19 +943,7 @@ foreach ($aData as $sVariant => $aVariant) {
     foreach ($aCentersFound as $sCenter) {
         $aLine[] = ($aVariant['classifications'][$sCenter] ?? '');
     }
-//    $aGenes = [];
-//    foreach ($aVariant['genes'] as $Gene) {
-//        if (is_array($Gene)) {
-//            $aGenes = array_merge($aGenes, $Gene);
-//        } else {
-//            $aGenes[] = $Gene;
-//        }
-//    }
-//    $aGenes = array_unique($aGenes);
-//    sort($aGenes);
-//    $aLine[] = implode(';', $aGenes);
-//    //$aLine[] = implode(', ', $aVariant['published_as']);
-//    fputs($fOutput, implode("\t", $aLine) . "\n");
+    //!!Can the '' be removed or is it still needed
 }
 fclose($fOutput);
 
@@ -1147,6 +1128,7 @@ foreach ($aData as $sVariant => $aVariant) {
         $sLOVDKey = $aCenterIDs[$sCenter] . ':' . $sVariant;
         $aVOGEntry = array(
             'id' => null,
+            //!!Can  'id' => null, be removed because we don't have id
             'allele' => '0', // Unknown.
             // Don't let internal conflicts cause notices here.
             'effectid' => (!isset($_CONFIG['effect_mapping_LOVD'][$sClassification])? 0 :
@@ -1224,8 +1206,8 @@ foreach ($aData as $sVariant => $aVariant) {
                 // But still store the new ID, if not yet included.
                 foreach ($aVariant['id'] as $sNewID) {
                     //var_dump($aVariant);
-//!WE HEBBEN GEEN ID
-//!WE KOMEN NIET IN DE STATEMENT
+//!!We have no id
+//!!We don't get in this statement
                     if (!in_array($sNewID, $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'])) {
                         $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'][] = $sNewID;
                     }
