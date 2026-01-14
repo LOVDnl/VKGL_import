@@ -743,35 +743,15 @@ $aStatusCounts = array(
     'opposite' => 0,
 );
 foreach ($aData as $sVariant => $aVariant) {
-    // Per center, first make sure we only have one classification left per variant. Het voorbeeld is van lumc
+    // Per center, first make sure we only have one classification left per variant.
     //De double ones get removed later
     $bInternalConflict = false;
     foreach ($aVariant['classifications'] as $sCenter => $Classification) {
         if (is_array($Classification)) {
-//Geen verschil
             // This center has multiple classifications for this variant.
-            // First collect all classifications per gene. Only then can you fully compare.
-            //$aGenesClassified = array(); // Classification per gene.
-            $aCentrumClassified = array();
-//            foreach ($aVariant['genes'][$sCenter] as $nKey => $sGene) {
-//                //var_dump($aVariant);
-////Geen verschil
-////!Genes is leeg, is deze nodig? ↑
-//                if (!isset($aGenesClassified[$sGene])) {
-//                    $aGenesClassified[$sGene] = array($Classification[$nKey]);
-//                } elseif (!in_array($Classification[$nKey], $aGenesClassified[$sGene])) {
-//                    $aGenesClassified[$sGene][] = $Classification[$nKey];
-//                }
-//            }
-
-            // Then, loop genes; make sure we have only one classification per gene.
-            //kijkt nu per gen, moet kijken per centrum, dan interne conflicten afgehandeld
-            //dan kijken of code die externe code regelt ook moet worden aangepast
             foreach ($aVariant['classifications'] as $sCenter => $aClassifications) {
-            //foreach ($aGenesClassified as $sGene => $aClassifications) {
                 // Flipping the array makes the values unique and makes it easier to work with the values;
                 //  isset()s are faster than array_search() and in_array().
-                //$aClassifications = array_flip($aClassifications);
                 $aClassifications = array_flip($aClassifications);
 
                 if (count($aClassifications) > 1) {
@@ -785,8 +765,7 @@ foreach ($aData as $sVariant => $aVariant) {
                             ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
                                 floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
                                 5, ' ', STR_PAD_LEFT) .
-                            '%] Warning: Internal conflict in center ' . $sCenter . ' (' . $sGene . '): ' . implode(', ', array_keys($aClassifications)) . ".\n");
-                      #      '                   IDs: ' . implode("\n                        ", $aVariant['id']) . "\n");
+                            '%] Warning: Internal conflict in center ' . $sCenter . ': ' . implode(', ', array_keys($aClassifications)) . ".\n");
                         // Reduce to one string, we want to store the conflict to report this in LOVD in a non-public entry.
                         $aClassifications = array(implode(',', array_keys($aClassifications)) => 1);
                         $bInternalConflict = true; // This'll make the consensus code a lot cleaner.
