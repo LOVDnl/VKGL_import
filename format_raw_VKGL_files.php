@@ -5,14 +5,17 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2025-09-25
- * Version     : 0.2.3
+ * Modified    : 2026-01-15
+ * Version     : 0.2.4
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.2.3  2025-09-25
+ * Changelog   : 0.2.4  2026-01-15
+ *               Add support for two new file formats; the new NKI tsv format
+ *               and the new UMCG JSON format.
+ *               0.2.3  2025-09-25
  *               Allow processing JSON files, too. Currently, we only support
  *               the JSON data from the NKI.
  *               0.2.2  2025-08-11
@@ -87,7 +90,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.2.3',
+    'version' => '0.2.4',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
