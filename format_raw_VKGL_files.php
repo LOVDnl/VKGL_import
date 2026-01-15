@@ -121,6 +121,9 @@ $_CONFIG = array(
         // Radboud/MUMC+:
         'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud',
 
+        // NKI:
+        'alt;category;chromosome;classification;cnomen;effect;end;exon;gene;pnomen;position;ref;region;strand;transcript' => 'nki',
+
         // Parsed JSON formats:
         'alt;annotation;build;cdna;chromosome;classification;gene;position;protein;ref;transcript' => 'JSON',
     ),
@@ -803,6 +806,23 @@ foreach ($aFiles as $sFile => $sCenter) {
                             'VUS',
                         ), strtolower($aDataLine['variant_effect'])),
                     $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['refseq_build'],
+                );
+                break;
+
+            case 'nki':
+                $sVariantKey = implode('|', array(
+                        $aDataLine['chromosome'],
+                        $aDataLine['position'],
+                        $aDataLine['ref'],
+                        $aDataLine['alt'],
+                        $aDataLine['gene'],
+                        $aDataLine['transcript'],
+                        $aDataLine['cnomen'],
+                ));
+                $aValues = array(
+                        'protein' => $aDataLine['pnomen'],
+                        $sCenter => str_replace(array('vous'), array('VUS'), strtolower($aDataLine['classification'])),
+                        $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['effect'],
                 );
                 break;
 
