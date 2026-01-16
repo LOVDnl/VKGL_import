@@ -867,7 +867,13 @@ foreach ($aData as $sVariant => $aVariant) {
             '%] Conflict: ' . implode(', ', array_map(function ($key, $val) { return $key . ': ' . $val; }, array_keys($aVariant['classifications']), $aVariant['classifications'])) . ".\n" .
             '                   DNA: ' . $aVariant['VariantOnGenome/DNA'] . "\n");
         // Also report in a structured manner which we can extract from the output to report.
-        //!!Is the line above this still needed
+        $sReport = '{Conflict|' . $aVariant['VariantOnGenome/DNA'];
+        foreach (array_keys($aCenterIDs) as $sCenter) {
+            // This is called a "Null coalescing operator" (PHP7) and doesn't emit a notice.
+            $sReport .= '|' . ($aVariant['classifications'][$sCenter] ?? '');
+        }
+        lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                '                   ' . $sReport . "}\n");
     }
 
     $aData[$sVariant] = $aVariant;
