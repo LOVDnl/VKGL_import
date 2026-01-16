@@ -856,12 +856,6 @@ foreach ($aData as $sVariant => $aVariant) {
         // VariantOnGenome/DNA, we grouped on this, so the other values are removed.
         //This is because the array get's transformed into a simple string.
         $aVariant['VariantOnGenome/DNA'] = current($aVariant['VariantOnGenome/DNA']);
-
-    } else {
-        // Better always have arrays here, which makes the code simpler.
-        //!!We have nothing here anymore
-        //$aVariant['gene'] = array($aVariant['gene']);
-        //$aVariant['published_as'] = array($aVariant['published_as']);
     }
 
     // Report opposites.
