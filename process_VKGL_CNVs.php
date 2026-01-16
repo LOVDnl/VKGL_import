@@ -522,7 +522,6 @@ lovd_printIfVerbose(VERBOSITY_HIGH,
 
 
 // Check given refseq build.
-//!!Says $_DB is undefined, is probably not the case if we open a database
 $sRefSeqBuild = $_DB->q('SELECT refseq_build FROM ' . TABLE_CONFIG)->fetchColumn();
 $bRefSeqBuildOK = ($_CONFIG['user']['refseq_build'] == $sRefSeqBuild);
 
@@ -609,9 +608,6 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM, "\n" .
 
 // Read out all variants, with labels per center, and store cDNA annotation.
 $aData = array();
-// 'disease' is currently empty. When we'll start using it, then add it to the mandatory columns and copy it here.
-// 'comments' is currently the same as 'id'.
-//!!We don't have these columns mentioned above this line
 $aColumnsToUse = array_merge($_CONFIG['columns_mandatory'], $aCentersFound);
 while ($sLine = fgets($fInput)) {
     $nLine++;
@@ -708,16 +704,12 @@ lovd_printIfVerbose(VERBOSITY_MEDIUM,
 // Loop variants again, merging entries.
 $nVariantsMerged = 0;
 foreach ($aData as $nKey => $aVariant) {
-    // Merging makes reconstructing some fields much harder, so link them now.
-    //!!Comment says to link some fields first, but then the next comment says it's going to merge
     // Simple merge.
     if (!isset($aData[$aVariant['VariantOnGenome/DNA']])) {
         $aData[$aVariant['VariantOnGenome/DNA']] = $aVariant;
     } else {
         // Variant has already been seen before.
         $aData[$aVariant['VariantOnGenome/DNA']] = array_merge_recursive($aData[$aVariant['VariantOnGenome/DNA']], $aVariant);
-        // !!Enable the line below to log which variants are reported as duplicates. This comment can be removed I think
-        //The line that was here is removed
         $nVariantsMerged ++;
     }
     // Get rid of the old data.
@@ -851,15 +843,11 @@ foreach ($aData as $sVariant => $aVariant) {
 
 
     // Do some cleaning up.
-    // FIXME: Best kans dat we hier naar "dna" kunnen kijken, maar ik weet niet 100% zeker of dat ook een array kan zijn...
-    //!!This is solved right, because we're using 'VariantOnGenome/DNA'
     if (is_array($aVariant['VariantOnGenome/DNA'])) {
         // Multiple variants have been merged, but much information is duplicated.
 
         // Chromosome can't really be different.
 
-        // Since we're grouping on variant, the gene doesn't have to be unique anymore.
-        //!!Is the line above this still needed, we don't use gene anymore
         // We can get case-differences here, and I don't like that. array_unique() however, is case-sensitive.
         // This trick solves that problem.
         // https://stackoverflow.com/questions/2276349/case-insensitive-array-unique
@@ -922,7 +910,6 @@ foreach ($aData as $sVariant => $aVariant) {
     foreach ($aCentersFound as $sCenter) {
         $aLine[] = ($aVariant['classifications'][$sCenter] ?? '');
     }
-    //!!Can the '' be removed or is it still needed
 }
 fclose($fOutput);
 
@@ -1107,7 +1094,6 @@ foreach ($aData as $sVariant => $aVariant) {
         $sLOVDKey = $aCenterIDs[$sCenter] . ':' . $sVariant;
         $aVOGEntry = array(
             'id' => null,
-            //!!Can  'id' => null, be removed because we don't have id
             'allele' => '0', // Unknown.
             // Don't let internal conflicts cause notices here.
             'effectid' => (!isset($_CONFIG['effect_mapping_LOVD'][$sClassification])? 0 :
