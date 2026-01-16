@@ -744,6 +744,7 @@ foreach ($aData as $sVariant => $aVariant) {
             foreach ($aVariant['classifications'] as $sCenter => $aClassifications) {
                 // Flipping the array makes the values unique and makes it easier to work with the values;
                 //  isset()s are faster than array_search() and in_array().
+                //!!This foreach loop can be removed I think because it's double
                 $aClassifications = array_flip($aClassifications);
 
                 if (count($aClassifications) > 1) {
@@ -852,8 +853,8 @@ foreach ($aData as $sVariant => $aVariant) {
         // This trick solves that problem.
         // https://stackoverflow.com/questions/2276349/case-insensitive-array-unique
 
-        // VariantOnGenome/DNA, we grouped on this, so just remove.
-        //!!remove what?
+        // VariantOnGenome/DNA, we grouped on this, so the other values are removed.
+        //This is because the array get's transformed into a simple string.
         $aVariant['VariantOnGenome/DNA'] = current($aVariant['VariantOnGenome/DNA']);
 
     } else {
@@ -1170,9 +1171,10 @@ foreach ($aData as $sVariant => $aVariant) {
                 );
                 // But still store the new ID, if not yet included.
                 foreach ($aVariant['id'] as $sNewID) {
-                    //var_dump($aVariant);
 //!!We have no id
-//!!We don't get in this statement
+//!!If I search for the whole sentence ($aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'], then I only find
+//here, but parts of this sentence are found elsewhere. Is it only when the whole piece is found
+//or also when parts of it are found?
                     if (!in_array($sNewID, $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'])) {
                         $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'][] = $sNewID;
                     }
