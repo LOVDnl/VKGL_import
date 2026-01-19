@@ -741,11 +741,12 @@ foreach ($aData as $sVariant => $aVariant) {
     foreach ($aVariant['classifications'] as $sCenter => $Classification) {
         if (is_array($Classification)) {
             // This center has multiple classifications for this variant.
-            foreach ($aVariant['classifications'] as $sCenter => $aClassifications) {
+            //foreach ($aVariant['classifications'] as $sCenter => $aClassifications) {
                 // Flipping the array makes the values unique and makes it easier to work with the values;
                 //  isset()s are faster than array_search() and in_array().
                 //!!This foreach loop can be removed I think because it's double
-                $aClassifications = array_flip($aClassifications);
+                //$aClassifications = array_flip($aClassifications);
+                $aClassifications = array_flip($Classification);
 
                 if (count($aClassifications) > 1) {
                     // We have seen multiple classifications of this gene.
@@ -789,7 +790,7 @@ foreach ($aData as $sVariant => $aVariant) {
 
                 // Store string value.
                 $aVariant['classifications'][$sCenter] = key($aClassifications); // Should of course have one value.
-            }
+            //}
         }
     }
 
@@ -1170,15 +1171,15 @@ foreach ($aData as $sVariant => $aVariant) {
                     $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public']
                 );
                 // But still store the new ID, if not yet included.
-                foreach ($aVariant['id'] as $sNewID) {
+                //foreach ($aVariant['id'] as $sNewID) {
 //!!We have no id
 //!!If I search for the whole sentence ($aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'], then I only find
 //here, but parts of this sentence are found elsewhere. Is it only when the whole piece is found
 //or also when parts of it are found?
-                    if (!in_array($sNewID, $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'])) {
-                        $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'][] = $sNewID;
-                    }
-                }
+                    //if (!in_array($sNewID, $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'])) {
+                      //  $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'][] = $sNewID;
+                    //}
+                //}
             }
 
             // NOTE: This is debugging code. It checks the differences, and reports them, instead of running the update.
