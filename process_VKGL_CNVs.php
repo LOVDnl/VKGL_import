@@ -663,6 +663,7 @@ foreach ($aData as $nKey => $aVariant) {
         if ($aVariant[$sCenter]) {
             $aVariant['classifications'][$sCenter] = str_replace(array('likely ', 'benign', 'pathogenic', 'vus'),
                 array('L', 'B', 'P', 'VUS'), strtolower($aVariant[$sCenter]));
+            //FIXME: LUMC and Radboud data have allele information but it's unknown if other centers include this too.
         }
         unset($aVariant[$sCenter]);
     }
@@ -798,9 +799,9 @@ foreach ($aData as $sVariant => $aVariant) {
 
     // Determine consensus (opposite, non-consensus, consensus, single-lab).
     $aVariant['status'] = '';
-    //Here is checked if there is a conflict, if they are different (opposite) or from the same lab, or if the only difference
-    //is if it's likely or not
-    //Here it is checked if there is 1 center and if there is a conflict in this center.
+    //First we're going to check if we're dealing with 1 center or more
+    //Here is checked if there are different conclusions in 1 center, that means that within 1 center
+    //different conclusions were drawn and forms a conflict
     if ($bInternalConflict) {
         // One center had a conflict, so we all have a conflict.
         $aVariant['status'] = 'opposite';
@@ -970,13 +971,13 @@ foreach ($aData as $sVariant => $aVariant) {
 
         $sChromosome = array_search($sRefSeq, $_SETT['human_builds'][$_CONFIG['user']['refseq_build']]['ncbi_sequences']);
         if (!$sChromosome) {
-            // Eh? It did work the other way around before...
+            // Eh? It did work the other way around before.... This is a failsave if there's a bug.
             lovd_printIfVerbose(VERBOSITY_LOW,
                 'Error: Cannot find chromosome belonging to ' . $_CONFIG['user']['refseq_build'] . ':' . $sRefSeq . ".\n\n");
             die(EXIT_ERROR_DATA_CONTENT_ERROR);
         }
 
-        // Reset counters.
+        // Reset counters. We're looking per chromosome.
         $aVariantsCreated[$sChromosome] = 0;
         $aVariantsUpdated[$sChromosome] = 0;
         $aVariantsDeleted[$sChromosome] = 0;
@@ -1084,7 +1085,7 @@ foreach ($aData as $sVariant => $aVariant) {
     }
 
     // Add some needed fields; (type, position_start, position_end).
-    //i.p.v deze functie HGVS library gebruiken om daar de needed fields uit te halen
+    //!!Instead of using this function, using the HGVS library to get the needed fields.
         $aVariant = array_merge(
         $aVariant,
         lovd_getVariantInfo($sDNA)
