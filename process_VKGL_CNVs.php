@@ -983,16 +983,14 @@ foreach ($aData as $sVariant => $aVariant) {
         // These are optional, so we don't want to die if we don't have them.
         $aActiveCols = $_DB->q('
             SELECT colid FROM ' . TABLE_ACTIVE_COLS . '
-            WHERE colid IN (?, ?, ?, ?, ?)',
+            WHERE colid IN (?, ?, ?, ?)',
             array(
                 'VariantOnGenome/Genetic_origin',
-                'VariantOnGenome/Published_as',
                 'VariantOnGenome/Remarks',
                 'VariantOnGenome/Remarks_Non_Public',
                 'VariantOnGenome/ClinicalClassification',
             ))->fetchAllColumn();
         $bGeneticOrigin = in_array('VariantOnGenome/Genetic_origin', $aActiveCols);
-        $bPublishedAs = in_array('VariantOnGenome/Published_as', $aActiveCols);
         $bRemarks = in_array('VariantOnGenome/Remarks', $aActiveCols);
         $bRemarksNonPublic = in_array('VariantOnGenome/Remarks_Non_Public', $aActiveCols);
         $bClassification = in_array('VariantOnGenome/ClinicalClassification', $aActiveCols);
@@ -1006,7 +1004,6 @@ foreach ($aData as $sVariant => $aVariant) {
               vog.created_by, vog.owned_by, vog.statusid, vog.`VariantOnGenome/DNA`,
               vog.`VariantOnGenome/DBID`' .
                 (!$bGeneticOrigin? '' : ', vog.`VariantOnGenome/Genetic_origin`') .
-                (!$bPublishedAs? '' : ', vog.`VariantOnGenome/Published_as`') .
                 (!$bRemarks? '' : ', vog.`VariantOnGenome/Remarks`') .
                 (!$bRemarksNonPublic? '' : ', vog.`VariantOnGenome/Remarks_Non_Public`') .
                 (!$bClassification? '' : ', IFNULL(NULLIF(vog.`VariantOnGenome/ClinicalClassification`, ""), "-") AS `VariantOnGenome/ClinicalClassification`') . '
@@ -1114,11 +1111,9 @@ foreach ($aData as $sVariant => $aVariant) {
             'VariantOnGenome/DNA' => $sDNA, // Can actually also update, if the LOVD data is not correct.
             'VariantOnGenome/DBID' => '', // FIXME: Will be filled in later for records to be created!
             'VariantOnGenome/Genetic_origin' => 'CLASSIFICATION record',
-            //'VariantOnGenome/Published_as' => $aVariant['published_as'],
             'VariantOnGenome/Remarks' => 'VKGL data sharing initiative Nederland' . ($aVariant['status'] != 'opposite'? '' : '; Variant classification is in conflict with a different center.'),
             'VariantOnGenome/Remarks_Non_Public' => array(
                 'warning' => 'Do not remove or edit this field!',
-                'ids' => $aVariant['id'],
                 'updates' => array(),
             ),
         );
@@ -1129,9 +1124,6 @@ foreach ($aData as $sVariant => $aVariant) {
         }
         if (!$bGeneticOrigin) {
             unset($aVOGEntry['VariantOnGenome/Genetic_origin']);
-        }
-        if (!$bPublishedAs) {
-            unset($aVOGEntry['VariantOnGenome/Published_as']);
         }
         if (!$bRemarks) {
             unset($aVOGEntry['VariantOnGenome/Remarks']);
@@ -1167,16 +1159,6 @@ foreach ($aData as $sVariant => $aVariant) {
                     $aVOGEntry['VariantOnGenome/Remarks_Non_Public'],
                     $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public']
                 );
-                // But still store the new ID, if not yet included.
-                //foreach ($aVariant['id'] as $sNewID) {
-//!!We have no id
-//!!If I search for the whole sentence ($aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'], then I only find
-//here, but parts of this sentence are found elsewhere. Is it only when the whole piece is found
-//or also when parts of it are found?
-                    //if (!in_array($sNewID, $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'])) {
-                      //  $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['ids'][] = $sNewID;
-                    //}
-                //}
             }
 
             // NOTE: This is debugging code. It checks the differences, and reports them, instead of running the update.
@@ -1188,22 +1170,6 @@ foreach ($aData as $sVariant => $aVariant) {
                 // Don't mention ins to dups, that's the logical result of our checking.
                 if ($aDataLOVD[$sLOVDKey]['type'] == 'ins' && $aVOGEntry['type'] == 'dup') {
                     $aDataLOVD[$sLOVDKey]['type'] = $aVOGEntry['type'];
-                }
-                if ($bPublishedAs) {
-                    // My "Published as" is often better. Calculate how much of the original I have.
-                    // So if we have some kind of percentage, I'm happy already.
-                    if (!$aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']
-                        || ($nPercentageMatch = similar_text(
-                                $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'],
-                                $aVOGEntry['VariantOnGenome/Published_as'])
-                            / strlen($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']) * 100) >= 40) {
-                        // Good enough.
-                        $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'] = $aVOGEntry['VariantOnGenome/Published_as'];
-                    } else {
-                        // Not sure about this one. Keep the difference to report, but add the matching percentage,
-                        //  so we can see if we need to lower the threshold.
-                        $aVOGEntry['VariantOnGenome/Published_as'] .= ' (' . round($nPercentageMatch, 2) . ')';
-                    }
                 }
             }
 
