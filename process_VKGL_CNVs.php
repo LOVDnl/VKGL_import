@@ -742,56 +742,52 @@ foreach ($aData as $sVariant => $aVariant) {
     foreach ($aVariant['classifications'] as $sCenter => $Classification) {
         if (is_array($Classification)) {
             // This center has multiple classifications for this variant.
-            //foreach ($aVariant['classifications'] as $sCenter => $aClassifications) {
-                // Flipping the array makes the values unique and makes it easier to work with the values;
-                //  isset()s are faster than array_search() and in_array().
-                //!!This foreach loop can be removed I think because it's double
-                //$aClassifications = array_flip($aClassifications);
-                $aClassifications = array_flip($Classification);
+            // Flipping the array makes the values unique and makes it easier to work with the values;
+            //  isset()s are faster than array_search() and in_array().
+            $aClassifications = array_flip($Classification);
+            if (count($aClassifications) > 1) {
+                // We have seen multiple classifications of this gene.
+                // Rules: report opposites; */VUS to VUS; LB/B to LB; LP/P to LP.
+                if ((isset($aClassifications['B']) || isset($aClassifications['LB']))
+                    && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
+                    // Internal conflict within center. These are reported in the opposites file.
+                    lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                        ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                        floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                        5, ' ', STR_PAD_LEFT) .
+                        '%] Warning: Internal conflict in center ' . $sCenter . ': ' . implode(', ', array_keys($aClassifications)) . ".\n");
+                    // Reduce to one string, we want to store the conflict to report this in LOVD in a non-public entry.
+                    $aClassifications = array(implode(',', array_keys($aClassifications)) => 1);
+                    $bInternalConflict = true; // This'll make the consensus code a lot cleaner.
 
-                if (count($aClassifications) > 1) {
-                    // We have seen multiple classifications of this gene.
+                } elseif (isset($aClassifications['VUS'])) {
+                    // VUS and something else, not a conflict. OK, VUS then.
+                    $aClassifications = array('VUS' => 1); // Remove the other classification(s).
 
-                    // Rules: report opposites; */VUS to VUS; LB/B to LB; LP/P to LP.
-                    if ((isset($aClassifications['B']) || isset($aClassifications['LB']))
-                        && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
-                        // Internal conflict within center. These are reported in the opposites file.
-                        lovd_printIfVerbose(VERBOSITY_MEDIUM,
-                            ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
-                                floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
-                                5, ' ', STR_PAD_LEFT) .
-                            '%] Warning: Internal conflict in center ' . $sCenter . ': ' . implode(', ', array_keys($aClassifications)) . ".\n");
-                        // Reduce to one string, we want to store the conflict to report this in LOVD in a non-public entry.
-                        $aClassifications = array(implode(',', array_keys($aClassifications)) => 1);
-                        $bInternalConflict = true; // This'll make the consensus code a lot cleaner.
-
-                    } elseif (isset($aClassifications['VUS'])) {
-                        // VUS and something else, not a conflict. OK, VUS then.
-                        $aClassifications = array('VUS' => 1); // Remove the other classification(s).
-
-                    } else {
-                        // Still multiple values. LB/B to LB, LP/P to LP.
-                        if (isset($aClassifications['B']) && isset($aClassifications['LB'])) {
-                            unset($aClassifications['B']);
-                        }
-                        if (isset($aClassifications['P']) && isset($aClassifications['LP'])) {
-                            unset($aClassifications['P']);
-                        }
+                } else {
+                    // Still multiple values. LB/B to LB, LP/P to LP.
+                    if (isset($aClassifications['B']) && isset($aClassifications['LB'])) {
+                        unset($aClassifications['B']);
                     }
-
-                    if (count($aClassifications) > 1) {
-                        // How can this be?
-                        lovd_printIfVerbose(VERBOSITY_MEDIUM,
-                            ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
-                                floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
-                                5, ' ', STR_PAD_LEFT) .
-                            '%] Warning: Failed to resolve classification string for center ' . $sCenter . ': ' . implode(', ', $Classification) . ".\n");
+                    if (isset($aClassifications['P']) && isset($aClassifications['LP'])) {
+                        unset($aClassifications['P']);
                     }
                 }
 
-                // Store string value.
-                $aVariant['classifications'][$sCenter] = key($aClassifications); // Should of course have one value.
-            //}
+                if (count($aClassifications) > 1) {
+                    // How can this be?
+                    //This is to check if $aClassification only has 1 value, we shouldn't get here.
+                    //This is a failsave.
+                    lovd_printIfVerbose(VERBOSITY_MEDIUM,
+                        ' ' . date('H:i:s', time() - $tStart) . ' [' . str_pad(number_format(
+                        floor($nVariantsDone * 1000 / $nVariants) / 10, 1),
+                        5, ' ', STR_PAD_LEFT) .
+                        '%] Warning: Failed to resolve classification string for center ' . $sCenter . ': ' . implode(', ', $Classification) . ".\n");
+                }
+            }
+
+            // Store string value.
+            $aVariant['classifications'][$sCenter] = key($aClassifications); // Should of course have one value.
         }
     }
 
