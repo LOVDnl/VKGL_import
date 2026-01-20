@@ -60,7 +60,7 @@
  *               0.1.0  2019-11-14
  *               Initial release.
  *
- * Copyright   : 2004-2025 Leiden University Medical Center; http://www.LUMC.nl/
+ * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
  *
  *
@@ -356,7 +356,7 @@ function lovd_verifySettings ($sKeyName, $sMessage, $sVerifyType, $options)
                             $sInput .= '/src';
                         } else {
                             print('    Cannot locate config.ini.php in given path.' . "\n" .
-                                '    Please check that the given path is a correct path to an LOVD installation.' . "\n");
+                                  '    Please check that the given path is a correct path to an LOVD installation.' . "\n");
                             break;
                         }
                     }
