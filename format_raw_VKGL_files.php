@@ -5,14 +5,17 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2025-09-25
- * Version     : 0.2.3
+ * Modified    : 2026-01-15
+ * Version     : 0.2.4
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.2.3  2025-09-25
+ * Changelog   : 0.2.4  2026-01-15
+ *               Add support for two new file formats; the new NKI tsv format
+ *               and the new UMCG JSON format.
+ *               0.2.3  2025-09-25
  *               Allow processing JSON files, too. Currently, we only support
  *               the JSON data from the NKI.
  *               0.2.2  2025-08-11
@@ -57,7 +60,7 @@
  *               0.1.0  2019-11-14
  *               Initial release.
  *
- * Copyright   : 2004-2025 Leiden University Medical Center; http://www.LUMC.nl/
+ * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
  *
  *
@@ -87,7 +90,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.2.3',
+    'version' => '0.2.4',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -121,11 +124,15 @@ $_CONFIG = array(
         // Radboud/MUMC+:
         'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud',
 
+        // NKI:
+        'alt;category;chromosome;classification;cnomen;effect;end;exon;gene;pnomen;position;ref;region;strand;transcript' => 'nki',
+
         // Parsed JSON formats:
         'alt;annotation;build;cdna;chromosome;classification;gene;position;protein;ref;transcript' => 'JSON',
     ),
     'header_signatures_JSON' => array(
         '_id;alternative;build;cNomen;category;chromosome;classification;date;description;display_id;effect;end;exon;gene_symbol;institute;location;maintainer;managed_variant_id;pNomen;position;reference;sub_category;type;variant_id;variant_info' => 'nki',
+        'created;pathogenicity;posedits' => 'umcg',
     ),
     'mutalyzer_URL' => 'https://v2.mutalyzer.nl/',
     'user' => array(
@@ -349,7 +356,7 @@ function lovd_verifySettings ($sKeyName, $sMessage, $sVerifyType, $options)
                             $sInput .= '/src';
                         } else {
                             print('    Cannot locate config.ini.php in given path.' . "\n" .
-                                '    Please check that the given path is a correct path to an LOVD installation.' . "\n");
+                                  '    Please check that the given path is a correct path to an LOVD installation.' . "\n");
                             break;
                         }
                     }
@@ -595,6 +602,11 @@ foreach ($aFiles as $sFile => $sCenter) {
             die(EXIT_ERROR_INPUT_CANT_OPEN);
         }
 
+        // The UMCG JSON file has one key: variants.
+        if (is_array($aJSON) && array_keys($aJSON) == ['variants']) {
+            $aJSON = $aJSON['variants'];
+        }
+
         // The keys of this array should all be numeric; it should be an array of objects.
         if (array_filter(array_keys($aJSON), 'is_string') || !is_array(current($aJSON))
             || !array_filter(array_keys(current($aJSON)), 'is_string')) {
@@ -660,6 +672,47 @@ foreach ($aFiles as $sFile => $sCenter) {
                         'protein' => $aVariant['pNomen'],
                         'classification' => str_replace('vous', 'VUS', $aVariant['classification']),
                         'annotation' => implode(',', $aVariant['maintainer']),
+                    ];
+                    $aLines[] = implode("\t", $aLine);
+                    break;
+
+                case 'umcg':
+                    // Skip variants without a pathogenicity (just a handfull).
+                    if (!$aVariant['pathogenicity']) {
+                        continue 2;
+                    }
+
+                    // We usually have two variant sets. We'll pick the hg19 set, also because they have slightly more variants.
+                    foreach ($aVariant['posedits'] as $aObservation) {
+                        if ($aObservation['human_reference'] == 'GRCh37') {
+                            // Just copy all the fields over.
+                            $aVariant = array_merge($aVariant, $aObservation);
+                            break;
+                        }
+                    }
+
+                    // This should never happen, but I'm not going to assume it won't ever happen in the future.
+                    if (!isset($aVariant['human_reference'])) {
+                        // The data didn't get copied; no hg19 data found, or no variant data given at all.
+                        // For now, decide to die here.
+                        lovd_printIfVerbose(VERBOSITY_LOW,
+                            'Error: Variant does not contain any hg19/GRCh37 data in ' . $sFile . ":\n" . print_r($aVariant, true) . "\n\n");
+                        die(EXIT_ERROR_DATA_CONTENT_ERROR);
+                    }
+
+                    // Build the data array. Keys aren't used, but it's useful for readability.
+                    $aLine = [
+                        'build' => $aVariant['human_reference'],
+                        'chromosome' => $aVariant['chromosome'],
+                        'position' => $aVariant['start'],
+                        'ref' => $aVariant['ref'],
+                        'alt' => $aVariant['alt'],
+                        'gene' => '',
+                        'transcript' => '',
+                        'cDNA' => '',
+                        'protein' => '',
+                        'classification' => str_replace(['_', 'vus'], [' ', 'VUS'], $aVariant['pathogenicity']),
+                        'annotation' => $aVariant['created'],
                     ];
                     $aLines[] = implode("\t", $aLine);
                     break;
@@ -803,6 +856,23 @@ foreach ($aFiles as $sFile => $sCenter) {
                             'VUS',
                         ), strtolower($aDataLine['variant_effect'])),
                     $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['refseq_build'],
+                );
+                break;
+
+            case 'nki':
+                $sVariantKey = implode('|', array(
+                        $aDataLine['chromosome'],
+                        $aDataLine['position'],
+                        $aDataLine['ref'],
+                        $aDataLine['alt'],
+                        $aDataLine['gene'],
+                        $aDataLine['transcript'],
+                        $aDataLine['cnomen'],
+                ));
+                $aValues = array(
+                        'protein' => $aDataLine['pnomen'],
+                        $sCenter => str_replace(array('vous'), array('VUS'), strtolower($aDataLine['classification'])),
+                        $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['effect'],
                 );
                 break;
 

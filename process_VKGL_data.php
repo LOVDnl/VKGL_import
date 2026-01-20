@@ -5,13 +5,15 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-06-27
- * Modified    : 2025-07-03
- * Version     : 1.4
+ * Modified    : 2026-01-20
+ * Version     : 1.5
  *
  * Purpose     : Processes the VKGL consensus data, and creates or updates the
  *               VKGL data in the LOVD instance.
  *
- * Changelog   : 1.4     2025-07-03
+ * Changelog   : 1.5     2026-01-20
+ *               Handle empty annotation coming from the new UMCG JSON files.
+ *               1.4     2025-07-03
  *               Create a data file while processing the data. This allows us to
  *               see what is actually the result of the normalization. What are
  *               we loading into the database?
@@ -83,7 +85,7 @@
  *               0.1     2019-07-18
  *               Initial release.
  *
- * Copyright   : 2004-2023 Leiden University Medical Center; http://www.LUMC.nl/
+ * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
  *
  *
@@ -123,7 +125,7 @@ define('CWD', dirname(__FILE__) . '/');
 // Default settings. Everything in 'user' will be verified with the user, and stored in settings.json.
 $_CONFIG = array(
     'name' => 'VKGL data importer',
-    'version' => '1.4',
+    'version' => '1.5',
     'settings_file' => CWD . 'settings.json',
     'flags' => array(
         'n' => false, // Dry run.
@@ -1075,6 +1077,21 @@ foreach ($aData as $nKey => $aVariant) {
         $aData[$aVariant['VariantOnGenome/DNA']] = $aVariant;
     } else {
         // Variant has already been seen before.
+        if (!$aVariant['gene']) {
+            // The new UMCG data doesn't send us genes and transcripts anymore. I refuse to have tens of thousands of updates for nothing.
+            foreach (['id', 'gene', 'transcript', 'c_dna', 'protein', 'published_as'] as $sKey) {
+                $NewValue = $aData[$aVariant['VariantOnGenome/DNA']][$sKey];
+                if (is_array($NewValue)) {
+                    $aVariant[$sKey] = $NewValue[0];
+                } else {
+                    $aVariant[$sKey] = $NewValue;
+                }
+            }
+            $sCenter = (array_keys($aVariant['genes'])[0] ?? '');
+            if ($sCenter) {
+                $aVariant['genes'][$sCenter] = $aVariant['gene'];
+            }
+        }
         $aData[$aVariant['VariantOnGenome/DNA']] = array_merge_recursive($aData[$aVariant['VariantOnGenome/DNA']], $aVariant);
         // Enable the line below to log which variants are reported as duplicates.
         // print($aVariant['id'] . "\t" . $aVariant['gene'] . "\t" . 'Equal to:' . "\t" . $aData[$aVariant['VariantOnGenome/DNA']]['id'][0] . "\t" . $aData[$aVariant['VariantOnGenome/DNA']]['gene'][0] . "\t" . $aVariant['VariantOnGenome/DNA'] . "\n");
