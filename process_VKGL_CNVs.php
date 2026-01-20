@@ -877,7 +877,7 @@ foreach ($aData as $sVariant => $aVariant) {
     $aData[$sVariant] = $aVariant;
     $nVariantsDone ++;
 }
-file_put_contents('output.' . time() . '.txt', print_r($aData, true));exit;
+//file_put_contents('output.' . time() . '.txt', print_r($aData, true));exit;
 
 $lPadding = max(array_map('strlen', array_keys($aStatusCounts)));
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
