@@ -29,9 +29,24 @@ class Settings
             return self::$data;
         } elseif (isset(self::$data[$sKey])) {
             return self::$data[$sKey];
-        } else {
-            return null;
+        } elseif (str_contains($sKey, '|')) {
+            // We're trying to set a nested key.
+            $aKeys = explode('|', $sKey);
+            $aData = self::$data;
+            while ($aKeys) {
+                $sKey = array_shift($aKeys);
+                if (!$aKeys) {
+                    // This was the last key.
+                    return ($aData[$sKey] ?? null);
+                } elseif (isset($aData[$sKey])) {
+                    $aData = $aData[$sKey];
+                } else {
+                    // Nope, we don't have that key.
+                    break;
+                }
+            }
         }
+        return null;
     }
 
 
