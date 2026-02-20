@@ -20,7 +20,7 @@ class Settings
     private static array $data = [];
     private static string $file = __DIR__ . '/settings.json';
 
-    public static function get ($sKey = ''): mixed
+    public static function get (string $sKey = ''): mixed
     {
         if (!self::$data) {
             self::load();
@@ -36,7 +36,7 @@ class Settings
 
 
 
-    public static function init ($bForce = false): bool
+    public static function init (bool $bForce = false): bool
     {
         // If the file does not exist, create it.
         if (!$bForce && self::load()) {
@@ -81,7 +81,7 @@ class Settings
 
 
 
-    public static function set ($sKey, $Value): mixed
+    public static function set (string $sKey, mixed $Value): mixed
     {
         if (!self::$data) {
             self::load();
