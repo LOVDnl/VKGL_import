@@ -20,6 +20,22 @@ class Settings
     private static array $data = [];
     private static string $file = __DIR__ . '/settings.json';
 
+    public static function get ($sKey = ''): mixed
+    {
+        if (!self::$data) {
+            self::load();
+        }
+        if (!$sKey) {
+            return self::$data;
+        } elseif (isset(self::$data[$sKey])) {
+            return self::$data[$sKey];
+        } else {
+            return null;
+        }
+    }
+
+
+
     public static function init ($bForce = false): bool
     {
         // If the file does not exist, create it.
