@@ -78,4 +78,16 @@ class Settings
 
         return (bool) file_put_contents(self::$file, json_encode(self::$data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
+
+
+
+    public static function set ($sKey, $Value): mixed
+    {
+        if (!self::$data) {
+            self::load();
+        }
+
+        self::$data[$sKey] = $Value;
+        return self::save();
+    }
 }
