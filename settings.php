@@ -63,4 +63,19 @@ class Settings
             return self::init(true);
         }
     }
+
+
+
+    public static function save (): bool
+    {
+        if (!self::$data) {
+            $b = self::load();
+            if (!$b) {
+                // Don't try to save the file when it can't be loaded.
+                return false;
+            }
+        }
+
+        return (bool) file_put_contents(self::$file, json_encode(self::$data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
 }
