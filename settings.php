@@ -1,0 +1,46 @@
+<?php
+/*******************************************************************************
+ *
+ * VKGL-LOVD data pipeline.
+ *
+ * Created     : 2026-02-20
+ * Modified    : 2026-02-20
+ *
+ * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
+ * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
+ *
+ *************/
+
+namespace LOVD\Settings;
+
+class Settings
+{
+    // Class abstracting the use of a settings.json file for pipelines.
+    // The actual filename can not be configured, and is hard-coded.
+    private static array $data = [];
+    private static string $file = __DIR__ . '/settings.json';
+
+    public static function init (): bool
+    {
+        // If the file does not exist, create it.
+        if (self::load()) {
+            return true;
+        } else {
+            return (bool) file_put_contents(self::$file, '{}');
+        }
+    }
+
+
+
+    public static function load (): bool
+    {
+        if (file_exists(self::$file) && is_file(self::$file) && is_readable(self::$file)) {
+            $aData = json_decode(file_get_contents(self::$file), true);
+            if ($aData && is_array($aData)) {
+                self::$data = $aData;
+                return true;
+            }
+        }
+        return false;
+    }
+}
