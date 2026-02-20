@@ -86,8 +86,23 @@ class Settings
         if (!self::$data) {
             self::load();
         }
-
-        self::$data[$sKey] = $Value;
+        if (!str_contains($sKey, '|')) {
+            self::$data[$sKey] = $Value;
+        } else {
+            // We're trying to set a nested key.
+            $aKeys = explode('|', $sKey);
+            $aData =& self::$data;
+            while ($aKeys) {
+                $sKey = array_shift($aKeys);
+                if (!$aKeys) {
+                    // This was the last key.
+                    $aData[$sKey] = $Value;
+                } else {
+                    // Dive deeper.
+                    $aData =& $aData[$sKey];
+                }
+            }
+        }
         return self::save();
     }
 }
