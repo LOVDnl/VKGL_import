@@ -20,10 +20,10 @@ class Settings
     private static array $data = [];
     private static string $file = __DIR__ . '/settings.json';
 
-    public static function init (): bool
+    public static function init ($bForce = false): bool
     {
         // If the file does not exist, create it.
-        if (self::load()) {
+        if (!$bForce && self::load()) {
             return true;
         } else {
             return (bool) file_put_contents(self::$file, '{}');
@@ -34,13 +34,17 @@ class Settings
 
     public static function load (): bool
     {
-        if (file_exists(self::$file) && is_file(self::$file) && is_readable(self::$file)) {
+        if (file_exists(self::$file)) {
             $aData = json_decode(file_get_contents(self::$file), true);
             if ($aData && is_array($aData)) {
                 self::$data = $aData;
                 return true;
             }
+            return false;
+
+        } else {
+            // Force to init it, instead.
+            return self::init(true);
         }
-        return false;
     }
 }
