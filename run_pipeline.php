@@ -44,3 +44,28 @@ foreach([
         $Settings->set("error_codes|$sErrorCode", $nErrorCode);
     }
 }
+
+
+
+// First, determine which release we're supposed to be working on.
+$aMonths = $Settings->get('release_months');
+if ($aMonths === null) {
+    print("Can't find information in the settings about the release months. Please configure them first.\n\n");
+    die($Settings->get('error_codes|EXIT_ERROR_SETTINGS_PROBLEM'));
+}
+
+rsort($aMonths);
+$nThisYear = date('Y');
+$nThisMonth = date('m');
+$nReleaseMonth = null;
+foreach ($aMonths as $nMonth) {
+    if ($nMonth <= $nThisMonth) {
+        $nReleaseMonth = $nMonth;
+        break;
+    }
+}
+if ($nReleaseMonth === null) {
+    $nReleaseMonth = max($aMonths);
+    $nThisYear --;
+}
+$sRelease = $nThisYear . '-' . str_pad($nReleaseMonth, 2, '0', STR_PAD_LEFT);
