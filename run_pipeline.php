@@ -14,7 +14,9 @@
 
 // New pipeline, running everything fully automated and reducing the time spent on manual verification even more.
 define('ROOT_PATH', __DIR__);
+require_once(ROOT_PATH . '/log.php');
 require_once(ROOT_PATH . '/settings.php');
+use LOVD\Log;
 use LOVD\Settings;
 $Settings = new Settings();
 
@@ -69,3 +71,18 @@ if ($nReleaseMonth === null) {
     $nThisYear --;
 }
 $sRelease = $nThisYear . '-' . str_pad($nReleaseMonth, 2, '0', STR_PAD_LEFT);
+
+// If the release folder doesn't exist yet, create it.
+define('RELEASE_PATH', ROOT_PATH . '/' . $sRelease);
+define('LOG_PATH', RELEASE_PATH . '/status.log');
+if (!file_exists(RELEASE_PATH) && !mkdir(RELEASE_PATH)) {
+    print("Can't create " . RELEASE_PATH . ".\n\n");
+    die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
+}
+try {
+    $Log = new Log(LOG_PATH);
+    $Log->printToScreen(true);
+} catch (Exception $e) {
+    print("Can't create " . LOG_PATH . ".\n\n");
+    die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
+}
