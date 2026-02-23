@@ -53,6 +53,9 @@ $(echo "$DATA" | tail | grep " Variants " | cut -b 20- | sed 's/\.$//' | sed 's/
 
 
 # Summaries:
+# FIXME: This needs totals as well.
+# FIXME: If the output of all of this is in JSON, I can add (+?%) to all output which would be nice.
+#        Also, I would be able to create graphs (LaTeX!) so I won't have to manually write the fucking report.
 echo "Summary of errors:";
 cut -f 7 vkgl_errors_${DATE}.log | grep -v '^$' | tr ',' '\n' | sort | uniq -c | sort -g;
 

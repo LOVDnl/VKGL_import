@@ -125,7 +125,7 @@ SYNCAGAIN=0;
 
 # If we have not run the debugging yet to build up the caches, do so now.
 OUTFILE="output.01.debugging-to-build-caches.log";
-if [ ! -f "${OUTFILE}" ];
+if [ ! -f "${OUTFILE}" ]; # NO, YOU FUCKING IMBECILE!!!
 then
     # Format the files.
     echo "$(date '+%Y-%m-%d %H:%M:%S')    Starting the first run, debug flags on, to build the cache..." >> "${LOG}";
@@ -150,11 +150,12 @@ fi;
 
 
 
+# FIXME: AFTER CACHE VALIDATION FAILED AND I RE-RAN IT BECAUSE I DON'T UNDERSTAND WHY IT FAILED, THE FUCKING SCRIPT CONTINUED THE FUCKING RUN!!!
 # If we have not run the cache verification yet, do so now.
 # This will add VV output to the variant mappings and correct Mutalyzer mappings.
 CACHETAINTED=0; # Store whether or not the cache is tainted still.
 OUTFILE="output.02.verify-cache.log";
-if [ ! -f "${OUTFILE}" ];
+if [ ! -f "${OUTFILE}" ]; # FUCK YOU FUCKFACE, THIS IS NOT A CHECK!!!!!!!!!
 then
     echo "$(date '+%Y-%m-%d %H:%M:%S')    Verifying the cache..." >> "${LOG}";
     tail -n 1 "${LOG}";
@@ -250,6 +251,8 @@ fi;
 
 # If we have not run the full process yet, do so now.
 OUTFILE="output.03.full-run-with-deletes.log";
+# FIXME: If we do have the outfile, but there was an error, this script will just continue. That's not cool.
+#        This may be a broader issue. Lots of other things also don't run if the outfile is still there.
 if [ ! -f "${OUTFILE}" ];
 then
     # Go ahead and fully process the data, including the database updates.
@@ -275,6 +278,9 @@ fi;
 
 
 
+# FIXME: WHY am I seeing so many more edits now? WHY am I seeing edits without any reason for an edit?
+# FIXME: Something's fishy and these numbers are not reliable. I feel that the number of updates should be lower.
+# FIXME: If I have fixed something there, reduce the cutoffs. These were based on Oct 2023 - July 2024.
 # Check the stats again. Now we have the full run, we should see all numbers clearly.
 TAIL=$(tail "${OUTFILE}" | grep -A 5 Totals);
 CREATED=$(echo "${TAIL}" | grep "Variants created" | tr ' ' '\n' | tail -n 1 | cut -d . -f 1);
