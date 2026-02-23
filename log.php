@@ -19,7 +19,7 @@ class Log
     // The actual filename can be set using the constructor.
     private bool $printToScreen = false;
     private string $file = __DIR__ . '/status.log';
-    private string $last_line = '';
+    private string $lastLine = '';
 
 
 
@@ -36,9 +36,9 @@ class Log
             }
 
             // Get the last line out. Strip the timestamp, if present.
-            $this->last_line = ltrim(strrchr(rtrim(file_get_contents($this->file)), "\n"));
-            if (preg_match('/^[0-9: -]{19} .. /', $this->last_line)) {
-                $this->last_line = substr($this->last_line, 23);
+            $this->lastLine = ltrim(strrchr(rtrim(file_get_contents($this->file)), "\n"));
+            if (preg_match('/^[0-9: -]{19} .. /', $this->lastLine)) {
+                $this->lastLine = substr($this->lastLine, 23);
             }
 
         } elseif (!touch($this->file)) {
@@ -50,7 +50,7 @@ class Log
 
     public function add (string $sLog, string $sCode = ''): bool
     {
-        $this->last_line = $sLog;
+        $this->lastLine = $sLog;
         $sLog = date('Y-m-d H:i:s ') . str_pad($sCode, 3) . str_replace("\n", str_repeat(' ', 23) . "\n", rtrim($sLog)) . "\n";
         if ($this->printToScreen) {
             echo $sLog;
@@ -73,7 +73,7 @@ class Log
 
     public function addBreakIfNotEmpty (): bool
     {
-        if ($this->last_line) {
+        if ($this->lastLine) {
             return $this->addBreak();
         }
         return true;
@@ -83,7 +83,7 @@ class Log
 
     public function getLastLine (): string
     {
-        return $this->last_line;
+        return $this->lastLine;
     }
 
 
