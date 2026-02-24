@@ -49,6 +49,45 @@ foreach([
 
 
 
+// Checking the server settings, and collecting passphrases when needed.
+$aPassphrases = [];
+foreach (($Settings->get('servers') ?? []) as $sServer => $aServer) {
+    if (!empty($aServer['key']) && !isset($aPassphrases[$aServer['key']])) {
+        $aPassphrases[$aServer['key']] = '';
+        // Check the key file and check if it's encrypted.
+        if (!file_exists($aServer['key']) || !is_readable($aServer['key'])) {
+            print("SSH key configured for server $sServer not found or not readable.\n");
+            die($Settings->get("error_codes|EXIT_ERROR_SETTINGS_PROBLEM"));
+        }
+        if (str_contains(file_get_contents($aServer['key']), 'ENCRYPTED')) {
+            // Key is encrypted. Ask for the passphrase.
+            while (true) {
+                print("SSH key {$aServer['key']} is encrypted, please provide the passphrase:\n");
+                // Disable echo, so the user can safely type the key without anyone seeing.
+                system('stty -echo');
+                $sInput = trim(fgets(STDIN));
+                // Re-enable echo, so the user can use their terminal again.
+                system('stty echo');
+
+                // If we have a hash stored, compare.
+                $sHash = password_hash($sInput, PASSWORD_DEFAULT);
+                if (empty($aServer['passphrase_hash'])) {
+                    $Settings->set("servers|{$sServer}|passphrase_hash", $sHash);
+                    print("SSH key passphrase hash cached for future use.\n");
+                    break;
+                } elseif (!password_verify($sInput, $aServer['passphrase_hash'])) {
+                    print("SSH key passphrase hash does not match — clear the cached hash or try again.\n");
+                } else {
+                    break;
+                }
+            }
+            $aPassphrases[$aServer['key']] = $sInput;
+        }
+    }
+}
+
+
+
 // First, determine which release we're supposed to be working on.
 $aMonths = $Settings->get('release_months');
 if ($aMonths === null) {
