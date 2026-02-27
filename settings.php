@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-20
- * Modified    : 2026-02-23
+ * Modified    : 2026-02-27
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -39,6 +39,30 @@ class Settings
         } elseif (!file_put_contents($this->file, '{}')) {
             throw new \Exception("Unable to create {$this->file}");
         }
+    }
+
+
+
+    public function delete (string $sKey): bool
+    {
+        if (!str_contains($sKey, '|')) {
+            unset($this->data[$sKey]);
+        } else {
+            // We're trying to set a nested key.
+            $aKeys = explode('|', $sKey);
+            $aData =& $this->data;
+            while ($aKeys) {
+                $sKey = array_shift($aKeys);
+                if (!$aKeys) {
+                    // This was the last key.
+                    unset($aData[$sKey]);
+                } else {
+                    // Dive deeper.
+                    $aData =& $aData[$sKey];
+                }
+            }
+        }
+        return $this->save();
     }
 
 
@@ -78,7 +102,7 @@ class Settings
 
 
 
-    public function set (string $sKey, mixed $Value): mixed
+    public function set (string $sKey, mixed $Value): bool
     {
         if (!str_contains($sKey, '|')) {
             $this->data[$sKey] = $Value;

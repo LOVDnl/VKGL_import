@@ -56,6 +56,8 @@ foreach ($Settings->get() as $sKey => $Value) {
             // Hasn't migrated yet.
             $Settings->set("centers|$sCenter|id", $Value);
         }
+        // Delete it, we don't need this anymore.
+        $Settings->delete($sKey);
     }
 }
 
