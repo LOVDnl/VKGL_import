@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-23
- * Modified    : 2026-02-23
+ * Modified    : 2026-02-27
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -51,7 +51,7 @@ class Log
     public function add (string $sLog, string $sCode = ''): bool
     {
         $this->lastLine = $sLog;
-        $sLog = date('Y-m-d H:i:s ') . str_pad($sCode, 3) . str_replace("\n", str_repeat(' ', 23) . "\n", rtrim($sLog)) . "\n";
+        $sLog = date('Y-m-d H:i:s ') . str_pad($sCode, 3) . str_replace("\n", "\n" . str_repeat(' ', 23), rtrim($sLog)) . "\n";
         if ($this->printToScreen) {
             echo $sLog;
         }
