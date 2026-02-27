@@ -158,3 +158,52 @@ chdir(RELEASE_PATH);
 if ($Status->get('step') === null) {
     $Status->set('step', 0);
 }
+
+
+
+
+
+// Step 1: Check if we have all the files.
+$nStep = 1;
+if ($Status->get('step') < $nStep) {
+    // Check if we have all the files.
+    $aFilesMissing = [];
+    foreach ($Settings->get('centers') as $sCenter => $aCenter) {
+        if (empty($aCenter['files'])) {
+            $Log->add("Center $sCenter doesn't have files configured; please define what files to expect, or remove the center.", '!!');
+            die($Settings->get('error_codes|EXIT_ERROR_SETTINGS_PROBLEM'));
+        }
+
+        // Loop the file settings, and check everything.
+        foreach ($aCenter['files'] as $sOrigin => $sFile) {
+            // Check if we have the file.
+            if (file_exists($sFile)) {
+                $Status->set("data_files|$sFile", $sCenter);
+                continue;
+            }
+
+            // File does not exist... is it packed?
+            if (file_exists("$sFile.gz")) {
+                @exec('gunzip ' . escapeshellarg("$sFile.gz"), $aOutput, $nReturn);
+                if ($nReturn !== 0) {
+                    $Log->add("Failed to decompress $sFile.gz for center $sCenter.", '!!');
+                    die($Settings->get('error_codes|EXIT_ERROR_INPUT_UNREADABLE'));
+                }
+                $Log->add("Decompressed $sFile.gz for center $sCenter.", 'OK');
+                $Status->set("data_files|$sFile", $sCenter);
+                continue;
+            }
+
+            $aFilesMissing[] = $sFile;
+        }
+    }
+
+    // If we don't have all files, complain.
+    if ($aFilesMissing) {
+        $Log->add("One or more data files are missing:\n" . implode("\n", $aFilesMissing), '!!');
+        die($Settings->get('error_codes|EXIT_ERROR_INPUT_NOT_A_FILE'));
+    }
+
+    $Log->add("All files are present, ready for the next step.", 'OK');
+    $Status->set('step', $nStep);
+}
