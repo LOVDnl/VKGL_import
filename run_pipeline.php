@@ -139,3 +139,22 @@ try {
     print("Can't create " . LOG_PATH . ".\n\n");
     die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
 }
+
+
+
+// For the release's status, we'll re-use the Settings class.
+$Status = new Settings(RELEASE_PATH . '/status.json');
+
+// Check the status; are we perhaps done already?
+if ($Status->get('step') == 9) {
+    // Nothing to do; we're done already.
+    die($Settings->get('error_codes|EXIT_OK'));
+}
+
+// Not done yet. Let's have a look.
+$Log->addBreakIfNotEmpty();
+$Log->add('Checking current status...');
+chdir(RELEASE_PATH);
+if ($Status->get('step') === null) {
+    $Status->set('step', 0);
+}
