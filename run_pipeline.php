@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-23
- * Modified    : 2026-02-23
+ * Modified    : 2026-02-27
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -44,6 +44,18 @@ foreach([
 ] as $sErrorCode => $nErrorCode) {
     if ($Settings->get("error_codes|$sErrorCode") === null) {
         $Settings->set("error_codes|$sErrorCode", $nErrorCode);
+    }
+}
+
+// Convert older settings to newer settings.
+foreach ($Settings->get() as $sKey => $Value) {
+    if (preg_match('/^center_([a-z_]+)_id$/', $sKey, $aRegs)) {
+        // Old-style center settings. Convert into something new.
+        $sCenter = $aRegs[1];
+        if (!$Settings->get("centers|$sCenter|id")) {
+            // Hasn't migrated yet.
+            $Settings->set("centers|$sCenter|id", $Value);
+        }
     }
 }
 
