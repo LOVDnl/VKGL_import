@@ -60,6 +60,38 @@ class Formatter
 
 
 
+    public function convertClassification ($sClassification): string
+    {
+        return match (strtolower($sClassification)) {
+            'benign' => 'B',
+            'likely benign' => 'LB',
+            'vus' => 'VUS',
+            'vous' => 'VUS',
+            'likely pathogenic' => 'LP',
+            'pathogenic' => 'P',
+            default => $sClassification,
+        };
+    }
+
+
+
+
+
+    public function identifyHeader (array $aHeader): string
+    {
+        // Identifies the file format and returns the name of the format.
+        sort($aHeader);
+        $sSignature = implode(';', $aHeader);
+        return match ($sSignature) {
+            '_id;alternative;build;cNomen;category;chromosome;classification;date;description;display_id;effect;end;exon;gene_symbol;institute;location;maintainer;managed_variant_id;pNomen;position;reference;sub_category;type;variant_id;variant_info' => 'nki_json',
+            default => false,
+        };
+    }
+
+
+
+
+
     public function parse (string $sFile, string $sCenter): bool
     {
         // Parse every file, and add the contents to $this->data.
@@ -85,6 +117,56 @@ class Formatter
         $aJSON = json_decode(file_get_contents($sFile), true);
         if (!$aJSON) {
             throw new \Exception("File $sFile could not be parsed as JSON");
+        }
+
+        // The UMCG JSON file has one key: variants.
+        if (is_array($aJSON) && array_keys($aJSON) == ['variants']) {
+            $aJSON = $aJSON['variants'];
+        }
+
+        // The keys of this array should all be numeric; it should be an array of objects.
+        if (array_filter(array_keys($aJSON), 'is_string') || !is_array(current($aJSON))
+                || !array_filter(array_keys(current($aJSON)), 'is_string')) {
+            // String keys in this array, first child is not an array, or first child does not have string keys.
+            throw new \Exception("JSON data is not an array of objects in $sFile");
+        }
+
+        // OK, now collect the signature and figure out what format this is.
+        $sFileType = $this->identifyHeader(array_keys(current($aJSON)));
+        if (!$sFileType) {
+            throw new \Exception("Can not identify JSON format for $sFile");
+        }
+
+        foreach ($aJSON as $aVariant) {
+            switch ($sFileType) {
+                case 'nki_json':
+                    // Skip artefacts.
+                    if (strtolower($aVariant['classification']) == 'artefact') {
+                        continue 2;
+                    }
+
+                    // Simply add the data to the set.
+                    $this->data[$sCenter]['SNV'][] = [
+                        'genomic_native' => "GRCh{$aVariant['build']}:{$aVariant['chromosome']}:{$aVariant['position']}:{$aVariant['reference']}:{$aVariant['alternative']}",
+                        'classification' => $this->convertClassification($aVariant['classification']),
+                        'gene' => $aVariant['gene_symbol']['hgnc_symbol'],
+                        // I found two examples where the primary transcript had a different cDNA description than the
+                        //  MANE transcript, and that the cDNA description matched the primary transcript.
+                        //  So we'll use that.
+                        'transcript' => $aVariant['gene_symbol']['primary_transcripts'][0],
+                        'cDNA' => $aVariant['cNomen'],
+                        'protein' => $aVariant['pNomen'],
+                        'annotation' => [
+                            'date' => $aVariant['date']['$date'],
+                            'maintainers' => $aVariant['maintainer'], // Usually contains one person, but occasionally, multiple.
+                        ],
+                    ];
+                    break;
+
+                default:
+                    // We forgot to implement something here.
+                    throw new \Exception("Unhandled JSON format ($sFileType) for $sFile");
+            }
         }
 
         return true;
