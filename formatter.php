@@ -83,8 +83,18 @@ class Formatter
         sort($aHeader);
         $sSignature = implode(';', $aHeader);
         return match ($sSignature) {
+            // JSON formats:
             '_id;alternative;build;cNomen;category;chromosome;classification;date;description;display_id;effect;end;exon;gene_symbol;institute;location;maintainer;managed_variant_id;pNomen;position;reference;sub_category;type;variant_id;variant_info' => 'nki_snv_json',
             'created;pathogenicity;posedits' => 'umcg_snv_json',
+
+            // TSV formats:
+            // Alissa:
+            'alt;c;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;timestamp;transcript;variant_type' => 'alissa_snv_tsv',
+            'alt;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;timestamp;transcript;variant_type' => 'alissa_snv_tsv',
+            // Apparently, Groningen used to edit the files and added the id and timestamp fields. Alissa files from the SFTP server don't have those fields.
+            'alt;c;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa_snv_tsv',
+            // 2024-02 + 2024-04; Due to a personnel change at Alissa without a proper handover, manual exports are being generated with yet another signature.
+            'alt;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa_snv_tsv',
             default => false,
         };
     }
@@ -103,6 +113,67 @@ class Formatter
         if (strrchr($sFile, '.') == '.json') {
             // JSON is handled differently.
             return $this->parseJSON($sFile, $sCenter);
+        }
+
+        $aLines = file($sFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if (!$aLines) {
+            throw new \Exception("File $sFile could not be opened");
+        }
+
+        // First line should be headers.
+        $aHeaders = explode("\t", strtolower(array_shift($aLines)));
+        $nHeaders = count($aHeaders);
+        $aHeaders = array_map('trim', $aHeaders, array_fill(0, $nHeaders, '"'));
+
+        // OK, now collect the signature and figure out what format this is.
+        $sFileType = $this->identifyHeader($aHeaders);
+        if (!$sFileType) {
+            throw new \Exception("Can not identify data format for $sFile");
+        }
+        $sDataType = (str_contains($sFileType, '_cnv_')? 'CNV' : 'SNV');
+
+        foreach ($aLines as $nLine => $sLine) {
+            $nLine++;
+            $aDataLine = explode("\t", rtrim($sLine));
+            // Trim quotes off of the data.
+            $aDataLine = array_map(function($sData) {
+                return trim($sData, '"');
+            }, $aDataLine);
+            $nDataColumns = count($aDataLine);
+            if ($nHeaders > $nDataColumns) {
+                // We accidentally trimmed off empty fields.
+                $aDataLine = array_pad($aDataLine, $nHeaders, '');
+            } elseif ($nHeaders < $nDataColumns) {
+                // Eh? More data received than headers.
+                $this->data_rejected[$sCenter][$sDataType][] = [
+                    'error' => "Error: Data line $nLine has " . count($aDataLine) . " columns instead of the expected $nHeaders.",
+                    'data' => json_encode($sLine, JSON_UNESCAPED_UNICODE),
+                ];
+                continue;
+            }
+
+            $aVariant = array_combine($aHeaders, $aDataLine);
+            switch ($sFileType) {
+                case 'alissa_snv_tsv':
+                    // Alissa data was always hg19.
+                    $this->data[$sCenter][$sDataType][] = [
+                        'genomic_native' => "hg19:{$aVariant['chromosome']}:{$aVariant['start']}:{$aVariant['ref']}:{$aVariant['alt']}",
+                        'classification' => $this->convertClassification($aVariant['classification']),
+                        'gene' => $aVariant['gene'],
+                        'transcript' => $aVariant['transcript'],
+                        'cDNA' => $aVariant['c_nomen'],
+                        'protein' => str_replace('NULL', '', $aVariant['p_nomen']),
+                        'annotation' => [
+                            'last_updated_by' => $aVariant['last_updated_by'],
+                            'last_updated_on' => strstr($aVariant['last_updated_on'], '.', true),
+                        ],
+                    ];
+                    break;
+
+                default:
+                    // We forgot to implement something here.
+                    throw new \Exception("Unhandled TSV format ($sFileType) for $sFile");
+            }
         }
 
         return true;
@@ -254,13 +325,7 @@ $_CONFIG = array(
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
     'header_signatures' => array(
         // Alissa:
-        'alt;c;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
-        'alt;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;timestamp;transcript;variant_type' => 'alissa',
         'alt;alt_orig;c_nomen;chrom;chromosome;classification;effect;exon;gene;hgvs_normalized_vkgl;id;last_updated_by;last_updated_on;location;p_nomen;pos;ref;ref_orig;significance;start;stop;timestamp;transcript;type;variant_type' => 'alissa2',
-        // Apparently, Groningen used to edit the files and added the id and timestamp fields. Alissa files from the SFTP server don't have those fields.
-        'alt;c;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa',
-        // 2024-02 + 2024-04; Due to a personnel change at Alissa without a proper handover, manual exports are being generated with yet another signature.
-        'alt;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa',
 
         // LUMC:
         'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc',
@@ -779,23 +844,6 @@ foreach ($aFiles as $sFile => $sCenter) {
         $sVariantKey = ''; // Chr,Start,Ref,Alt,Gene,Transcript,cDNA.
         $aValues = array(); // protein => ..., center => classification, center_link => ....
         switch ($sFileType) {
-            case 'alissa':
-                $sVariantKey = implode('|', array(
-                    $aDataLine['chromosome'],
-                    $aDataLine['start'],
-                    $aDataLine['ref'],
-                    $aDataLine['alt'],
-                    $aDataLine['gene'],
-                    $aDataLine['transcript'],
-                    $aDataLine['c_nomen'],
-                ));
-                $aValues = array(
-                    'protein' => str_replace('NULL', '', $aDataLine['p_nomen']),
-                    $sCenter => str_replace(array('_', 'vous'), array(' ', 'VUS'), strtolower($aDataLine['classification'])),
-                    $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['last_updated_by'],
-                );
-                break;
-
             case 'alissa2':
                 $sVariantKey = implode('|', array(
                     $aDataLine['chromosome'],
