@@ -2,88 +2,93 @@
 <?php
 /*******************************************************************************
  *
- * LEIDEN OPEN VARIATION DATABASE (LOVD)
+ * VKGL-LOVD data pipeline.
  *
- * Created     : 2019-11-13
- * Modified    : 2026-01-15
- * Version     : 0.2.4
- *
- * Purpose     : Parses the VKGL center's raw data files (of different formats)
- *               and creates one consensus data file which can then be processed
- *               by the process_VKGL_data.php script.
- *
- * Changelog   : 0.2.4  2026-01-15
- *               Add support for two new file formats; the new NKI tsv format
- *               and the new UMCG JSON format.
- *               0.2.3  2025-09-25
- *               Allow processing JSON files, too. Currently, we only support
- *               the JSON data from the NKI.
- *               0.2.2  2025-08-11
- *               Allow for genomic variants starting with "m."; this is normal
- *               for mitochondrial genes.
- *             : 0.2.1  2025-05-01
- *               Added more variant types to lovd_HGVStoVCF();
- *               deletion-insertions and inversions.
- * Changelog   : 0.2.0  2025-02-07
- *               Re-implement the storage of variants and the filtering of
- *               duplicates completely. We were losing variants when only a
- *               single center reported multiple classifications. Fixed that and
- *               handle classification differences neatly (i.e., opposites are
- *               reported and only the center's opinion is removed, not the
- *               entire variant; VUS+anything -> VUS, B+LB -> LB; LP+P -> LP).
- *               Also, the *_link fields can now contain multiple values, and
- *               empty values are removed from the protein fields.
- *               0.1.9  2024-08-28
- *               Silently skip Leiden's WT variants (g.123456=) that were
- *               recently introduced and break this script.
- *               0.1.8  2024-04-19
- *               Sigh... yet another Alissa data signature.
- *               0.1.7  2023-01-10
- *               Added yet another file header signature; perhaps the final one?
- *               It seems now we really have the raw Alissa data.
- *               0.1.6  2022-11-01
- *               Improved warning reporting; they can now easily be grepped.
- *               0.1.5  2021-09-13
- *               Added yet another file header signature, we keep receiving
- *               different files each time.
- *               0.1.4  2021-02-09
- *               Added handling duplicate variants in one file; the VUMC list
- *               now consists of two files that have a small overlap.
- *               0.1.3  2020-06-29
- *               Fixed bug; Now also handling file headers with quotes.
- *               0.1.2  2020-03-23
- *               Fixed bug; no longer assume the centers' files ares sorted
- *               alphabetically.
- *               0.1.1  2019-12-10
- *               Added alternative Alissa format, since we're receiving
- *               something else now.
- *               0.1.0  2019-11-14
- *               Initial release.
+ * Created     : 2026-02-27 (based on format_raw_VKGL_files.php)
+ * Modified    : 2026-03-06
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
  *
- *
- * This file is part of LOVD.
- *
- * LOVD is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * LOVD is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with LOVD.  If not, see <http://www.gnu.org/licenses/>.
- *
  *************/
 
-// Command line only.
-if (isset($_SERVER['HTTP_HOST'])) {
-    die('Please run this script through the command line.' . "\n");
+namespace LOVD\VKGL;
+
+class Formatter
+{
+    // Class abstracting the formatting of various formats used in the VKGL project.
+    // This code is based on format_raw_VKGL_files.php, first written on 2019-11-13 and last modified 2026-01-15.
+    private array $data = [];
+    private array $data_rejected = [];
+    private array $data_output_header = [
+        'center',
+        'type',
+        'genomic_native',
+        'genomic_liftover',
+        'classification',
+        'gene',
+        'transcript',
+        'cDNA',
+        'protein',
+        'annotation'
+    ];
+    private array $data_rejected_output_header = [
+        'center',
+        'type',
+        'error',
+        'data'
+    ];
+
+    public static function format (array $aFiles): Formatter
+    {
+        // Loop the given files and parse them one by one.
+        // $aFiles should be the format as used in the status log.
+        $o = new Formatter();
+
+        foreach ($aFiles as $sFile => $sCenter) {
+            if (is_int($sFile)) {
+                // Looks like we got a "normal" array instead of an associative array.
+                throw new \Exception("Invalid argument format — the formatter requires the list of files as an associative array: [file => center].");
+            }
+            $o->parse($sFile, $sCenter);
+        }
+
+        return $o;
+    }
+
+
+
+
+
+    public function parse (string $sFile, string $sCenter): bool
+    {
+        // Parse every file, and add the contents to $this->data.
+        if (!file_exists($sFile) || !is_readable($sFile)) {
+            throw new \Exception("File $sFile does not exist or is not readable");
+        }
+
+        if (strrchr($sFile, '.') == '.json') {
+            // JSON is handled differently.
+            return $this->parseJSON($sFile, $sCenter);
+        }
+
+        return true;
+    }
+
+
+
+
+
+    public function parseJSON (string $sFile, string $sCenter): bool
+    {
+        // Parse the JSON file and add the contents to $this->data.
+        $aJSON = json_decode(file_get_contents($sFile), true);
+        if (!$aJSON) {
+            throw new \Exception("File $sFile could not be parsed as JSON");
+        }
+
+        return true;
+    }
 }
 
 // Default settings. Everything in 'user' will be verified with the user, and stored in settings.json.
