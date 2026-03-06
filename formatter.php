@@ -62,7 +62,7 @@ class Formatter
 
     public function convertClassification ($sClassification): string
     {
-        return match (strtolower($sClassification)) {
+        return match (strtolower(str_replace('_', ' ', $sClassification))) {
             'benign' => 'B',
             'likely benign' => 'LB',
             'vus' => 'VUS',
@@ -84,6 +84,7 @@ class Formatter
         $sSignature = implode(';', $aHeader);
         return match ($sSignature) {
             '_id;alternative;build;cNomen;category;chromosome;classification;date;description;display_id;effect;end;exon;gene_symbol;institute;location;maintainer;managed_variant_id;pNomen;position;reference;sub_category;type;variant_id;variant_info' => 'nki_json',
+            'created;pathogenicity;posedits' => 'umcg_json',
             default => false,
         };
     }
@@ -163,6 +164,62 @@ class Formatter
                     ];
                     break;
 
+                case 'umcg_json':
+                    // Reject variants without a pathogenicity (just a handful).
+                    if (empty($aVariant['pathogenicity'])) {
+                        $this->data_rejected[$sCenter]['SNV'][] = [
+                            'error' => 'Error: Variant does not contain a pathogenicity.',
+                            'data' => json_encode($aVariant, JSON_UNESCAPED_UNICODE),
+                        ];
+                        continue 2;
+                    }
+
+                    // We usually have two variant sets. If we have two, we'll assume that hg19 is the native one,
+                    //  because hg19 has slightly more variants. Start by sorting the array on the genome builds.
+                    usort($aVariant['posedits'], function ($a, $b) {
+                        return strcmp($a['human_reference'], $b['human_reference']);
+                    });
+                    // The first position (thus, the oldest build) will be considered the native one.
+                    list($aNative, $aLiftOver) = array_pad($aVariant['posedits'], 2, []);
+                    // This should never happen, but I'm not going to assume it won't ever happen in the future.
+                    if (!$aNative) {
+                        // We didn't find a genomic variant.
+                        $this->data_rejected[$sCenter]['SNV'][] = [
+                            'error' => 'Error: Variant does not contain any variant data.',
+                            'data' => json_encode($aVariant, JSON_UNESCAPED_UNICODE),
+                        ];
+                        continue 2;
+                    }
+
+                    // This data is a bit more complex, so we should build it carefully.
+                    $aLine = [];
+                    // Some variants are very large; ref is then set to one base, and alt is set to null.
+                    // We then can't use the VCF fields, but have to rely on the HGVS fields.
+                    // In all other cases, we ignore the HGVS field because it's often wrong.
+                    foreach (['genomic_native' => $aNative, 'genomic_liftover' => $aLiftOver] as $sField => $aData) {
+                        if ($aData) {
+                            if ($aData['alt'] === null) {
+                                $aLine[$sField] = $aData['hgvs'];
+                            } else {
+                                $aLine[$sField] = "{$aData['human_reference']}:{$aData['chromosome']}:{$aData['start']}:{$aData['ref']}:{$aData['alt']}";
+                            }
+                        }
+                    }
+                    $this->data[$sCenter]['SNV'][] = array_merge(
+                        $aLine,
+                        [
+                            'classification' => $this->convertClassification($aVariant['pathogenicity']),
+                            // We earlier received a JSON format with gene, transcript, cDNA, etc. Later, we got a format that lacks these fields.
+                            // Keeping this in here, in case we'll later get the better format again.
+                            // 'gene' => $aVariant['gene_symbol']['hgnc_symbol'],
+                            // 'transcript' => $aVariant['gene_symbol']['primary_transcripts'][0],
+                            // 'cDNA' => $aVariant['cNomen'],
+                            // 'protein' => $aVariant['pNomen'],
+                            'annotation' => ['created' => strstr($aVariant['created'], '.', true)],
+                        ]
+                    );
+                    break;
+
                 default:
                     // We forgot to implement something here.
                     throw new \Exception("Unhandled JSON format ($sFileType) for $sFile");
@@ -213,13 +270,6 @@ $_CONFIG = array(
 
         // NKI:
         'alt;category;chromosome;classification;cnomen;effect;end;exon;gene;pnomen;position;ref;region;strand;transcript' => 'nki',
-
-        // Parsed JSON formats:
-        'alt;annotation;build;cdna;chromosome;classification;gene;position;protein;ref;transcript' => 'JSON',
-    ),
-    'header_signatures_JSON' => array(
-        '_id;alternative;build;cNomen;category;chromosome;classification;date;description;display_id;effect;end;exon;gene_symbol;institute;location;maintainer;managed_variant_id;pNomen;position;reference;sub_category;type;variant_id;variant_info' => 'nki',
-        'created;pathogenicity;posedits' => 'umcg',
     ),
     'mutalyzer_URL' => 'https://v2.mutalyzer.nl/',
     'user' => array(
@@ -679,142 +729,6 @@ foreach ($aFiles as $sFile => $sCenter) {
 
 
 
-    if (strrchr($sFile, '.') == '.json') {
-        // The simplest way is to convert the JSON data into TSV data and then throw that into the parser.
-        // It means the TSV gets created and then parsed again, but that's fine for now.
-        // We should later probably handle this in a better (OOP) way, but for now, this works just fine.
-
-        // Parse the JSON data. Let's keep this simple.
-        $aJSON = json_decode(implode($aLines), true);
-        if (!$aJSON) {
-            lovd_printIfVerbose(VERBOSITY_LOW,
-                'Error: Can not parse file:' . $sFile . ".\n\n");
-            die(EXIT_ERROR_INPUT_CANT_OPEN);
-        }
-
-        // The UMCG JSON file has one key: variants.
-        if (is_array($aJSON) && array_keys($aJSON) == ['variants']) {
-            $aJSON = $aJSON['variants'];
-        }
-
-        // The keys of this array should all be numeric; it should be an array of objects.
-        if (array_filter(array_keys($aJSON), 'is_string') || !is_array(current($aJSON))
-            || !array_filter(array_keys(current($aJSON)), 'is_string')) {
-            // String keys in this array, first child is not an array, or first child does not have string keys.
-            lovd_printIfVerbose(VERBOSITY_LOW,
-                'Error: JSON data is not an array of objects:' . $sFile . ".\n\n");
-            die(EXIT_ERROR_INPUT_CANT_OPEN);
-        }
-
-        // OK, now collect the signature and figure out what format this is.
-        $aSignature = array_keys(current($aJSON));
-        sort($aSignature);
-        $sHeaderSignature = implode(';', $aSignature);
-        if (!isset($_CONFIG['header_signatures_JSON'][$sHeaderSignature])) {
-            lovd_printIfVerbose(VERBOSITY_LOW,
-                'Error: File does not conform to any known JSON format: ' . $sFile . ".\n({$sHeaderSignature})\n\n");
-            die(EXIT_ERROR_HEADER_FIELDS_INCORRECT);
-        } else {
-            $sFileType = $_CONFIG['header_signatures_JSON'][$sHeaderSignature];
-        }
-
-        // Build the header first, then loop the data and build the data file.
-        $aLines = [
-            implode("\t",
-                [
-                    'build',
-                    'chromosome',
-                    'position',
-                    'ref',
-                    'alt',
-                    'gene',
-                    'transcript',
-                    'cDNA',
-                    'protein',
-                    'classification',
-                    'annotation',
-                ]
-            )
-        ];
-        foreach ($aJSON as $aVariant) {
-            switch ($sFileType) {
-                case 'nki':
-                    $aVariant['classification'] = strtolower($aVariant['classification']);
-
-                    // Skip artefacts.
-                    if ($aVariant['classification'] == 'artefact') {
-                        continue 2;
-                    }
-
-                    // Build the data array. Keys aren't used, but it's useful for readability.
-                    $aLine = [
-                        'build' => 'GRCh' . $aVariant['build'],
-                        'chromosome' => $aVariant['chromosome'],
-                        'position' => $aVariant['position'],
-                        'ref' => $aVariant['reference'],
-                        'alt' => $aVariant['alternative'],
-                        'gene' => $aVariant['gene_symbol']['hgnc_symbol'],
-                        // I found two examples where the primary transcript had a different cDNA description than the
-                        //  MANE transcript, and that the cDNA description matched the primary transcript.
-                        //  So we'll use that.
-                        'transcript' => $aVariant['gene_symbol']['primary_transcripts'][0],
-                        'cDNA' => $aVariant['cNomen'],
-                        'protein' => $aVariant['pNomen'],
-                        'classification' => str_replace('vous', 'VUS', $aVariant['classification']),
-                        'annotation' => implode(',', $aVariant['maintainer']),
-                    ];
-                    $aLines[] = implode("\t", $aLine);
-                    break;
-
-                case 'umcg':
-                    // Skip variants without a pathogenicity (just a handfull).
-                    if (!$aVariant['pathogenicity']) {
-                        continue 2;
-                    }
-
-                    // FIXME: Should I double-check if posedits is an array? It's in the header, of course, so it must exist, but it may not always be an array, maybe...
-                    // We usually have two variant sets. We'll pick the hg19 set, also because they have slightly more variants.
-                    foreach ($aVariant['posedits'] as $aObservation) {
-                        if ($aObservation['human_reference'] == 'GRCh37') {
-                            // Just copy all the fields over.
-                            $aVariant = array_merge($aVariant, $aObservation);
-                            break;
-                        }
-                    }
-
-                    // This should never happen, but I'm not going to assume it won't ever happen in the future.
-                    if (!isset($aVariant['human_reference'])) {
-                        // The data didn't get copied; no hg19 data found, or no variant data given at all.
-                        // For now, decide to die here.
-                        lovd_printIfVerbose(VERBOSITY_LOW,
-                            'Error: Variant does not contain any hg19/GRCh37 data in ' . $sFile . ":\n" . print_r($aVariant, true) . "\n\n");
-                        die(EXIT_ERROR_DATA_CONTENT_ERROR);
-                    }
-
-                    // FIXME: We have UMCG variants that are very large, and ALT set to null. We could use the HGVS there.
-
-                    // Build the data array. Keys aren't used, but it's useful for readability.
-                    $aLine = [
-                        'build' => $aVariant['human_reference'],
-                        'chromosome' => $aVariant['chromosome'],
-                        'position' => $aVariant['start'],
-                        'ref' => $aVariant['ref'],
-                        'alt' => $aVariant['alt'],
-                        'gene' => '',//$aVariant['gene_symbol']['hgnc_symbol'],
-                        'transcript' => '',//$aVariant['gene_symbol']['primary_transcripts'][0],
-                        'cDNA' => '',//$aVariant['cNomen'],
-                        'protein' => '',//$aVariant['pNomen'],
-                        'classification' => str_replace(['_', 'vus'], [' ', 'VUS'], $aVariant['pathogenicity']),
-                        'annotation' => $aVariant['created'],
-                    ];
-                    $aLines[] = implode("\t", $aLine);
-                    break;
-            }
-        }
-    }
-
-
-
     // First line should be headers.
     $aHeaders = explode("\t", strtolower(array_shift($aLines)));
     $nHeaders = count($aHeaders);
@@ -1022,23 +936,6 @@ foreach ($aFiles as $sFile => $sCenter) {
                             'pathogenic',
                         ), strtolower($aDataLine['classification'])),
                     $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['classification'],
-                );
-                break;
-
-            case 'JSON':
-                $sVariantKey = implode('|', array(
-                    $aDataLine['chromosome'],
-                    $aDataLine['position'],
-                    $aDataLine['ref'],
-                    $aDataLine['alt'],
-                    $aDataLine['gene'],
-                    $aDataLine['transcript'],
-                    $aDataLine['cdna'],
-                ));
-                $aValues = array(
-                    'protein' => $aDataLine['protein'],
-                    $sCenter => $aDataLine['classification'],
-                    $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['annotation'],
                 );
                 break;
         }
