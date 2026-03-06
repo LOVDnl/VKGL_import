@@ -83,8 +83,8 @@ class Formatter
         sort($aHeader);
         $sSignature = implode(';', $aHeader);
         return match ($sSignature) {
-            '_id;alternative;build;cNomen;category;chromosome;classification;date;description;display_id;effect;end;exon;gene_symbol;institute;location;maintainer;managed_variant_id;pNomen;position;reference;sub_category;type;variant_id;variant_info' => 'nki_json',
-            'created;pathogenicity;posedits' => 'umcg_json',
+            '_id;alternative;build;cNomen;category;chromosome;classification;date;description;display_id;effect;end;exon;gene_symbol;institute;location;maintainer;managed_variant_id;pNomen;position;reference;sub_category;type;variant_id;variant_info' => 'nki_snv_json',
+            'created;pathogenicity;posedits' => 'umcg_snv_json',
             default => false,
         };
     }
@@ -140,7 +140,7 @@ class Formatter
 
         foreach ($aJSON as $aVariant) {
             switch ($sFileType) {
-                case 'nki_json':
+                case 'nki_snv_json':
                     // Skip artefacts.
                     if (strtolower($aVariant['classification']) == 'artefact') {
                         continue 2;
@@ -164,7 +164,7 @@ class Formatter
                     ];
                     break;
 
-                case 'umcg_json':
+                case 'umcg_snv_json':
                     // Reject variants without a pathogenicity (just a handful).
                     if (empty($aVariant['pathogenicity'])) {
                         $this->data_rejected[$sCenter]['SNV'][] = [
