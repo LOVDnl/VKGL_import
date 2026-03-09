@@ -63,12 +63,11 @@ class Formatter
     public function convertClassification ($sClassification): string
     {
         return match (strtolower(str_replace('_', ' ', $sClassification))) {
-            'benign' => 'B',
-            'likely benign' => 'LB',
-            'vus' => 'VUS',
-            'vous' => 'VUS',
-            'likely pathogenic' => 'LP',
-            'pathogenic' => 'P',
+            'benign', '-' => 'B',
+            'likely benign', '-?' => 'LB',
+            'vus', 'vous', '?' => 'VUS',
+            'likely pathogenic', '+?' => 'LP',
+            'pathogenic', '+' => 'P',
             default => $sClassification,
         };
     }
@@ -96,6 +95,8 @@ class Formatter
             'alt;c;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa_snv_tsv',
             // 2024-02 + 2024-04; Due to a personnel change at Alissa without a proper handover, manual exports are being generated with yet another signature.
             'alt;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa_snv_tsv',
+            // Other:
+            'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc_snv_tsv',
             default => false,
         };
     }
@@ -171,6 +172,29 @@ class Formatter
                             'last_updated_by' => $aVariant['last_updated_by'],
                             'last_updated_on' => strstr($aVariant['last_updated_on'], '.', true),
                         ],
+                    ];
+                    break;
+
+                case 'lumc_snv_tsv':
+                    // 2024-08-28 Since the July run, LUMC has WT variants (e.g., g.123456=). I guess they come from
+                    //  Moon. Nonetheless, we should get rid of them. Just skip them silently.
+                    if (str_ends_with($aVariant['gdna_normalized'], '=')) {
+                        // Yup, a WT variant. Silently skip it.
+                        continue 2;
+                    }
+
+                    // We allow for multiple transcript mappings to be sent. Let's just grab the first one.
+                    list($aVariant['transcript'], $aVariant['cdna']) =
+                            explode(':', substr($aVariant['cdna'], 0, strpos($aVariant['cdna'] . ',', ',')), 2);
+                    $aVariant['protein'] = substr($aVariant['protein'], 0, strpos($aVariant['protein'] . ',', ','));
+
+                    $this->data[$sCenter][$sDataType][] = [
+                        'genomic_native' => $aVariant['gdna_normalized'],
+                        'classification' => $this->convertClassification($aVariant['variant_effect']),
+                        'gene' => $aVariant['geneid'],
+                        'transcript' => $aVariant['transcript'],
+                        'cDNA' => $aVariant['cdna'],
+                        'protein' => str_replace('NULL', '', $aVariant['protein']),
                     ];
                     break;
 
@@ -328,9 +352,6 @@ $_CONFIG = array(
     ),
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
     'header_signatures' => array(
-        // LUMC:
-        'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc',
-
         // Radboud/MUMC+:
         'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud',
 
@@ -372,84 +393,6 @@ define('VERBOSITY_LOW', 3); // Low output, only the really important messages.
 define('VERBOSITY_MEDIUM', 5); // Medium output. No output if there is nothing to do. Useful for when using cron.
 define('VERBOSITY_HIGH', 7); // High output. The default.
 define('VERBOSITY_FULL', 9); // Full output, including debug statements.
-
-
-
-
-
-function lovd_HGVStoVCF ($sVariant) {
-    // Function to convert HGVS in sort of VCF. Sort of, because we'll leave REF or ALTs empty and put Ns everywhere.
-    // We do not pretend to check the variant. We do not support inversions for this reason.
-
-    $aVCF = array(
-        'chr' => '',
-        'pos' => '',
-        'ref' => '',
-        'alt' => '',
-    );
-
-    if (preg_match('/^NC_([0-9]+)\.([0-9]+):/', $sVariant, $aRegs)) {
-        $aVCF['chr'] = str_replace(
-            array('23', '24', '12920'),
-            array('X', 'Y', 'M'),
-            (string) (int) $aRegs[1]);
-        $sVariant = substr($sVariant, strlen($aRegs[0]));
-    }
-
-    if (preg_match('/^[gm]\.([0-9]+)([A-Z])>([A-Z])$/', $sVariant, $aRegs)) {
-        // Substitutions.
-        list(,$aVCF['pos'], $aVCF['ref'], $aVCF['alt']) = $aRegs;
-
-    } elseif (preg_match('/^[gm]\.([0-9]+)(_([0-9]+))?del$/', $sVariant, $aRegs)) {
-        // Deletions.
-        $aVCF['pos'] = $aRegs[1];
-        $aVCF['alt'] = '.';
-        if (empty($aRegs[2])) {
-            $aVCF['ref'] = 'N';
-        } else {
-            $aVCF['ref'] = str_repeat('N', ($aRegs[3] - $aRegs[1] + 1));
-        }
-
-    } elseif (preg_match('/^[gm]\.([0-9]+)(_([0-9]+))?delins([A-Z]+)$/', $sVariant, $aRegs)) {
-        // Deletion-insertions.
-        $aVCF['pos'] = $aRegs[1];
-        if (empty($aRegs[2])) {
-            $aVCF['ref'] = 'N';
-        } else {
-            $aVCF['ref'] = str_repeat('N', ($aRegs[3] - $aRegs[1] + 1));
-        }
-        $aVCF['alt'] = $aRegs[4];
-
-    } elseif (preg_match('/^[gm]\.([0-9]+)(_([0-9]+))?dup$/', $sVariant, $aRegs)) {
-        // Duplications.
-        $aVCF['pos'] = $aRegs[1];
-        if (empty($aRegs[2])) {
-            $aVCF['ref'] = 'N';
-            $aVCF['alt'] = 'NN';
-        } else {
-            $aVCF['ref'] = str_repeat('N', ($aRegs[3] - $aRegs[1]) + 1);
-            $aVCF['alt'] = str_repeat('N', strlen($aVCF['ref']) * 2);
-        }
-
-    } elseif (preg_match('/^[gm]\.([0-9]+)_[0-9]+ins([A-Z]+)$/', $sVariant, $aRegs)) {
-        // Insertions.
-        // This is totally breaking the VCF standard, but whatever, it's what the VKGL uses.
-        $aVCF['pos'] = $aRegs[1];
-        $aVCF['ref'] = 'N';
-        $aVCF['alt'] = 'N' . $aRegs[2];
-
-    } elseif (preg_match('/^[gm]\.([0-9]+)_([0-9]+)inv$/', $sVariant, $aRegs)) {
-        // Inversions.
-        $aVCF['pos'] = $aRegs[1];
-        $aVCF['ref'] = str_repeat('N', ($aRegs[2] - $aRegs[1]) + 1);
-        $aVCF['alt'] = $aVCF['ref'];
-
-    } else {
-        return false;
-    }
-
-    return $aVCF;
-}
 
 
 
@@ -845,59 +788,6 @@ foreach ($aFiles as $sFile => $sCenter) {
         $sVariantKey = ''; // Chr,Start,Ref,Alt,Gene,Transcript,cDNA.
         $aValues = array(); // protein => ..., center => classification, center_link => ....
         switch ($sFileType) {
-            case 'lumc':
-                // Because all data is otherwise in (sort of) VCF fields and I don't want to pull the normalization code
-                //  into this script, I'm just creating the (sort of) VCF fields that VKGL is using. This would allow
-                //  for the least changes to the processing script, whilst allowing for some merging of LUMC variants
-                //  with the other centers.
-                $aVariant = lovd_HGVStoVCF($aDataLine['gdna_normalized']);
-                if ($aVariant === false) {
-                    // 2024-08-28 Since the July run, LUMC has WT variants (e.g., g.123456=). I guess they come from
-                    //  Moon. Nonetheless, we should get rid of them. Just skip them silently.
-                    if (substr($aDataLine['gdna_normalized'], -1) == '=') {
-                        // Yup, a WT variant. Silently skip it.
-                        continue 2;
-                    }
-                    lovd_printIfVerbose(VERBOSITY_LOW,
-                        'Error: Unhandled variant, could not generate VCF fields: ' .
-                        $aDataLine['gdna_normalized'] . ".\n\n");
-                    die(EXIT_ERROR_DATA_CONTENT_ERROR);
-                }
-
-                // We allow for multiple transcript mappings to be sent. Let's just grab the first one.
-                list($aDataLine['transcript'], $aDataLine['cdna']) =
-                    explode(':', substr($aDataLine['cdna'], 0, strpos($aDataLine['cdna'] . ',', ',')), 2);
-                $aDataLine['protein'] = substr($aDataLine['protein'], 0, strpos($aDataLine['protein'] . ',', ','));
-
-                $sVariantKey = implode('|', array(
-                    $aVariant['chr'],
-                    $aVariant['pos'],
-                    $aVariant['ref'],
-                    $aVariant['alt'],
-                    $aDataLine['geneid'],
-                    $aDataLine['transcript'],
-                    $aDataLine['cdna'],
-                ));
-                $aValues = array(
-                    'protein' => str_replace('NULL', '', $aDataLine['protein']),
-                    $sCenter => str_replace(
-                        array(
-                            '-?',
-                            '-',
-                            '+?',
-                            '+',
-                            '?',
-                        ), array(
-                            'likely benign',
-                            'benign',
-                            'likely pathogenic',
-                            'pathogenic',
-                            'VUS',
-                        ), strtolower($aDataLine['variant_effect'])),
-                    $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['refseq_build'],
-                );
-                break;
-
             case 'nki':
                 $sVariantKey = implode('|', array(
                         $aDataLine['chromosome'],
