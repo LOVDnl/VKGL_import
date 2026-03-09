@@ -100,6 +100,7 @@ class Formatter
             'alt;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa_snv_tsv',
             // Other:
             'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc_snv_tsv',
+            'alt;category;chromosome;classification;cnomen;effect;end;exon;gene;pnomen;position;ref;region;strand;transcript' => 'nki_snv_tsv',
             'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud_snv_tsv',
             default => false,
         };
@@ -223,6 +224,18 @@ class Formatter
                         'transcript' => $aVariant['transcript'],
                         'cDNA' => $aVariant['cdna'],
                         'protein' => str_replace('NULL', '', $aVariant['protein']),
+                    ];
+                    break;
+
+                case 'nki_snv_tsv':
+                    // NKI tsv data is always hg19.
+                    $this->data[$sCenter][$sDataType][] = [
+                            'genomic_native' => "hg19:{$aVariant['chromosome']}:{$aVariant['position']}:{$aVariant['ref']}:{$aVariant['alt']}",
+                            'classification' => $this->convertClassification($aVariant['classification']),
+                            'gene' => $aVariant['gene'],
+                            'transcript' => $aVariant['transcript'],
+                            'cDNA' => $aVariant['cnomen'],
+                            'protein' => $aVariant['pnomen'],
                     ];
                     break;
 
@@ -432,11 +445,6 @@ $_CONFIG = array(
         'protein',
     ),
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
-    'header_signatures' => array(
-        // NKI:
-        'alt;category;chromosome;classification;cnomen;effect;end;exon;gene;pnomen;position;ref;region;strand;transcript' => 'nki',
-    ),
-    'mutalyzer_URL' => 'https://v2.mutalyzer.nl/',
     'user' => array(
         // Variables we will be asking the user.
         'consensus_file' => 'vkgl_consensus_' . date('Y-m-d') . '.tsv',
@@ -757,13 +765,6 @@ if (!$_CONFIG['flags']['y']) {
 
 
 
-lovd_printIfVerbose(VERBOSITY_MEDIUM, "\n" .
-    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Parsing VKGL files...' . "\n");
-
-
-
-
-
 // Loop through files and load all data, grouping the entries in memory.
 $aData = array();
 // Sort on center names, but keep file names.
@@ -771,132 +772,10 @@ $aData = array();
 asort($aFiles);
 // Sort center list then too, because we'll loop it later and we need to keep the order the same.
 sort($aCentersFound);
-$nFile = 0;
-foreach ($aFiles as $sFile => $sCenter) {
-    lovd_printIfVerbose(VERBOSITY_MEDIUM,
-        ' ' . date('H:i:s', time() - $tStart) . ' [' .
-        str_pad(number_format(($nFile/$nCentersFound)*90, 1), 5, ' ', STR_PAD_LEFT) .
-        '%] Parsing VKGL file for center ' . $sCenter . '...' . "\n");
-    $nFile ++;
-
-    $aHeaders = array();
-    $nHeaders = 0;
-    $sFileType = '';
-
-    $aLines = file($sFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    if (!$aLines) {
-        lovd_printIfVerbose(VERBOSITY_LOW,
-            'Error: Can not open file:' . $sFile . ".\n\n");
-        die(EXIT_ERROR_INPUT_CANT_OPEN);
-    }
-
-
-    // First line should be headers.
-    $aHeaders = explode("\t", strtolower(array_shift($aLines)));
-    $nHeaders = count($aHeaders);
-    $aHeaders = array_map('trim', $aHeaders, array_fill(0, $nHeaders, '"'));
-
-    // Check header's signature.
-    $aSignature = $aHeaders;
-    sort($aSignature);
-    $sHeaderSignature = implode(';', $aSignature);
-
-    if (!isset($_CONFIG['header_signatures'][$sHeaderSignature])) {
-        lovd_printIfVerbose(VERBOSITY_LOW,
-            'Error: File does not conform to any known format: ' . $sFile . ".\n({$sHeaderSignature})\n\n");
-        die(EXIT_ERROR_HEADER_FIELDS_INCORRECT);
-    } else {
-        $sFileType = $_CONFIG['header_signatures'][$sHeaderSignature];
-    }
-
-    if (!$aHeaders) {
-        lovd_printIfVerbose(VERBOSITY_LOW,
-            'Error: File does not conform to format; can not find headers.' . "\n\n");
-        die(EXIT_ERROR_HEADER_FIELDS_NOT_FOUND);
-    }
-
-
-
-    foreach ($aLines as $nLine => $sLine) {
-        $nLine++;
-        $aDataLine = explode("\t", rtrim($sLine));
-        // Trim quotes off of the data.
-        $aDataLine = array_map(function($sData) {
-            return trim($sData, '"');
-        }, $aDataLine);
-        $nDataColumns = count($aDataLine);
-        if ($nHeaders > $nDataColumns) {
-            // We accidentally trimmed off empty fields.
-            $aDataLine = array_pad($aDataLine, $nHeaders, '');
-        } elseif ($nHeaders < $nDataColumns) {
-            // Eh? More data received than headers.
-            lovd_printIfVerbose(VERBOSITY_LOW,
-                'Error: Data line ' . $nLine . ' has ' . count($aDataLine) .
-                ' columns instead of the expected ' . $nHeaders . ".\n\n");
-            die(EXIT_ERROR_DATA_FIELD_COUNT_INCORRECT);
-        }
-
-        $aDataLine = array_combine($aHeaders, $aDataLine);
-        // How we group variants, very loosely to make things simple for us.
-        $sVariantKey = ''; // Chr,Start,Ref,Alt,Gene,Transcript,cDNA.
-        $aValues = array(); // protein => ..., center => classification, center_link => ....
-        switch ($sFileType) {
-            case 'nki':
-                $sVariantKey = implode('|', array(
-                        $aDataLine['chromosome'],
-                        $aDataLine['position'],
-                        $aDataLine['ref'],
-                        $aDataLine['alt'],
-                        $aDataLine['gene'],
-                        $aDataLine['transcript'],
-                        $aDataLine['cnomen'],
-                ));
-                $aValues = array(
-                        'protein' => $aDataLine['pnomen'],
-                        $sCenter => str_replace(array('vous'), array('VUS'), strtolower($aDataLine['classification'])),
-                        $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['effect'],
-                );
-                break;
-
-        }
-
-        if (!$sVariantKey) {
-            // Unhandled file type?
-            lovd_printIfVerbose(VERBOSITY_LOW,
-                'Error: Unhandled file type, could not generate variant key.' . "\n\n");
-            die(EXIT_ERROR_DATA_CONTENT_ERROR);
-        }
-
-        if (!isset($aData[$sVariantKey])) {
-            $aData[$sVariantKey] = array('protein' => array());
-        }
-        // Everything will go into arrays now, and we'll sort it out later.
-        if (!isset($aData[$sVariantKey][$sCenter])) {
-            $aData[$sVariantKey][$sCenter] = array();
-            $aData[$sVariantKey][$sCenter . $_CONFIG['columns_center_suffix']] = array();
-        }
-        foreach ($aValues as $sKey => $sValue) {
-            $aData[$sVariantKey][$sKey][] = $sValue;
-        }
-    }
-
-    // Also add center to headers for output, as long as it's not there already.
-    if (!in_array($sCenter, $_CONFIG['columns_mandatory'])) {
-        $_CONFIG['columns_mandatory'][] = $sCenter;
-        $_CONFIG['columns_mandatory'][] = $sCenter . $_CONFIG['columns_center_suffix'];
-    }
-
-    lovd_printIfVerbose(VERBOSITY_MEDIUM,
-        ' ' . date('H:i:s', time() - $tStart) . ' [' .
-        str_pad(number_format(($nFile/$nCentersFound)*90, 1), 5, ' ', STR_PAD_LEFT) .
-        '%] VKGL file successfully parsed, currently at ' . count($aData) . ' variants.' . "\n");
-}
 
 // Now, we'll figure out how to handle multiple entries per variant.
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
-    ' ' . date('H:i:s', time() - $tStart) . ' [' .
-    str_pad(number_format(90, 1), 5, ' ', STR_PAD_LEFT) .
-    '%] Checking VKGL data for intra-center duplicates...' . "\n");
+    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Checking VKGL data for intra-center duplicates...' . "\n");
 
 foreach ($aData as $sVariantKey => $aVariant) {
     foreach ($aCentersFound as $sCenter) {
