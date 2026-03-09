@@ -79,6 +79,15 @@ class Formatter
 
 
 
+    public function hasErrors (): bool
+    {
+        return (bool) count($this->data_rejected);
+    }
+
+
+
+
+
     public function identifyHeader (array $aHeader): string
     {
         // Identifies the file format and returns the name of the format.
@@ -442,6 +451,36 @@ class Formatter
                             $Value = json_encode($Value, JSON_UNESCAPED_UNICODE);
                         }
                         $aLine[] = $Value;
+                    }
+                    $aData[] = implode("\t", $aLine);
+                }
+            }
+        }
+        $aData[] = '';
+
+        // Save the data.
+        return (bool) file_put_contents(
+            $sFile,
+            implode("\r\n", $aData)
+        );
+    }
+
+
+
+
+
+    public function saveErrors (string $sFile): bool
+    {
+        // Save errors to disk.
+        $aData = [implode("\t", $this->data_rejected_output_header)];
+        foreach ($this->data_rejected as $sCenter => $aCenter) {
+            foreach ($aCenter as $sType => $aVariants) {
+                foreach ($aVariants as $aVariant) {
+                    $aVariant['center'] = $sCenter;
+                    $aVariant['type'] = $sType;
+                    $aLine = [];
+                    foreach ($this->data_rejected_output_header as $sField) {
+                        $aLine[] = ($aVariant[$sField] ?? '');
                     }
                     $aData[] = implode("\t", $aLine);
                 }
