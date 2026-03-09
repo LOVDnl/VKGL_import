@@ -421,34 +421,50 @@ class Formatter
 
         return true;
     }
+
+
+
+
+
+    public function save (string $sFile): bool
+    {
+        // Save the data to disk.
+        $aData = [implode("\t", $this->data_output_header)];
+        foreach ($this->data as $sCenter => $aCenter) {
+            foreach ($aCenter as $sType => $aVariants) {
+                foreach ($aVariants as $aVariant) {
+                    $aVariant['center'] = $sCenter;
+                    $aVariant['type'] = $sType;
+                    $aLine = [];
+                    foreach ($this->data_output_header as $sField) {
+                        $Value = ($aVariant[$sField] ?? '');
+                        if ($sField == 'annotation' && $Value) {
+                            $Value = json_encode($Value, JSON_UNESCAPED_UNICODE);
+                        }
+                        $aLine[] = $Value;
+                    }
+                    $aData[] = implode("\t", $aLine);
+                }
+            }
+        }
+        $aData[] = '';
+
+        // Save the data.
+        return (bool) file_put_contents(
+            $sFile,
+            implode("\r\n", $aData)
+        );
+    }
 }
 
 // Default settings. Everything in 'user' will be verified with the user, and stored in settings.json.
-$bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
     'version' => '0.2.4',
-    'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
     ),
-    'columns_mandatory' => array(
-        // These are the columns that need to be present in order for the file to get processed.
-        'id',
-        'chromosome',
-        'start',
-        'ref',
-        'alt',
-        'gene',
-        'transcript',
-        'c_dna',
-        'protein',
-    ),
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
-    'user' => array(
-        // Variables we will be asking the user.
-        'consensus_file' => 'vkgl_consensus_' . date('Y-m-d') . '.tsv',
-    ),
 );
 
 // Exit codes.
@@ -497,117 +513,6 @@ function lovd_printIfVerbose ($nVerbosity, $sMessage)
         print($sMessage);
     }
     return true;
-}
-
-
-
-
-
-function lovd_verifySettings ($sKeyName, $sMessage, $sVerifyType, $options)
-{
-    // Based on a function provided by Ileos.nl in the interest of Open Source.
-    // Check if settings match certain input.
-    global $_CONFIG;
-
-    switch($sVerifyType) {
-        case 'array':
-            $aOptions = $options;
-            if (!is_array($aOptions)) {
-                return false;
-            }
-            break;
-
-        case 'int':
-            // Integer, options define a range in the format '1,3' (1 to 3) or '1,' (1 or higher).
-            $aRange = explode(',', $options);
-            if (!is_array($aRange) ||
-                ($aRange[0] === '' && $aRange[1] === '') ||
-                ($aRange[0] !== '' && !ctype_digit($aRange[0])) ||
-                ($aRange[1] !== '' && !ctype_digit($aRange[1]))) {
-                return false;
-            }
-            break;
-    }
-
-    while (true) {
-        print('  ' . $sMessage .
-            ($sVerifyType != 'int' || ($aRange === array('', ''))? '' : ' (' . (int) $aRange[0] . '-' . $aRange[1] . ')') .
-            (empty($_CONFIG['user'][$sKeyName])? '' : ' [' . $_CONFIG['user'][$sKeyName] . ']') . ' : ');
-        $sInput = trim(fgets(STDIN));
-        if (!strlen($sInput) && !empty($_CONFIG['user'][$sKeyName])) {
-            $sInput = $_CONFIG['user'][$sKeyName];
-        }
-
-        switch ($sVerifyType) {
-            case 'array':
-                $sInput = strtolower($sInput);
-                if (in_array($sInput, $aOptions)) {
-                    $_CONFIG['user'][$sKeyName] = $sInput;
-                    return true;
-                }
-                break;
-
-            case 'int':
-                $sInput = (int) $sInput;
-                // Check if input is lower than minimum required value (if configured).
-                if ($aRange[0] !== '' && $sInput < $aRange[0]) {
-                    break;
-                }
-                // Check if input is higher than maximum required value (if configured).
-                if ($aRange[1] !== '' && $sInput > $aRange[1]) {
-                    break;
-                }
-                $_CONFIG['user'][$sKeyName] = $sInput;
-                return true;
-
-            case 'string':
-                $_CONFIG['user'][$sKeyName] = $sInput;
-                return true;
-
-            case 'file':
-            case 'lovd_path':
-            case 'path':
-                // Always accept the default (if non-empty) or the given options.
-                if (($sInput && ($sInput == $_CONFIG['user'][$sKeyName] ||
-                            $sInput === $options)) ||
-                    (is_array($options) && in_array($sInput, $options))) {
-                    $_CONFIG['user'][$sKeyName] = $sInput; // In case an option was chosen that was not the default.
-                    return true;
-                }
-                if (in_array($sVerifyType, array('lovd_path', 'path')) && !is_dir($sInput)) {
-                    print('    Given path is not a directory.' . "\n");
-                    break;
-                } elseif (!is_readable($sInput)) {
-                    print('    Cannot read given path.' . "\n");
-                    break;
-                }
-
-                if ($sVerifyType == 'lovd_path') {
-                    if (!file_exists($sInput . '/config.ini.php')) {
-                        if (file_exists($sInput . '/src/config.ini.php')) {
-                            $sInput .= '/src';
-                        } else {
-                            print('    Cannot locate config.ini.php in given path.' . "\n" .
-                                  '    Please check that the given path is a correct path to an LOVD installation.' . "\n");
-                            break;
-                        }
-                    }
-                    if (!is_readable($sInput . '/config.ini.php')) {
-                        print('    Cannot read configuration file in given LOVD directory.' . "\n");
-                        break;
-                    }
-                    // We'll set everything up later, because we don't want to
-                    // keep the $_DB open for as long as the user is answering questions.
-                }
-                $_CONFIG['user'][$sKeyName] = $sInput;
-                return true;
-
-            default:
-                return false;
-        }
-    }
-
-    return false; // We'd actually never get here.
 }
 
 
@@ -692,86 +597,11 @@ foreach ($aFiles as $sFile) {
 $aCentersFound = array();
 $nCentersFound = 0;
 
-foreach ($aFiles as $nKey => $sFile) {
-    list($sName, $sExt) = explode('.', basename($sFile), 2);
-    // Allow multiple files per center.
-    if (!in_array($sName, $aCentersFound)) {
-        $aCentersFound[] = $sName;
-        $nCentersFound ++;
-    }
-
-    // Make file key in array, so we can store metadata.
-    $aFiles[$sFile] = $sName;
-    unset($aFiles[$nKey]);
-}
-
-
-
-
-
-// Get settings file, if it exists.
-$_SETT = array();
-if (file_exists($_CONFIG['settings_file']) && is_file($_CONFIG['settings_file'])
-    && is_readable($_CONFIG['settings_file'])) {
-    if (!($_SETT = json_decode(file_get_contents($_CONFIG['settings_file']), true))) {
-        lovd_printIfVerbose(VERBOSITY_LOW,
-            'Error: Unreadable settings file.' . "\n\n");
-        die(EXIT_ERROR_SETTINGS_UNREADABLE);
-    }
-}
-
-// The settings file always replaces the standard defaults.
-$_CONFIG['user'] = array_merge($_CONFIG['user'], $_SETT);
-
-
-
-// Loop the settings. If we have a center in there, and the file does not exist, we surely need to bail out.
-foreach ($_CONFIG['user'] as $sKey => $sVal) {
-    if (preg_match('/^center_(.+)_id$/', $sKey, $aRegs)) {
-        $sCenter = $aRegs[1];
-        if (!in_array($sCenter, $aCentersFound)) {
-            lovd_printIfVerbose(VERBOSITY_LOW,
-                'Error: Settings mention center ' . $sCenter . ' but have not located its source file.' . "\n" .
-                'Please make sure the source files are named properly, and their names start with the name of the center.' . "\n\n");
-            die(EXIT_ERROR_ARGS_INSUFFICIENT);
-        }
-    }
-}
-
-
-
-// User may have requested to continue without verifying the settings, but we may not have them all.
-// If at least one setting evaluates to "false", we will ask anyway.
-if ($_CONFIG['flags']['y']) {
-    foreach ($_CONFIG['user'] as $Value) {
-        if (!$Value) {
-            $_CONFIG['flags']['y'] = false;
-            break;
-        }
-    }
-}
-
-
-
-
-
-// Verify all the settings, if needed.
-$aCenterIDs = array();
-if (!$_CONFIG['flags']['y']) {
-    lovd_verifySettings('consensus_file', 'File to write resulting consensus data to', 'string', '');
-}
-
-
-
-
-
 // Loop through files and load all data, grouping the entries in memory.
 $aData = array();
 // Sort on center names, but keep file names.
 // I don't want to sort on the keys, because files can be in different directories.
 asort($aFiles);
-// Sort center list then too, because we'll loop it later and we need to keep the order the same.
-sort($aCentersFound);
 
 // Now, we'll figure out how to handle multiple entries per variant.
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
@@ -850,61 +680,7 @@ foreach ($aData as $sVariantKey => $aVariant) {
 lovd_printIfVerbose(VERBOSITY_MEDIUM,
     ' ' . date('H:i:s', time() - $tStart) . ' [' .
     str_pad(number_format(100, 1), 5, ' ', STR_PAD_LEFT) .
-    '%] VKGL data successfully cleaned, currently at ' . count($aData) . ' variants.' . "\n\n" .
-    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Writing consensus data file...' . "\n");
-
-
-
-
-
-// Write header first.
-$fOutput = fopen($_CONFIG['user']['consensus_file'], 'w');
-if ($fOutput === false) {
-    lovd_printIfVerbose(VERBOSITY_LOW,
-        'Error: Can not open file for writing:' . $_CONFIG['user']['consensus_file'] . ".\n\n");
-    die(EXIT_ERROR_CACHE_CANT_CREATE);
-}
-fputs($fOutput, implode("\t", $_CONFIG['columns_mandatory']) . "\r\n");
-
-
-
-// Loop data and write to file.
-foreach ($aData as $sVariantKey => $aVariant) {
-    // Decompose the key again to Chr, Pos, Ref, Alt, Gene, Transcript, cDNA.
-    $aVariantKey = explode('|', $sVariantKey);
-
-    $aLine = array(
-        // https://github.com/molgenis/data-transform-vkgl/blob/master/src/main/java/org/molgenis/mappers/VkglTableMapper.java#L10
-        substr(hash('sha256',
-            $aVariantKey[0] . '_' . $aVariantKey[1] . '_' . $aVariantKey[2] . '_' . $aVariantKey[3] . '_' .
-            $aVariantKey[4]), 0, 10), // ID; sha256(chr + "_" + pos + "_" + ref + "_" + alt + "_" + gene).substr(0,10);
-        $aVariantKey[0], // Chr.
-        $aVariantKey[1], // Pos.
-        $aVariantKey[2], // Ref.
-        $aVariantKey[3], // Alt.
-        $aVariantKey[4], // Gene.
-        $aVariantKey[5], // Transcript.
-        $aVariantKey[6], // cDNA.
-        implode(', ', array_filter(array_unique($aVariant['protein']))),
-    );
-
-    // Loop centers.
-    foreach ($aCentersFound as $sCenter) {
-        if (isset($aVariant[$sCenter])) {
-            $aLine[] = $aVariant[$sCenter];
-        } else {
-            $aLine[] = '';
-        }
-        if (isset($aVariant[$sCenter . $_CONFIG['columns_center_suffix']])) {
-            $aLine[] = $aVariant[$sCenter . $_CONFIG['columns_center_suffix']];
-        } else {
-            $aLine[] = '';
-        }
-    }
-
-    // Write data.
-    fputs($fOutput, implode("\t", $aLine) . "\r\n");
-}
+    '%] VKGL data successfully cleaned, currently at ' . count($aData) . ' variants.' . "\n\n");
 
 // Final message.
 $nVariants = count($aData);
