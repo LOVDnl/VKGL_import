@@ -14,6 +14,9 @@
 
 namespace LOVD\VKGL;
 
+require_once __DIR__ . '/libs/HGVS-syntax-checker/HGVS.php';
+use LOVD\HGVS\HGVS;
+
 class Formatter
 {
     // Class abstracting the formatting of various formats used in the VKGL project.
@@ -63,11 +66,11 @@ class Formatter
     public function convertClassification ($sClassification): string
     {
         return match (strtolower(str_replace('_', ' ', $sClassification))) {
-            'benign', '-' => 'B',
-            'likely benign', '-?' => 'LB',
-            'vus', 'vous', '?' => 'VUS',
-            'likely pathogenic', '+?' => 'LP',
-            'pathogenic', '+' => 'P',
+            'benign', '-', 'class 1' => 'B',
+            'likely benign', '-?', 'class 2' => 'LB',
+            'vus', 'vous', '?', 'class 3' => 'VUS',
+            'likely pathogenic', '+?', 'class 4' => 'LP',
+            'pathogenic', '+', 'class 5' => 'P',
             default => $sClassification,
         };
     }
@@ -97,6 +100,7 @@ class Formatter
             'alt;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa_snv_tsv',
             // Other:
             'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc_snv_tsv',
+            'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud_snv_tsv',
             default => false,
         };
     }
@@ -120,6 +124,30 @@ class Formatter
         $aLines = file($sFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         if (!$aLines) {
             throw new \Exception("File $sFile could not be opened");
+        }
+
+        // The Radboud data doesn't have a header :(
+        if ($sCenter == 'radboud_mumc') {
+            // Invent the header.
+            array_unshift(
+                $aLines,
+                implode("\t",
+                    [
+                        'chromosome',
+                        'start',
+                        'stop',
+                        'ref',
+                        'alt',
+                        'gene',
+                        'transcript_or_dna',
+                        'empty',
+                        'empty',
+                        'location',
+                        'empty',
+                        'classification',
+                    ]
+                )
+            );
         }
 
         // First line should be headers.
@@ -195,6 +223,59 @@ class Formatter
                         'transcript' => $aVariant['transcript'],
                         'cDNA' => $aVariant['cdna'],
                         'protein' => str_replace('NULL', '', $aVariant['protein']),
+                    ];
+                    break;
+
+                case 'radboud_snv_tsv':
+                    // The transcript field is a disaster; it can contain any kind of information.
+                    $sTranscript = '';
+                    $sDNA = '';
+                    $sProtein = '';
+                    $aTranscripts = array_map('trim', preg_split('/[,; ]/', $aVariant['transcript_or_dna']));
+                    foreach ($aTranscripts as $sDescription) {
+                        if (!$sDescription || ctype_digit($sDescription)) {
+                            continue;
+                        } elseif (str_starts_with($sDescription, 'M_')) {
+                            // This happens quite a bit.
+                            $sDescription = 'N' . $sDescription;
+                        }
+                        // We used to have all kinds of code trying to fix shit. Let's not. We have LOVD/HGVS for this.
+                        // Yes, it's much slower. But it's also much better.
+                        $HGVS = HGVS::check($sDescription);
+                        switch ($HGVS->getIdentifiedAs()) {
+                            case 'reference_sequence':
+                                $sTranscript = $HGVS->getCorrectedValue();
+                                break 2;
+                            case 'full_variant_DNA':
+                                $sTranscript = $HGVS->ReferenceSequence->getCorrectedValue(); // This can be empty, when we received ":c.100del".
+                                $sDNA = $HGVS->Variant->getCorrectedValue();
+                                break 2;
+                            case 'variant_DNA':
+                                $sDNA = $HGVS->getCorrectedValue();
+                                break 2;
+                            case 'gene_symbol':
+                            case 'genome_build':
+                                // Nah, we have that already. Try a next value.
+                                continue 2;
+                        }
+
+                        // If we got here, LOVD/HGVS didn't recognize it.
+                        // Currently, however, protein descriptions aren't handled by LOVD/HGVS yet.
+                        if (preg_match('/p\.(\([A-Z][a-z]{2}[0-9]+[A-Z][a-z]{2}\)|[A-Z][a-z]{2}[0-9]+[A-Z][a-z]{2})/',
+                                $sDescription, $aRegs)) {
+                            // Protein given; store in protein field.
+                            $sProtein = $aRegs[0];
+                        }
+                    }
+
+                    // The Radboud tsv data is always hg19.
+                    $this->data[$sCenter][$sDataType][] = [
+                            'genomic_native' => "hg19:{$aVariant['chromosome']}:{$aVariant['start']}:{$aVariant['ref']}:{$aVariant['alt']}",
+                            'classification' => $this->convertClassification($aVariant['classification']),
+                            'gene' => $aVariant['gene'],
+                            'transcript' => $sTranscript,
+                            'cDNA' => $sDNA,
+                            'protein' => $sProtein,
                     ];
                     break;
 
@@ -352,9 +433,6 @@ $_CONFIG = array(
     ),
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
     'header_signatures' => array(
-        // Radboud/MUMC+:
-        'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud',
-
         // NKI:
         'alt;category;chromosome;classification;cnomen;effect;end;exon;gene;pnomen;position;ref;region;strand;transcript' => 'nki',
     ),
@@ -712,31 +790,6 @@ foreach ($aFiles as $sFile => $sCenter) {
         die(EXIT_ERROR_INPUT_CANT_OPEN);
     }
 
-    // The Radboud data doesn't have a header :(
-    if ($sCenter == 'radboud_mumc') {
-        // Invent the header.
-        array_unshift(
-            $aLines,
-            implode("\t",
-                [
-                    'chromosome',
-                    'start',
-                    'stop',
-                    'ref',
-                    'alt',
-                    'gene',
-                    'transcript_or_dna',
-                    'empty',
-                    'empty',
-                    'location',
-                    'empty',
-                    'classification',
-                ]
-            )
-        );
-    }
-
-
 
     // First line should be headers.
     $aHeaders = explode("\t", strtolower(array_shift($aLines)));
@@ -805,61 +858,6 @@ foreach ($aFiles as $sFile => $sCenter) {
                 );
                 break;
 
-            case 'radboud':
-                // The transcript field is a bit of a mix.
-                $sTranscript = '';
-                $sDNA = '';
-                $sProtein = '';
-                $aTranscripts = array_map('trim', preg_split('/[,; ]/', $aDataLine['transcript_or_dna']));
-                foreach ($aTranscripts as $sDescription) {
-                    if (preg_match('/(NM_[0-9]{6,9}\.[0-9]+|ENST[0-9]+\.[0-9])(?:\(' .
-                            preg_quote($aDataLine['gene'], '/') .
-                            '\))?:(c\.[0-9_+-]+[A-Z>deldupins]+)/', $sDescription, $aRegs)) {
-                        // cDNA given; store separate fields.
-                        $sTranscript = $aRegs[1];
-                        $sDNA = $aRegs[2];
-                        continue;
-                    } elseif (preg_match('/p\.(\([A-Z][a-z]{2}[0-9]+[A-Z][a-z]{2}\)|[A-Z][a-z]{2}[0-9]+[A-Z][a-z]{2})/',
-                            $sDescription, $aRegs)) {
-                        // Protein given; store in protein field.
-                        $sProtein = $aRegs[0];
-                        continue;
-                    } elseif (preg_match('/^(Chr[0-9XYM]+\(GRCh[0-9]{2}\):)?g\.[0-9]+([A-Z]>[A-Z]|ins[ACGT]+)$/',
-                            $sDescription, $aRegs)) {
-                        // Genomic DNA given; store in DNA field.
-                        $sDNA = $aRegs[0];
-                        continue;
-                    }
-                }
-
-                $sVariantKey = implode('|', array(
-                    preg_replace('/^chr/', '', $aDataLine['chromosome']),
-                    $aDataLine['start'],
-                    $aDataLine['ref'],
-                    $aDataLine['alt'],
-                    $aDataLine['gene'],
-                    $sTranscript,
-                    $sDNA,
-                ));
-                $aValues = array(
-                    'protein' => $sProtein,
-                    $sCenter => str_replace(
-                        array(
-                            'class 1',
-                            'class 2',
-                            'class 3',
-                            'class 4',
-                            'class 5',
-                        ), array(
-                            'benign',
-                            'likely benign',
-                            'VUS',
-                            'likely pathogenic',
-                            'pathogenic',
-                        ), strtolower($aDataLine['classification'])),
-                    $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['classification'],
-                );
-                break;
         }
 
         if (!$sVariantKey) {
