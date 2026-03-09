@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-27 (based on format_raw_VKGL_files.php)
- * Modified    : 2026-03-06
+ * Modified    : 2026-03-09
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -91,6 +91,7 @@ class Formatter
             // Alissa:
             'alt;c;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;timestamp;transcript;variant_type' => 'alissa_snv_tsv',
             'alt;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;timestamp;transcript;variant_type' => 'alissa_snv_tsv',
+            'alt;alt_orig;c_nomen;chrom;chromosome;classification;effect;exon;gene;hgvs_normalized_vkgl;id;last_updated_by;last_updated_on;location;p_nomen;pos;ref;ref_orig;significance;start;stop;timestamp;transcript;type;variant_type' => 'alissa2_snv_tsv',
             // Apparently, Groningen used to edit the files and added the id and timestamp fields. Alissa files from the SFTP server don't have those fields.
             'alt;c;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa_snv_tsv',
             // 2024-02 + 2024-04; Due to a personnel change at Alissa without a proper handover, manual exports are being generated with yet another signature.
@@ -154,6 +155,9 @@ class Formatter
 
             $aVariant = array_combine($aHeaders, $aDataLine);
             switch ($sFileType) {
+                case 'alissa2_snv_tsv':
+                    $aVariant['ref'] = $aVariant['ref_orig'];
+                    $aVariant['alt'] = $aVariant['alt_orig'];
                 case 'alissa_snv_tsv':
                     // Alissa data was always hg19.
                     $this->data[$sCenter][$sDataType][] = [
@@ -324,9 +328,6 @@ $_CONFIG = array(
     ),
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
     'header_signatures' => array(
-        // Alissa:
-        'alt;alt_orig;c_nomen;chrom;chromosome;classification;effect;exon;gene;hgvs_normalized_vkgl;id;last_updated_by;last_updated_on;location;p_nomen;pos;ref;ref_orig;significance;start;stop;timestamp;transcript;type;variant_type' => 'alissa2',
-
         // LUMC:
         'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc',
 
@@ -844,23 +845,6 @@ foreach ($aFiles as $sFile => $sCenter) {
         $sVariantKey = ''; // Chr,Start,Ref,Alt,Gene,Transcript,cDNA.
         $aValues = array(); // protein => ..., center => classification, center_link => ....
         switch ($sFileType) {
-            case 'alissa2':
-                $sVariantKey = implode('|', array(
-                    $aDataLine['chromosome'],
-                    $aDataLine['start'],
-                    $aDataLine['ref_orig'],
-                    $aDataLine['alt_orig'],
-                    $aDataLine['gene'],
-                    $aDataLine['transcript'],
-                    $aDataLine['c_nomen'],
-                ));
-                $aValues = array(
-                    'protein' => str_replace('NULL', '', $aDataLine['p_nomen']),
-                    $sCenter => str_replace(array('_', 'vous'), array(' ', 'VUS'), strtolower($aDataLine['classification'])),
-                    $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['last_updated_by'],
-                );
-                break;
-
             case 'lumc':
                 // Because all data is otherwise in (sort of) VCF fields and I don't want to pull the normalization code
                 //  into this script, I'm just creating the (sort of) VCF fields that VKGL is using. This would allow
