@@ -63,6 +63,11 @@ foreach ($Settings->get() as $sKey => $Value) {
     }
 }
 
+// Fix the timezone, if needed (PHP defaults to UTC).
+if ($Settings->get('timezone')) {
+    date_default_timezone_set($Settings->get('timezone'));
+}
+
 
 
 // Checking the server settings, and collecting passphrases when needed.
