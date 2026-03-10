@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-23
- * Modified    : 2026-02-27
+ * Modified    : 2026-03-10
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -14,8 +14,10 @@
 
 // New pipeline, running everything fully automated and reducing the time spent on manual verification even more.
 define('ROOT_PATH', __DIR__);
+require_once(ROOT_PATH . '/formatter.php');
 require_once(ROOT_PATH . '/log.php');
 require_once(ROOT_PATH . '/settings.php');
+use LOVD\VKGL\Formatter;
 use LOVD\Log;
 use LOVD\Settings;
 $Settings = new Settings();
@@ -205,5 +207,42 @@ if ($Status->get('step') < $nStep) {
     }
 
     $Log->add("All files are present, ready for the next step.", 'OK');
+    $Status->set('step', $nStep);
+}
+
+
+
+
+
+// Step 2: Merge all files into one, regardless of the given format.
+$nStep++;
+if ($Status->get('step') < $nStep) {
+    // Use the formatter which recognizes all formats and merges everything into one tab-delimited file.
+    $Log->add("Parsing the VKGL data files...");
+    try {
+        $o = Formatter::format($Status->get('data_files'));
+    } catch (Exception $e) {
+        $Log->add("Failed to parse the data files.\n" . $e->getMessage() . '.', '!!');
+        die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
+    }
+
+    $sOutputFile = 'vkgl_data_raw_' . date('Y-m-d.H.i.s') . '.tsv';
+    if (!$o->save($sOutputFile)) {
+        $Log->add("Failed to save the result to $sOutputFile.", '!!');
+        die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
+    }
+    $Log->add("Successfully created $sOutputFile.", 'OK');
+    $Status->set('output_files|formatted', $sOutputFile);
+
+    if ($o->hasErrors()) {
+        $sErrorOutputFile = str_replace('.tsv', '.errors.tsv', $sOutputFile);
+        if (!$o->saveErrors($sErrorOutputFile)) {
+            $Log->add("Failed to save the errors to $sErrorOutputFile.", '!!');
+            die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
+        }
+        $Log->add("Errors occurred, successfully created $sErrorOutputFile.", 'OK');
+        $Status->set('error_files|formatted', $sErrorOutputFile);
+    }
+
     $Status->set('step', $nStep);
 }
