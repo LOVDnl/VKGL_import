@@ -119,18 +119,20 @@ if ($aMonths === null) {
 rsort($aMonths);
 $nThisYear = date('Y');
 $nThisMonth = date('m');
+$nReleaseYear = null;
 $nReleaseMonth = null;
 foreach ($aMonths as $nMonth) {
     if ($nMonth <= $nThisMonth) {
+        $nReleaseYear = $nThisYear;
         $nReleaseMonth = $nMonth;
         break;
     }
 }
 if ($nReleaseMonth === null) {
+    $nReleaseYear = ($nThisYear - 1);
     $nReleaseMonth = max($aMonths);
-    $nThisYear --;
 }
-$sRelease = $nThisYear . '-' . str_pad($nReleaseMonth, 2, '0', STR_PAD_LEFT);
+$sRelease = $nReleaseYear . '-' . str_pad($nReleaseMonth, 2, '0', STR_PAD_LEFT);
 
 // If the release folder doesn't exist yet, create it.
 define('RELEASE_PATH', ROOT_PATH . '/' . $sRelease);
