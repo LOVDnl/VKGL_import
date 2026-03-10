@@ -176,6 +176,7 @@ if ($Status->get('step') === null) {
 $nStep = 1;
 if ($Status->get('step') < $nStep) {
     // Check if we have all the files.
+    $Log->add("Checking if we have all the required files...");
     $aFilesMissing = [];
     foreach ($Settings->get('centers') as $sCenter => $aCenter) {
         if (empty($aCenter['files'])) {
@@ -233,7 +234,7 @@ if ($Status->get('step') < $nStep) {
         die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
     }
 
-    $sOutputFile = 'vkgl_data_raw_' . date('Y-m-d.H.i.s') . '.tsv';
+    $sOutputFile = 'vkgl_data.01-raw.' . date('Y-m-d.H.i.s') . '.tsv';
     if (!$o->save($sOutputFile)) {
         $Log->add("Failed to save the result to $sOutputFile.", '!!');
         die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
