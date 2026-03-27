@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-27 (based on format_raw_VKGL_files.php)
- * Modified    : 2026-03-09
+ * Modified    : 2026-03-27
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -14,7 +14,7 @@
 
 namespace LOVD\VKGL;
 
-require_once __DIR__ . '/libs/HGVS-syntax-checker/HGVS.php';
+require_once(__DIR__ . '/libs/HGVS-syntax-checker/HGVS.php');
 use LOVD\HGVS\HGVS;
 
 class Formatter
@@ -98,6 +98,10 @@ class Formatter
             '_id;alternative;build;cNomen;category;chromosome;classification;date;description;display_id;effect;end;exon;gene_symbol;institute;location;maintainer;managed_variant_id;pNomen;position;reference;sub_category;type;variant_id;variant_info' => 'nki_snv_json',
             'created;pathogenicity;posedits' => 'umcg_snv_json',
 
+            // CSV formats:
+            // Illumina Emedgene:
+            'alt;chromosome;created reference build;diseases (omim id);end;error;overlap %;pathogenicity;position;ref;transcript;vartype' => 'emedgene_csv',
+
             // TSV formats:
             // Alissa:
             'alt;c;c_nomen;chromosome;classification;effect;exon;gene;id;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;timestamp;transcript;variant_type' => 'alissa_snv_tsv',
@@ -134,6 +138,13 @@ class Formatter
         $aLines = file($sFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         if (!$aLines) {
             throw new \Exception("File $sFile could not be opened");
+        }
+
+        // Illumina Emedgene gives us .csv files. Just convert to TSV.
+        if (strrchr($sFile, '.') == '.csv') {
+            foreach ($aLines as $i => $sLine) {
+                $aLines[$i] = str_replace(',', "\t", $sLine);
+            }
         }
 
         // The Radboud data doesn't have a header :(
@@ -210,6 +221,24 @@ class Formatter
                             'last_updated_by' => $aVariant['last_updated_by'],
                             'last_updated_on' => strstr($aVariant['last_updated_on'], '.', true),
                         ],
+                    ];
+                    break;
+
+                case 'emedgene_csv':
+                    // This format actually contains both CNVs and SNVs. We'll handle them both here.
+                    if ($aVariant['vartype'] == 'SNV') {
+                        // Simple SNV. Result will be, e.g., "GRCh37:1:211832061:CA:C".
+                        $sVariant = "{$aVariant['created reference build']}:{$aVariant['chromosome']}:{$aVariant['position']}:{$aVariant['ref']}:{$aVariant['alt']}";
+                    } else {
+                        // CNV. Result will be, e.g., "GRCh37:1:1_1068640DEL".
+                        $sVariant = "{$aVariant['created reference build']}:{$aVariant['chromosome']}:{$aVariant['position']}_{$aVariant['end']}{$aVariant['vartype']}";
+                        $aVariant['vartype'] = 'CNV';
+                    }
+
+                    $this->data[$sCenter][$aVariant['vartype']][] = [
+                        'genomic_native' => $sVariant,
+                        'classification' => $this->convertClassification($aVariant['pathogenicity']),
+                        'transcript' => $aVariant['transcript'],
                     ];
                     break;
 
