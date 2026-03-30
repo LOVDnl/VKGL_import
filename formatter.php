@@ -449,7 +449,7 @@ class Formatter
                             // 'transcript' => $aVariant['gene_symbol']['primary_transcripts'][0],
                             // 'cDNA' => $aVariant['cNomen'],
                             // 'protein' => $aVariant['pNomen'],
-                            'annotation' => ['created' => strstr($aVariant['created'], '.', true)],
+                            'annotation' => ['created' => strstr($aVariant['created'], '.', true), 'reported-as' => $aVariant['posedits'][0]['emg']],
                         ]
                     );
                     break;
