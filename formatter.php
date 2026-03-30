@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-27 (based on format_raw_VKGL_files.php)
- * Modified    : 2026-03-27
+ * Modified    : 2026-03-30
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -96,7 +96,7 @@ class Formatter
         return match ($sSignature) {
             // JSON formats:
             '_id;alternative;build;cNomen;category;chromosome;classification;date;description;display_id;effect;end;exon;gene_symbol;institute;location;maintainer;managed_variant_id;pNomen;position;reference;sub_category;type;variant_id;variant_info' => 'nki_snv_json',
-            'created;pathogenicity;posedits' => 'umcg_snv_json',
+            'created;pathogenicity;posedits' => 'umcg_json',
 
             // CSV formats:
             // Illumina Emedgene:
@@ -395,7 +395,7 @@ class Formatter
                     ];
                     break;
 
-                case 'umcg_snv_json':
+                case 'umcg_json':
                     // Reject variants without a pathogenicity (just a handful).
                     if (empty($aVariant['pathogenicity'])) {
                         $this->data_rejected[$sCenter]['SNV'][] = [
@@ -424,19 +424,22 @@ class Formatter
 
                     // This data is a bit more complex, so we should build it carefully.
                     $aLine = [];
-                    // Some variants are very large; ref is then set to one base, and alt is set to null.
+                    // This format contains SNVs as well as CNVs. For the latter, ref has one base, and alt is null.
                     // We then can't use the VCF fields, but have to rely on the HGVS fields.
                     // In all other cases, we ignore the HGVS field because it's often wrong.
+                    $sDataType = 'SNV';
                     foreach (['genomic_native' => $aNative, 'genomic_liftover' => $aLiftOver] as $sField => $aData) {
                         if ($aData) {
                             if ($aData['alt'] === null) {
+                                // This is a CNV. Use the HGVS field.
                                 $aLine[$sField] = $aData['hgvs'];
+                                $sDataType = 'CNV';
                             } else {
                                 $aLine[$sField] = "{$aData['human_reference']}:{$aData['chromosome']}:{$aData['start']}:{$aData['ref']}:{$aData['alt']}";
                             }
                         }
                     }
-                    $this->data[$sCenter]['SNV'][] = array_merge(
+                    $this->data[$sCenter][$sDataType][] = array_merge(
                         $aLine,
                         [
                             'classification' => $this->convertClassification($aVariant['pathogenicity']),
