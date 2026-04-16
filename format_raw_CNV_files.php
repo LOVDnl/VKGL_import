@@ -976,17 +976,14 @@ foreach ($aFiles as $sFile => $sCenter) {
                         }
                     }
                 }
-                if ($aDataLine['classification'] == 'class 1'){
-                    $sCNV_class = 'benign';
-                } elseif ($aDataLine['classification'] == 'class 2'){
-                    $sCNV_class = 'likely benign';
-                } elseif ($aDataLine['classification'] == 'class 3'){
-                    $sCNV_class = 'VUS';
-                } elseif ($aDataLine['classification'] == 'class 4'){
-                    $sCNV_class = 'likely pathogenic';
-                } elseif ($aDataLine['classification'] == 'class 5'){
-                    $sCNV_class = 'pathogenic';
-                }
+                $aClassification = array (
+                        'class 1' => 'benign',
+                        'class 2' => 'likely benign',
+                        'class 3' => 'VUS',
+                        'class 4' => 'likely pathogenic',
+                        'class 5' => 'pathogenic',
+                );
+                $sCNV_class = ($aClassification[$aDataLine['classification']] ?? '');
                 $aValues = array(
                     $sCenter => str_replace("vus","VUS",strtolower($sCNV_class)),
                     $sCenter . $_CONFIG['columns_center_suffix'] => $sHomOrHet,
