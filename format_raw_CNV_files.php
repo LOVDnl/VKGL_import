@@ -926,7 +926,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                     if (strpos($aChecking[0],'pter_qter') !== false && $aDataLine['inside start']=='pter') {
                         $sVariantKey = $aChecking[0];
                     } else {
-                        //This is where only the numbered positions are taken to copare them.
+                        //This is where only the numbered positions are taken to compare them.
                         //To see if there is only one HGVS description with the maximum amount of numbers.
                         foreach ($aUnique as $sHGVS) {
                             $sVariant = strstr($sHGVS, ':');
