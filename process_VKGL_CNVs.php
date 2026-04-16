@@ -711,6 +711,8 @@ foreach ($aData as $nKey => $aVariant) {
     } else {
         // Variant has already been seen before.
         $aData[$aVariant['VariantOnGenome/DNA']] = array_merge_recursive($aData[$aVariant['VariantOnGenome/DNA']], $aVariant);
+        // Enable the line below to log which variants are reported as duplicates.
+        // print($aVariant['id'] . "\t" . $aVariant['gene'] . "\t" . 'Equal to:' . "\t" . $aData[$aVariant['VariantOnGenome/DNA']]['id'][0] . "\t" . $aData[$aVariant['VariantOnGenome/DNA']]['gene'][0] . "\t" . $aVariant['VariantOnGenome/DNA'] . "\n");
         $nVariantsMerged ++;
     }
     // Get rid of the old data.
