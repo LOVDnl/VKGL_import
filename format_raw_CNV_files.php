@@ -915,72 +915,65 @@ foreach ($aFiles as $sFile => $sCenter) {
                     //If they are different, this variant will not be used.
                     foreach ($aUnique as $sEffect) {
                         if (preg_match_all('/((del|dup|sup))/',$sEffect,$aMatches)){
-                            $aSaveString = $aMatches[0];
-                            $aDelDup[] = $aSaveString[0];
+                            $aDelDup[] = $aMatches[0][0];
                         }
                     }
-                    $aUnEff = array_unique($aDelDup);
-                    $nUnDelDup = count($aUnEff);
-                    if ($nUnDelDup == 1) {
-                        //This check is to see if the whole chromosome is duplicated or deleted.
-                        $sCheck = strstr($aChecking[0],'pter_qter');
-                        if ($sCheck == true && $aDataLine['inside start']=='pter') {
-                            $sVariantKey = $aChecking[0];
-                        } else {
-                            //This is where only the numbered positions are taken to compare them.
-                            //To see if there is only one HGVS description with the maximum amount of numbers.
-                            foreach ($aUnique as $sHGVS) {
-                                $sVariant = strstr($sHGVS, ':');
-                                preg_match_all('/([0-9]+)/', $sVariant, $aMatches);
-                                $aPositions[] = $aMatches[0];
+                    //Here is being checked if there is only 1 effect (del/dup) for each variant.
+                    if (count(array_unique($aDelDup))!=1) {
+                        continue 2;
+                    }
+                    //This check is to see if the whole chromosome is duplicated or deleted.
+                    if (strpos($aChecking[0],'pter_qter') !== false && $aDataLine['inside start']=='pter') {
+                        $sVariantKey = $aChecking[0];
+                    } else {
+                        //This is where only the numbered positions are taken to copare them.
+                        //To see if there is only one HGVS description with the maximum amount of numbers.
+                        foreach ($aUnique as $sHGVS) {
+                            $sVariant = strstr($sHGVS, ':');
+                            preg_match_all('/([0-9]+)/', $sVariant, $aMatches);
+                            $aPositions[] = $aMatches[0];
+                        }
+                        $aPositionCounts = array_map('count', $aPositions);
+                        $nMaxPositions = max($aPositionCounts);
+                        $nWithMaxPositions = count(array_intersect($aPositionCounts, [$nMaxPositions]));
+                        //If there is only one HGVS description with the maximum amount of positions, we will continue
+                        if ($nWithMaxPositions != 1) {
+                            continue 2;
+                        }
+                        $iWithMaxPositions = array_search($nMaxPositions, $aPositionCounts);
+                        foreach ($aPositions as $i => $aPos) {
+                            if ($i == $iWithMaxPositions) {
+                                continue;
                             }
-                            $aPositionCounts = array_map('count', $aPositions);
-                            $nMaxPositions = max($aPositionCounts);
-                            $nWithMaxPositions = count(array_intersect($aPositionCounts, [$nMaxPositions]));
-                            //If there is only one HGVS description with the maximum amount of positions, we will continue
-                            if ($nWithMaxPositions == 1) {
-                                $iWithMaxPositions = array_search($nMaxPositions, $aPositionCounts);
-                                foreach ($aPositions as $i => $aPos) {
-                                    if ($i == $iWithMaxPositions) {
-                                        continue;
-                                    }
-                                    $aDiff = array_diff($aPos, $aPositions[$iWithMaxPositions]);
-                                    //Here we are going to check if the positions in the shorter HGVS description are present in
-                                    //the HGVS description with the maximum positions. If they are, we will continue.
-                                    if (empty($aDiff)) {
-                                        $aLongestPos = $aPositions[$iWithMaxPositions];
-                                        $aSafe = array_search($aLongestPos, $aPositions);
-                                        if ($aSafe == 1) {
-                                            //This is where the arrays will be checked if there were more than one unique HGVS description.
-                                            //Starting by checking the length by counting the symbol: '_', this symbol is used because it is
-                                            //an indicator for the length.
-                                            $nMax = max(array_map(function ($sHGVS) {
-                                                return substr_count($sHGVS, '_');
-                                            }, $aUnique));
-                                            $aHGVS = array_filter($aUnique, function ($sHGVS) use ($nMax) {
-                                                $n = substr_count($sHGVS, '_');
-                                                return $nMax == $n;
-                                            });
-                                            $nAmountTotal = count($aHGVS);
-                                            if ($nAmountTotal == 1) {
-                                                $sAddLine = current($aHGVS);
-                                                $sVariantKey = $sAddLine;
-                                            } else {
-                                                continue 3;
-                                            }
-                                        } else {
-                                            continue 3;
-                                        }
-                                    } else {
-                                        continue 3;
-                                    }
-                                }
+                            $aDiff = array_diff($aPos, $aPositions[$iWithMaxPositions]);
+                            //Here we are going to check if the positions in the shorter HGVS description are present in
+                            //the HGVS description with the maximum positions. If they are, we will continue.
+                            if (!empty($aDiff)) {
+                                continue 3;
+                            }
+                            $aLongestPos = $aPositions[$iWithMaxPositions];
+                            $aSafe = array_search($aLongestPos, $aPositions);
+                            if ($aSafe != 1) {
+                                continue 3;
+                            }
+                            //This is where the arrays will be checked if there were more than one unique HGVS description.
+                            //Starting by checking the length by counting the symbol: '_', this symbol is used because it is
+                            //an indicator for the length.
+                            $nMax = max(array_map(function ($sHGVS) {
+                                return substr_count($sHGVS, '_');
+                            }, $aUnique));
+                            $aHGVS = array_filter($aUnique, function ($sHGVS) use ($nMax) {
+                                $n = substr_count($sHGVS, '_');
+                                return $nMax == $n;
+                            });
+                            $nAmountTotal = count($aHGVS);
+                            if ($nAmountTotal == 1) {
+                                $sAddLine = current($aHGVS);
+                                $sVariantKey = $sAddLine;
                             } else {
-                                continue 2;
+                                continue 3;
                             }
                         }
-                    } else {
-                        continue 2;
                     }
                 }
                 if ($aDataLine['classification'] == 'class 1'){
@@ -1001,7 +994,6 @@ foreach ($aFiles as $sFile => $sCenter) {
 
                 break;
         }
-
 
         if (!$sVariantKey) {
             // Unhandled file type?
