@@ -532,156 +532,26 @@ class Formatter
     }
 }
 
+
+
+
+
+/*
 // Default settings. Everything in 'user' will be verified with the user, and stored in settings.json.
 $_CONFIG = array(
-    'name' => 'VKGL raw data formatter',
-    'version' => '0.2.4',
-    'flags' => array(
-        'y' => false,
-    ),
     'columns_center_suffix' => '_link', // This is how we recognize a center, because it also has a *_link column.
 );
-
-// Exit codes.
-// See http://tldp.org/LDP/abs/html/exitcodes.html for recommendations, in particular:
-// "[I propose] restricting user-defined exit codes to the range 64 - 113 (...), to conform with the C/C++ standard."
-define('EXIT_OK', 0);
-define('EXIT_WARNINGS_OCCURRED', 64);
-define('EXIT_ERROR_ARGS_INSUFFICIENT', 65);
-define('EXIT_ERROR_ARGS_NOT_UNDERSTOOD', 66);
-define('EXIT_ERROR_INPUT_NOT_A_FILE', 67);
-define('EXIT_ERROR_INPUT_UNREADABLE', 68);
-define('EXIT_ERROR_INPUT_CANT_OPEN', 69);
-define('EXIT_ERROR_HEADER_FIELDS_NOT_FOUND', 70);
-define('EXIT_ERROR_HEADER_FIELDS_INCORRECT', 71);
-define('EXIT_ERROR_SETTINGS_CANT_CREATE', 72);
-define('EXIT_ERROR_SETTINGS_UNREADABLE', 73);
-define('EXIT_ERROR_SETTINGS_CANT_UPDATE', 74);
-define('EXIT_ERROR_SETTINGS_INCORRECT', 75);
-define('EXIT_ERROR_CONNECTION_PROBLEM', 76);
-define('EXIT_ERROR_CACHE_CANT_CREATE', 77);
-define('EXIT_ERROR_CACHE_UNREADABLE', 78);
-define('EXIT_ERROR_CACHE_CANT_UPDATE', 79);
-define('EXIT_ERROR_DATA_FIELD_COUNT_INCORRECT', 80);
-define('EXIT_ERROR_DATA_CONTENT_ERROR', 81);
-
-define('VERBOSITY_NONE', 0); // No output whatsoever.
-define('VERBOSITY_LOW', 3); // Low output, only the really important messages.
-define('VERBOSITY_MEDIUM', 5); // Medium output. No output if there is nothing to do. Useful for when using cron.
-define('VERBOSITY_HIGH', 7); // High output. The default.
-define('VERBOSITY_FULL', 9); // Full output, including debug statements.
-
-
-
-
-
-function lovd_printIfVerbose ($nVerbosity, $sMessage)
-{
-    // This function only prints the given message when the current verbosity is set to a level high enough.
-
-    // If no verbosity is currently defined, just print everything.
-    if (!defined('VERBOSITY')) {
-        define('VERBOSITY', 9);
-    }
-
-    if (VERBOSITY >= $nVerbosity) {
-        print($sMessage);
-    }
-    return true;
-}
-
-
-
-
-
-// Parse command line options.
-$aArgs = $_SERVER['argv'];
-$nArgs = $_SERVER['argc'];
-// We need at least one argument, the file(s) to convert.
-$nArgsRequired = 1;
-
-$sScriptName = array_shift($aArgs);
-$nArgs --;
-$nWarningsOccurred = 0;
-
-if ($nArgs < $nArgsRequired) {
-    lovd_printIfVerbose(VERBOSITY_LOW,
-        $_CONFIG['name'] . ' v' . $_CONFIG['version'] . '.' . "\n" .
-        'Usage: ' . $sScriptName . ' file_center_A.txt [file_center_B.txt [ ... ]] [-y]' . "\n\n");
-    die(EXIT_ERROR_ARGS_INSUFFICIENT);
-}
-
-// Parse arguments and flags.
-$aFiles = array();
-while ($nArgs) {
-    // Check for flags.
-    $sArg = array_shift($aArgs);
-    $nArgs --;
-    if (preg_match('/^-[A-Z]+$/i', $sArg)) {
-        $sArg = substr($sArg, 1);
-        foreach (str_split($sArg) as $sFlag) {
-            if (isset($_CONFIG['flags'][$sFlag])) {
-                $_CONFIG['flags'][$sFlag] = true;
-            } else {
-                // Flag not recognized.
-                lovd_printIfVerbose(VERBOSITY_LOW,
-                    'Error: Flag -' . $sFlag . ' not understood.' . "\n\n");
-                die(EXIT_ERROR_ARGS_NOT_UNDERSTOOD);
-            }
-        }
-
-    } elseif (file_exists($sArg)) {
-        $aFiles[] = $sArg;
-    } else {
-        // Eh?
-        var_dump("bad arg: $sArg");
-    }
-}
-$bCron = (empty($_SERVER['REMOTE_ADDR']) && empty($_SERVER['TERM']));
-define('VERBOSITY', ($bCron? 5 : 7));
-// Record the start of the script, but correct for the timezone. This way, (time() - $tStart) doesn't seem to make sense
-//  to us human readers, but when used in combination with date('H:i:s', ...) to format hours, minutes, and seconds
-//  spent, it all makes sense. Note that date("H:i:s", 0) only returns 00:00:00 when your timezone is GMT.
-$tStart = time() + date('Z', 0);
-
-lovd_printIfVerbose(VERBOSITY_MEDIUM,
-    $_CONFIG['name'] . ' v' . $_CONFIG['version'] . '.' . "\n");
-
-
-
-
-
-// Check files passed as an argument.
-foreach ($aFiles as $sFile) {
-    if (!file_exists($sFile) || !is_file($sFile)) {
-        lovd_printIfVerbose(VERBOSITY_LOW,
-            'Error: Input is not a file:' . $sFile . ".\n\n");
-        die(EXIT_ERROR_INPUT_NOT_A_FILE);
-    }
-    if (!is_readable($sFile)) {
-        lovd_printIfVerbose(VERBOSITY_LOW,
-            'Error: Unreadable input file:' . $sFile . ".\n\n");
-        die(EXIT_ERROR_INPUT_UNREADABLE);
-    }
-}
 
 
 
 // Isolate the center names from the file names.
 // Verify these and store.
 $aCentersFound = array();
-$nCentersFound = 0;
 
 // Loop through files and load all data, grouping the entries in memory.
 $aData = array();
-// Sort on center names, but keep file names.
-// I don't want to sort on the keys, because files can be in different directories.
-asort($aFiles);
 
 // Now, we'll figure out how to handle multiple entries per variant.
-lovd_printIfVerbose(VERBOSITY_MEDIUM,
-    ' ' . date('H:i:s', time() - $tStart) . ' [  0.0%] Checking VKGL data for intra-center duplicates...' . "\n");
-
 foreach ($aData as $sVariantKey => $aVariant) {
     foreach ($aCentersFound as $sCenter) {
         // Does this center even know this variant?
@@ -710,21 +580,19 @@ foreach ($aData as $sVariantKey => $aVariant) {
             // Simple, just one classification.
             $aData[$sVariantKey][$sCenter] = current($aClassifications);
             // Do report.
-            lovd_printIfVerbose(VERBOSITY_HIGH,
-                '                   Warning: Center ' . $sCenter . ' has two entries for the same variant. ID: ' . $sVariantKey . "\n");
+            print('                   Warning: Center ' . $sCenter . ' has two entries for the same variant. ID: ' . $sVariantKey . "\n");
 
         } else {
             // Now we're actually in trouble. Internal conflict.
             // First, report the issue.
-            lovd_printIfVerbose(VERBOSITY_MEDIUM,
-                '                   Warning: Center ' . $sCenter . ' has an internal conflict; ' . implode(', ', $aClassifications) . '. ID: ' . $sVariantKey . "\n");
+            print('                   Warning: Center ' . $sCenter . ' has an internal conflict; ' . implode(', ', $aClassifications) . '. ID: ' . $sVariantKey . "\n");
 
             $bB   = in_array('benign', $aClassifications);
             $bLB  = in_array('likely benign', $aClassifications);
             $bVUS = in_array('VUS', $aClassifications);
             $bLP  = in_array('likely pathogenic', $aClassifications);
             $bP   = in_array('pathogenic', $aClassifications);
-            // Rules: report opposites; */VUS to VUS; LB/B to LB; LP/P to LP.
+            // Rules: report opposites; anything+VUS to VUS; LB+B to LB; LP+P to LP.
             if (($bB || $bLB) && ($bLP || $bP)) {
                 // Internal conflict within center; a conflict that we can't resolve.
                 unset($aData[$sVariantKey][$sCenter]);
@@ -751,18 +619,5 @@ foreach ($aData as $sVariantKey => $aVariant) {
         unset($aData[$sVariantKey]);
     }
 }
-
-lovd_printIfVerbose(VERBOSITY_MEDIUM,
-    ' ' . date('H:i:s', time() - $tStart) . ' [' .
-    str_pad(number_format(100, 1), 5, ' ', STR_PAD_LEFT) .
-    '%] VKGL data successfully cleaned, currently at ' . count($aData) . ' variants.' . "\n\n");
-
-// Final message.
-$nVariants = count($aData);
-lovd_printIfVerbose(VERBOSITY_MEDIUM,
-    ' ' . date('H:i:s', time() - $tStart) . ' [100.0%] ' . $nVariants . ' variants stored.' . "\n\n");
-
-if ($nWarningsOccurred) {
-    die(EXIT_WARNINGS_OCCURRED);
-}
+*/
 ?>
