@@ -104,15 +104,13 @@
  *
  *************/
 
-/// FIXME: When the position converter returns mappings that Mutalyzer cannot generate a protein change for because the
-///  transcript or later versions of it is not found in the NC, we skip the transcript, and we don't store it, either.
-///  This can be improved on, by taking in mappings that map into locations that we can generate the protein change for.
-///  Notes: Position converter descriptions are *not* normalized. For variants on the reverse strand, this is a problem.
-///         If you fix this, remove "numberConversion" as a method from the cache, so all variants will be repeated.
-///         Perhaps VV can help here, it may provide more mappings and surely is a lot faster.
-/// FIXME: Fix conflicts if on different genes, they can be regarded as non-conflicts.
-/// FIXME: Running this repeatedly may result in updates that just updated the edited_by. I don't know why.
-/// NOTE: Locally AT HOME, I have the VKGL data loaded but only for chr1. May be very, very old data (Sep 2021?).
+// FIXME: When the position converter returns mappings that Mutalyzer cannot generate a protein change for because the
+//  transcript or later versions of it is not found in the NC, we skip the transcript, and we don't store it, either.
+//  This can be improved on, by taking in mappings that map into locations that we can generate the protein change for.
+//  Notes: Position converter descriptions are *not* normalized. For variants on the reverse strand, this is a problem.
+//         If you fix this, remove "numberConversion" as a method from the cache, so all variants will be repeated.
+//         Perhaps VV can help here, it may provide more mappings and surely is a lot faster.
+// FIXME: Fix conflicts if on different genes, they can be regarded as non-conflicts.
 
 // Command line only.
 if (isset($_SERVER['HTTP_HOST'])) {
@@ -538,9 +536,6 @@ $_CONFIG['user'] = array_merge($_CONFIG['user'], $_SETT);
 if ($_CONFIG['flags']['y']) {
     foreach ($_CONFIG['user'] as $Value) {
         if (!$Value) {
-var_dump("WHAT THTE FUCK!!!!!!!!!");
-var_dump($_CONFIG['user']);exit;
-// FIXME: This never ever happens anymore of course, ADD OUTPUT so I won't waste my fucking time on this ever again. It included a new center in the settings, and that center didn't have an LOVD ID, so it started verifying the entire fucking settings file, asking a million questions.
             $_CONFIG['flags']['y'] = false;
             break;
         }
@@ -598,8 +593,6 @@ lovd_saveSettings();
 // Open connection, and check if user accounts exist.
 lovd_printIfVerbose(VERBOSITY_HIGH,
     '  Connecting to LOVD...');
-// FUCKING BULLSHIT. I can't do ../../processblabla BECAUSE FUCKING LOVD_CLEANDIRNAME() KEEPS LOOPING AND IT FUCKS EVERYTHING UP WASTING HOURS AND HOIURS OF MY FUCKING TIME!!!!!!!
-// FUCKING CUNT IS FINE WITH ../processFUCKMYLIFE! WHAT THE FUCK IS WRONG WITH THIS BULLSHIT!!!!!
 
 // Find LOVD installation, run it's inc-init.php to get DB connection, initiate $_SETT, etc.
 define('ROOT_PATH', $_CONFIG['user']['lovd_path'] . '/');
@@ -1558,10 +1551,6 @@ foreach ($aData as $sVariant => $aVariant) {
         // We're not using lovd_getRNAProteinPrediction() because that's using runMutalyzerLight,
         //  and we already did that stuff. Also, this code below is better in predicting good RNA values.
         // We will be borrowing quite some logic though. It would be better if this was solved.
-        // FIXME: I can't use VV's getRNAProteinPrediction() either, as it's a private function.
-        //        Should it be? I don't think it should be; it doesn't depend on VV at all.
-        //        I might even have doubted to put that in the VV at all,
-        //         but I guess VV needed it and I wanted the VV library to be as independent as possible.
         $aMapping['RNA'] = 'r.(?)'; // Default.
         if ($aMapping['type'] == '=') {
             $aMapping['RNA'] = 'r.(=)';
@@ -2057,7 +2046,6 @@ foreach ($aData as $sVariant => $aVariant) {
                     );
                     if ($bRemarksNonPublic) {
                         // Also report differences.
-                        // FIXME: When an entry gets deleted, this is not mentioned in the JSON. Updates remains empty.
                         if ($sKey == 'vots') {
                             // We won't report changes per field here, just per transcript.
                             // But, only report differences in VOTs that are not the classification.
