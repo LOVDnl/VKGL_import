@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-27 (based on format_raw_VKGL_files.php)
- * Modified    : 2026-03-30
+ * Modified    : 2026-04-28
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -210,6 +210,10 @@ class Formatter
                     $aVariant['alt'] = $aVariant['alt_orig'];
                 case 'alissa_snv_tsv':
                     // Alissa data was always hg19.
+                    if ($aVariant['chromosome'] == 'MT') {
+                        // Chromosome "MT" is not accepted by the HGVS library; make it "M", instead.
+                        $aVariant['chromosome'] = 'M';
+                    }
                     $this->data[$sCenter][$sDataType][] = [
                         'genomic_native' => "hg19:{$aVariant['chromosome']}:{$aVariant['start']}:{$aVariant['ref']}:{$aVariant['alt']}",
                         'classification' => $this->convertClassification($aVariant['classification']),
