@@ -14,10 +14,12 @@
 
 // New pipeline, running everything fully automated and reducing the time spent on manual verification even more.
 define('ROOT_PATH', __DIR__);
+require_once(ROOT_PATH . '/aggregator.php');
 require_once(ROOT_PATH . '/formatter.php');
 require_once(ROOT_PATH . '/log.php');
 require_once(ROOT_PATH . '/settings.php');
 use LOVD\VKGL\Formatter;
+use LOVD\VKGL\Aggregator;
 use LOVD\Log;
 use LOVD\Settings;
 $Settings = new Settings();
@@ -253,4 +255,39 @@ if ($Status->get('step') < $nStep) {
     }
 
     $Status->set('step', $nStep);
+}
+// Step 3: Normalizer
+$nStep++;
+//This is where the normalizer script will be called and executed.
+
+// Step 4: aggregator
+$nStep++;
+if ($Status->get('step') < $nStep) {
+    $Log->add("Parsing the VKGL data files...");
+    try {
+        $o = Aggregator::aggregate($Status->get('output_files|normalized'));
+    } catch (Exception $e) {
+        $Log->add("Failed to parse the data files.\n" . $e->getMessage() . '.', '!!');
+        die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
+    }
+
+    $sOutputFile = 'vkgl_data.03-aggregated.' . date('Y-m-d.H.i.s') . '.tsv';
+    if (!$o->saveFile($sOutputFile)) {
+        $Log->add("Failed to save the result to $sOutputFile.", '!!');
+        die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
+    }
+    $Log->add("Successfully created $sOutputFile.", 'OK');
+    $Status->set('output_files|aggregated', $sOutputFile);
+
+    if ($o->hasConflicts()) {
+        $sConflictOutputFile = str_replace('.tsv', '.errors.tsv', $sOutputFile);
+        if (!$o->saveConflicts($sConflictOutputFile)) {
+            $Log->add("Failed to save the errors to $sConflictOutputFile.", '!!');
+            die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
+        }
+        $Log->add("Conflicts occurred, successfully created $sConflictOutputFile.", 'OK');
+        $Status->set('error_files|aggregated', $sConflictOutputFile);
+    }
+
+    //$Status->set('step', $nStep);
 }
