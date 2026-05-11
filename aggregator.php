@@ -17,6 +17,7 @@ namespace LOVD\VKGL;
 class Aggregator
 {
     private array $data = [];
+    private array $data_rejected = [];
     private array $data_output_header = [
             'center',
             'type',
@@ -25,12 +26,20 @@ class Aggregator
             'genomic_liftover_normalized',
             'genomic_liftover_reported',
             'classification',
+            'status',
             'gene',
             'transcript',
             'cDNA',
             'protein',
-            'annotation',
-            'status'
+            'annotation'
+    ];
+    private array $data_rejected_output_header = [
+            'center',
+            'type',
+            'genomic_native_normalized',
+            'genomic_native_reported',
+            'classifications',
+            'status',
     ];
 
     public static function aggregate (string $sFile): Aggregator
@@ -125,7 +134,15 @@ class Aggregator
                             $aMergedVariant[$sColumn] = Aggregator::Merge($aValues);
                         }
                     }
+                    //This is where the created line will be written into the output file.
                     $this->data[$sVariant][$sCenter] = $aMergedVariant;
+                    //This is where the data will be written into another output file if a conflict occured.
+                    if ($this->data[$sVariant][$sCenter]['classification'] == 'conflicting') {
+                        $this->data_rejected[$sVariant][$sCenter]['type'] = $this->data[$sVariant][$sCenter]['type'];
+                        $this->data_rejected[$sVariant][$sCenter]['genomic_native_reported'] = $this->data[$sVariant][$sCenter]['genomic_native_reported'];
+                        $this->data_rejected[$sVariant][$sCenter]['classifications'] = implode(", ",$this->data[$sVariant][$sCenter]['annotation']['classification']);
+                        $this->data_rejected[$sVariant][$sCenter]['status'] = 'internal_opposite';
+                    }
                 }
             }
         }
