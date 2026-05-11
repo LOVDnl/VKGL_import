@@ -38,6 +38,7 @@ class Aggregator
         $o = new Aggregator();
         $o->parse($sFile);
         $o->groupByCenter();
+        $o->compareCenters();
         return $o;
     }
 
@@ -234,6 +235,142 @@ class Aggregator
             $sUniqueValues = implode(", ", array_unique($aCreateUniqueValues));
         }
         return $sUniqueValues;
+    }
+
+    public function compareCenters(): bool
+    {
+        //In this function the values between different centers will be compared.
+        foreach ($this->data as $sVariant => $aData) {
+            if (count($aData) == 1) {
+                //If there is one center for a variant, we are looking at the classification to decide the status.
+                $sCenter = array_key_first($aData);
+                if ($aData[$sCenter]['classification'] == 'conflicting') {
+                    $this->data[$sVariant][$sCenter]['status'] = 'internal_opposite';
+                } else {
+                    $this->data[$sVariant][$sCenter]['status'] = 'single_lab';
+                }
+            } else {
+                $aClassifications = [];
+                //If there are multiple centers for one variant, it is checked if one or more
+                //of the centers have 'conflicting' as the classification.
+                foreach ($aData as $sCenter => $aVariantObservation) {
+                    if ($aVariantObservation['classification'] == 'conflicting') {
+                        $this->data[$sVariant][$sCenter]['status'] = 'internal_opposite';
+                    } else {
+                        $aClassifications[$sCenter] = $aVariantObservation['classification'];
+                    }
+                }
+                //Then it will be checked if there are still multiple centers for this variant.
+                if (count($aClassifications) == 1) {
+                    $this->data[$sVariant][$sCenter]['status'] = 'single_lab';
+                } elseif (count($aClassifications) > 1) {
+                    //If there are more than one center for the variant, the classifications
+                    //are compared to decide the status.
+                    $aClassificationsFlip = array_flip($aClassifications);
+                    if (count(array_unique($aClassificationsFlip)) == 1) {
+                        foreach ($aClassifications as $sCenter => $sClassification) {
+                            $this->data[$sVariant][$sCenter]['status'] = 'consensus';
+                        }
+                    } else {
+                         if ((isset($aClassificationsFlip['B']) || isset($aClassificationsFlip['LB']))
+                                && (isset($aClassificationsFlip['P']) || isset($aClassificationsFlip['LP']))) {
+                             $sClassifications = '';
+                             foreach ($aClassifications as $sCenters => $aClassification) {
+                                 if ($sClassifications == '') {
+                                     $sClassifications .= $sCenters . ": " . $aClassification;
+                                 } else {
+                                     $sClassifications .= ", " . $sCenters . ": " . $aClassification;
+                                 }
+                             }
+                            foreach ($aClassifications as $sCenter => $sClassification) {
+                                //This is where the created line will be written into the output file.
+                                $this->data[$sVariant][$sCenter]['status'] = 'external_opposite';
+                                //This is where the data will be written into another output file if a conflict occured.
+                                $this->data_rejected[$sVariant][$sCenter]['type'] = $this->data[$sVariant][$sCenter]['type'];
+                                $this->data_rejected[$sVariant][$sCenter]['genomic_native_reported'] = $this->data[$sVariant][$sCenter]['genomic_native_reported'];
+                                $this->data_rejected[$sVariant][$sCenter]['classifications'] = $sClassifications;
+                                $this->data_rejected[$sVariant][$sCenter]['status'] = 'external_opposite';
+                            }
+                        } elseif (isset($aClassificationsFlip['VUS'])) {
+                            foreach ($aClassifications as $sCenter => $sClassification) {
+                                $this->data[$sVariant][$sCenter]['status'] = 'non_consensus';
+                            }
+                        }else {
+                            foreach ($aClassifications as $sCenter => $sClassification) {
+                                $this->data[$sVariant][$sCenter]['status'] = 'consensus';
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    public function saveFile($sOutputFile): bool
+    {
+        //Save the data to disk.
+        $aData = [implode("\t", $this->data_output_header)];
+        foreach ($this->data as $sVariant => $aVariantObservations) {
+            foreach ($aVariantObservations as $sCenter => $aVariantObservation) {
+                //This is where the columns 'genomic_native_normalized' and 'center' are
+                //added to the final file.
+                $aVariantObservation['genomic_native_normalized'] = $sVariant;
+                $aVariantObservation['center'] = $sCenter;
+                //Creating an array which contains all information of the variant.
+                $aLine = [];
+                foreach ($this->data_output_header as $sField) {
+                    $Value = ($aVariantObservation[$sField] ?? '');
+                    if ($sField == 'annotation' && $Value) {
+                        $Value = json_encode($Value);
+                    }
+                    $aLine[] = $Value;
+                }
+                //Imploding the array, which results in all values going in the correct column.
+                $aData[] = implode("\t", $aLine);
+            }
+        }
+        $aData[] = '';
+
+        //This is where the filled data file is returned to 'run_pipeline.php' where it is saved as a file.
+        return (bool) File_put_contents(
+                $sOutputFile,
+                implode("\r\n", $aData)
+        );
+    }
+
+    public function hasConflicts(): bool
+    {
+        //This functions checks if there are conflicts found in the data.
+        return (bool) count($this->data_rejected);
+    }
+
+    public function saveConflicts(string $sConflictOutputFile): bool
+    {
+        // Save conflicts to disk.
+        $aData = [implode("\t", $this->data_rejected_output_header)];
+        foreach ($this->data_rejected as $sVariant => $aVariantObservations) {
+            foreach ($aVariantObservations as $sCenter => $aVariantObservation) {
+                //This is where the columns 'genomic_native_normalized' and 'center' are
+                //added to the final file.
+                $aVariantObservation['genomic_native_normalized'] = $sVariant;
+                $aVariantObservation['center'] = $sCenter;
+                //Creating an array which contains all information of the variant.
+                $aLine = [];
+                foreach ($this->data_rejected_output_header as $sField) {
+                    $Value = ($aVariantObservation[$sField] ?? '');
+                    $aLine[] = $Value;
+                }
+                //Imploding the array, which results in all values going in the correct column.
+                $aData[] = implode("\t", $aLine);
+            }
+        }
+        $aData[] = '';
+        //This is where the filled data file is returned to 'run_pipeline.php' where it is saved as a file.
+        return (bool) File_put_contents(
+                $sConflictOutputFile,
+                implode("\r\n", $aData)
+        );
     }
 
 }
