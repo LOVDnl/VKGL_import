@@ -59,15 +59,17 @@ class Aggregator
 
         foreach ($aLines as $nLine => $sLine) {
             $aDataLine = explode("\t", rtrim($sLine));
-            // Trim quotes off of the data
+            // Trim quotes off of the data.
             $aDataLine = array_map(function($sData) {
                 return trim($sData,'"');
             }, $aDataLine);
             $nDataColumns = count($aDataLine);
             if ($nHeaders > $nDataColumns) {
+                //We accidently trimmed of empty fields.
                 $aDataLine = array_pad($aDataLine, $nHeaders, '');
             }
            $aVariantObservations = array_combine($aHeaders, $aDataLine);
+            //Creating format in which the data will be stored.
             $this->data[$aVariantObservations['genomic_native_normalized']][$aVariantObservations['center']][] = [
                     'type' => $aVariantObservations['type'],
                     'genomic_native_reported' => $aVariantObservations['genomic_native_reported'],
@@ -86,6 +88,8 @@ class Aggregator
 
     public function groupByCenter(): bool
     {
+        //In this function we are checking if there are multiple lines
+        //of the same variant within one center.
         foreach ($this->data as $sVariant => $aData) {
             foreach ($aData as $sCenter => $aObservations) {
                 if (count($aObservations) == 1) {
@@ -93,9 +97,13 @@ class Aggregator
                     Aggregator::createReportedAs($aObservations[0]);
                     $this->data[$sVariant][$sCenter] = $aObservations[0];
                 } else {
+                    //If there are more than one line, we need to check or combine the columns.
                     foreach ($aObservations as $i => $aVariantObservation) {
                        $aVariantObservation['annotation'] = json_decode($aVariantObservation['annotation'], true);
+                       //This function combines multiple columns to combine them into the column 'annotation'.
                        Aggregator::createReportedAs($aVariantObservation);
+                       //Adding classifications to annotation, this way the original classification is saved if the
+                       //classification column is changed to something else.
                        $aVariantObservation['annotation']['classification'] = $aVariantObservation['classification'];
                        $aVariantObservations[$i] = $aVariantObservation;
                     }
@@ -105,6 +113,7 @@ class Aggregator
                         foreach ($aVariantObservations as $aVariantObservation) {
                             $aValues[] = $aVariantObservation[$sColumn];
                         }
+                        //This is where the other columns are checked or combined.
                         if ($sColumn == 'type' || $sColumn == 'genomic_liftover_normalized') {
                             $aMergedVariant[$sColumn] = Aggregator::checkUniqueOrDie($aValues);
                         } elseif ($sColumn == 'classification') {
@@ -124,6 +133,8 @@ class Aggregator
 
     public function createReportedAs(array &$aVariantObservation)
     {
+        //This function combines the columns: 'gene', 'transcript', 'cDNA', and 'protein' are combined
+        //to create the column 'reported_as' in 'annotation'.
         $sReportedAs = '';
         if ($aVariantObservation['gene']) {
             $sReportedAs .= $aVariantObservation['gene'];
@@ -148,6 +159,9 @@ class Aggregator
 
     public function checkUniqueOrDie($aMustBeUnique): string
     {
+        //This functions checks if the values are the same by checking if
+        //there is only one unique value.
+        //If there are more than one unique value, the script will stop.
         if (count(array_unique($aMustBeUnique)) == 1) {
             $sUnique = $aMustBeUnique[0];
         } else {
@@ -162,6 +176,10 @@ class Aggregator
     }
     public function checkClassifications($aClassifications): string
     {
+        //In this function the classifications are compared.
+        //If there is one unique classification, it is kept.
+        //If there are more than one unique classification, they need to be compared.
+        //A conclusion will be drawn from the comparison.
         if (count(array_unique($aClassifications)) == 1) {
             $sClassification = $aClassifications[0];
         } else {
@@ -184,6 +202,11 @@ class Aggregator
 
     public function checkAnnotation($aAnnotation): array
     {
+        //This function checks if the column 'annotation' is empty or not.
+        //If it is empty it will be returned as an empty array.
+        //If there is one 'annotation' array it will be returned with no changes.
+        //If there are multiple 'annotation' arrays, they will be merged to form
+        //one 'annotation' array. The merged array is returned.
         $aAnnotation = array_filter($aAnnotation);
         if (!$aAnnotation) {
             return [];
@@ -203,6 +226,7 @@ class Aggregator
 
     public function Merge($aCreateUniqueValues): string
     {
+        //This function merges the other columns that have not been checked by the other functions.
         $aCreateUniqueValues = array_filter($aCreateUniqueValues);
         if (count(array_unique($aCreateUniqueValues)) == 1) {
             $sUniqueValues = $aCreateUniqueValues[0];
