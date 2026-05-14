@@ -80,18 +80,10 @@ class Aggregator
             }
            $aVariantObservations = array_combine($aHeaders, $aDataLine);
             //Creating format in which the data will be stored.
-            $this->data[$aVariantObservations['genomic_native_normalized']][$aVariantObservations['center']][] = [
-                    'type' => $aVariantObservations['type'],
-                    'genomic_native_reported' => $aVariantObservations['genomic_native_reported'],
-                    'genomic_liftover_normalized' => $aVariantObservations['genomic_liftover_normalized'],
-                    'genomic_liftover_reported' => $aVariantObservations['genomic_liftover_reported'],
-                    'classification' => $aVariantObservations['classification'],
-                    'gene' => $aVariantObservations['gene'],
-                    'transcript' => $aVariantObservations['transcript'],
-                    'cDNA' => $aVariantObservations['cDNA'],
-                    'protein' => $aVariantObservations['protein'],
-                    'annotation' => $aVariantObservations['annotation']
-                ];
+            $aGenomic_native_normalized = $aVariantObservations['genomic_native_normalized'];
+            $aCenter = $aVariantObservations['center'];
+            unset($aVariantObservations['genomic_native_normalized'],$aVariantObservations['center']);
+            $this->data[$aGenomic_native_normalized][$aCenter][] = $aVariantObservations;
         }
         return true;
     }
