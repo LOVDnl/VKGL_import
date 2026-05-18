@@ -1,0 +1,3 @@
+[submodule "libs/HGVS-syntax-checker"]
+	path = libs/HGVS-syntax-checker
+	url = git@github.com:LOVDnl/HGVS-syntax-checker.git
