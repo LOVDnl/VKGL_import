@@ -51,7 +51,11 @@ class Aggregator
         return $o;
     }
 
-    public function parse(string $sFile): bool
+
+
+
+
+    public function parse (string $sFile): bool
     {
         // Parse every file, and add the contents to $this->data.
         if (!file_exists($sFile) || !is_readable($sFile)) {
@@ -75,20 +79,24 @@ class Aggregator
             }, $aDataLine);
             $nDataColumns = count($aDataLine);
             if ($nHeaders > $nDataColumns) {
-                //We accidently trimmed of empty fields.
+                // We accidentally trimmed off empty fields.
                 $aDataLine = array_pad($aDataLine, $nHeaders, '');
             }
-           $aVariantObservations = array_combine($aHeaders, $aDataLine);
-            //Creating format in which the data will be stored.
-            $aGenomic_native_normalized = $aVariantObservations['genomic_native_normalized'];
-            $aCenter = $aVariantObservations['center'];
+            $aVariantObservations = array_combine($aHeaders, $aDataLine);
+            // Creating format in which the data will be stored.
+            $sGenomicNativeNormalized = $aVariantObservations['genomic_native_normalized'];
+            $sCenter = $aVariantObservations['center'];
             unset($aVariantObservations['genomic_native_normalized'],$aVariantObservations['center']);
             $this->data[$aGenomic_native_normalized][$aCenter][] = $aVariantObservations;
         }
         return true;
     }
 
-    public function groupByCenter(): bool
+
+
+
+
+    public function groupByCenter (): bool
     {
         // In this function the data is grouped based on center, this way
         //  all variants from the same center are together.
@@ -108,14 +116,14 @@ class Aggregator
                     Aggregator::createReportedAs($aObservations[0]);
                     $this->data[$sVariant][$sCenter] = $aObservations[0];
                 } else {
-                    //If there are more than one line, we need to check or combine the columns.
+                    // If there are more than one line, we need to check or combine the columns.
                     foreach ($aObservations as $i => $aVariantObservation) {
                        $aVariantObservation['annotation'] = json_decode($aVariantObservation['annotation'], true);
                        // This function will combine the columns 'gene', 'transcript', 'cDNA', and 'protein' into one array
                        //  which will be combined with the existing column 'annotation' to form the new 'annotation' column.
                        Aggregator::createReportedAs($aVariantObservation);
-                       //Adding classifications to annotation, this way the original classification is saved if the
-                       //classification column is changed to something else.
+                       // Adding classifications to annotation, this way the original classification is saved if the
+                       //  classification column is changed to something else.
                        $aVariantObservation['annotation']['classification'] = $aVariantObservation['classification'];
                        $aVariantObservations[$i] = $aVariantObservation;
                     }
@@ -146,9 +154,9 @@ class Aggregator
                             $aMergedVariant[$sColumn] = Aggregator::Merge($aValues);
                         }
                     }
-                    //This is where the created line will be written into the output file.
+                    // This is where the created line will be saved if no error or conflict occurred.
                     $this->data[$sVariant][$sCenter] = $aMergedVariant;
-                    //This is where the data will be written into another output file if a conflict occured.
+                    // This is where the data will be saved if the classification resulted in a conflict.
                     if ($this->data[$sVariant][$sCenter]['classification'] == 'conflicting') {
                         $this->data_rejected[$sVariant][$sCenter]['type'] = $this->data[$sVariant][$sCenter]['type'];
                         $this->data_rejected[$sVariant][$sCenter]['genomic_native_reported'] = $this->data[$sVariant][$sCenter]['genomic_native_reported'];
@@ -161,7 +169,11 @@ class Aggregator
         return true;
     }
 
-    public function createReportedAs(array &$aVariantObservation)
+
+
+
+
+    public function createReportedAs (array &$aVariantObservation)
     {
         // This function combines the columns: 'gene', 'transcript', 'cDNA', and 'protein' are combined
         //  to create the string 'reported_as' in 'annotation'.
@@ -194,11 +206,14 @@ class Aggregator
     }
 
 
-    public function checkUniqueOrDie($aMustBeUnique): string
+
+
+
+    public function checkUniqueOrDie ($aMustBeUnique): string
     {
-        //This functions checks if the values are the same by checking if
-        //there is only one unique value.
-        //If there are more than one unique value, the script will stop.
+        // This functions checks if the values are the same by checking if
+        //  there is only one unique value.
+        // If there are more than one unique value, the script will stop.
         if (count(array_unique($aMustBeUnique)) == 1) {
             $sUnique = $aMustBeUnique[0];
         } else {
@@ -211,12 +226,17 @@ class Aggregator
         }
         return $sUnique;
     }
-    public function checkClassifications($aClassifications): string
+
+
+
+
+
+    public function checkClassifications ($aClassifications): string
     {
-        //In this function the classifications are compared.
-        //If there is one unique classification, it is kept.
-        //If there are more than one unique classification, they need to be compared.
-        //A conclusion will be drawn from the comparison.
+        // In this function the classifications are compared.
+        // If there is one unique classification, it is kept.
+        // If there are more than one unique classification, they need to be compared.
+        // A conclusion will be drawn from the comparison.
         if (count(array_unique($aClassifications)) == 1) {
             $sClassification = $aClassifications[0];
         } else {
@@ -237,7 +257,7 @@ class Aggregator
                 // Still multiple values. LB/B to LB, LP/P to LP.
                 if (isset($aClassifications['B']) && isset($aClassifications['LB'])) {
                     $sClassification = 'LB';
-                } elseif(isset($aClassificationsFlip['P']) && isset($aClassificationsFlip['LP'])) {
+                } elseif (isset($aClassifications['P']) && isset($aClassifications['LP'])) {
                     $sClassification = 'LP';
                 }
             }
@@ -245,15 +265,19 @@ class Aggregator
         return $sClassification;
     }
 
-    public function checkAnnotation($aAnnotation): array
+
+
+
+
+    public function checkAnnotation ($aAnnotations): array
     {
-        //This function checks if the column 'annotation' is empty or not.
-        //If it is empty it will be returned as an empty array.
-        //If there is one 'annotation' array it will be returned with no changes.
-        //If there are multiple 'annotation' arrays, they will be merged to form
-        //one 'annotation' array. The merged array is returned.
-        $aAnnotation = array_filter($aAnnotation);
-        if (!$aAnnotation) {
+        // This function checks if the column 'annotation' is empty or not.
+        // If it is empty it will be returned as an empty array.
+        // If there is one 'annotation' array it will be returned with no changes.
+        // If there are multiple 'annotation' arrays, they will be merged to form
+        // one 'annotation' array. The merged array is returned.
+        $aAnnotations = array_filter($aAnnotations);
+        if (!$aAnnotations) {
             return [];
         } elseif (count($aAnnotation) == 1) {
             return array_values($aAnnotation);
@@ -276,12 +300,16 @@ class Aggregator
         }
     }
 
-    public function Merge($aCreateUniqueValues): string
+
+
+
+
+    public function Merge ($aCreateUniqueValues): string
     {
         // For the columns 'genomic_native_reported' and 'genomic_liftover_reported' they can contain
         // multiple unique value. For each of these columns the values will be merged if there are
         // multiple values.
-        
+
         // This function merges the other columns that have not been checked by the other functions.
         $aCreateUniqueValues = array_filter($aCreateUniqueValues);
         if (count(array_unique($aCreateUniqueValues)) == 1) {
@@ -292,12 +320,16 @@ class Aggregator
         return $sUniqueValues;
     }
 
-    public function compareCenters(): bool
+
+
+
+
+    public function compareCenters (): bool
     {
-        //In this function the values between different centers will be compared.
+        // In this function the values between different centers will be compared.
         foreach ($this->data as $sVariant => $aData) {
             if (count($aData) == 1) {
-                //If there is one center for a variant, we are looking at the classification to decide the status.
+                // If there is one center for a variant, we are looking at the classification to decide the status.
                 $sCenter = array_key_first($aData);
                 if ($aData[$sCenter]['classification'] == 'conflicting') {
                     $this->data[$sVariant][$sCenter]['status'] = 'internal_opposite';
@@ -306,8 +338,8 @@ class Aggregator
                 }
             } else {
                 $aClassifications = [];
-                //If there are multiple centers for one variant, it is checked if one or more
-                //of the centers have 'conflicting' as the classification.
+                // If there are multiple centers for one variant, it is checked if one or more
+                // of the centers have 'conflicting' as the classification.
                 foreach ($aData as $sCenter => $aVariantObservation) {
                     if ($aVariantObservation['classification'] == 'conflicting') {
                         $this->data[$sVariant][$sCenter]['status'] = 'internal_opposite';
@@ -315,7 +347,7 @@ class Aggregator
                         $aClassifications[$sCenter] = $aVariantObservation['classification'];
                     }
                 }
-                //Then it will be checked if there are still multiple centers for this variant.
+                // Then it will be checked if there are still multiple centers for this variant.
                 if (count($aClassifications) == 1) {
                     $this->data[$sVariant][$sCenter]['status'] = 'single_lab';
                 } elseif (count($aClassifications) > 1) {
@@ -359,7 +391,7 @@ class Aggregator
                             foreach ($aClassifications as $sCenter => $sClassification) {
                                 $this->data[$sVariant][$sCenter]['status'] = 'non_consensus';
                             }
-                        }else {
+                        } else {
                             foreach ($aClassifications as $sCenter => $sClassification) {
                                 $this->data[$sVariant][$sCenter]['status'] = 'consensus';
                             }
@@ -371,17 +403,21 @@ class Aggregator
         return true;
     }
 
-    public function saveFile($sOutputFile): bool
+
+
+
+
+    public function saveFile ($sOutputFile): bool
     {
-        //Save the data to disk.
+        // Save the data to disk.
         $aData = [implode("\t", $this->data_output_header)];
         foreach ($this->data as $sVariant => $aVariantObservations) {
             foreach ($aVariantObservations as $sCenter => $aVariantObservation) {
-                //This is where the columns 'genomic_native_normalized' and 'center' are
-                //added to the final file.
+                // This is where the columns 'genomic_native_normalized' and 'center' are
+                // added to the final file.
                 $aVariantObservation['genomic_native_normalized'] = $sVariant;
                 $aVariantObservation['center'] = $sCenter;
-                //Creating an array which contains all information of the variant.
+                // Creating an array which contains all information of the variant.
                 $aLine = [];
                 foreach ($this->data_output_header as $sField) {
                     $Value = ($aVariantObservation[$sField] ?? '');
@@ -390,7 +426,7 @@ class Aggregator
                     }
                     $aLine[] = $Value;
                 }
-                //Imploding the array, which results in all values going in the correct column.
+                // Imploding the array, which results in all values going in the correct column.
                 $aData[] = implode("\t", $aLine);
             }
         }
@@ -403,29 +439,37 @@ class Aggregator
         );
     }
 
-    public function hasConflicts(): bool
+
+
+
+
+    public function hasConflicts (): bool
     {
-        //This functions checks if there are conflicts found in the data.
+        // This functions checks if there are conflicts found in the data.
         return (bool) count($this->data_rejected);
     }
 
-    public function saveConflicts(string $sConflictOutputFile): bool
+
+
+
+
+    public function saveConflicts (string $sConflictOutputFile): bool
     {
         // Save conflicts to disk.
         $aData = [implode("\t", $this->data_rejected_output_header)];
         foreach ($this->data_rejected as $sVariant => $aVariantObservations) {
             foreach ($aVariantObservations as $sCenter => $aVariantObservation) {
-                //This is where the columns 'genomic_native_normalized' and 'center' are
-                //added to the final file.
+                // This is where the columns 'genomic_native_normalized' and 'center' are
+                // added to the final file.
                 $aVariantObservation['genomic_native_normalized'] = $sVariant;
                 $aVariantObservation['center'] = $sCenter;
-                //Creating an array which contains all information of the variant.
+                // Creating an array which contains all information of the variant.
                 $aLine = [];
                 foreach ($this->data_rejected_output_header as $sField) {
                     $Value = ($aVariantObservation[$sField] ?? '');
                     $aLine[] = $Value;
                 }
-                //Imploding the array, which results in all values going in the correct column.
+                // Imploding the array, which results in all values going in the correct column.
                 $aData[] = implode("\t", $aLine);
             }
         }
