@@ -90,11 +90,20 @@ class Aggregator
 
     public function groupByCenter(): bool
     {
-        //In this function we are checking if there are multiple lines
-        //of the same variant within one center.
+        // In this function the data is grouped based on center, this way
+        //  all variants from the same center are together.
+        // The next step is to check the amount of a variant within one center.
+        // If there are more than one, the columns are compared to see if they are different.
+        // Some columns will be merged (example: if there are different genes), some will give
+        //  an error (example: if the type is different), and sometimes a conclusion is drawn
+        //  based on the difference (example: the classification will say 'conflicting'
+        //  if the classifications are opposite).
         foreach ($this->data as $sVariant => $aData) {
             foreach ($aData as $sCenter => $aObservations) {
                 if (count($aObservations) == 1) {
+                    // If the variant is found once in a center, the 'annotation' column is decoded to be able to add
+                    //  different values to the column. In this case the columns 'gene', 'transcript', 'cDNA', 'protein'
+                    //  will combine in an array with key 'reported_as' which will be added to 'annotation'.
                     $aObservations[0]['annotation'] = json_decode($aObservations[0]['annotation'], true);
                     Aggregator::createReportedAs($aObservations[0]);
                     $this->data[$sVariant][$sCenter] = $aObservations[0];
@@ -102,20 +111,31 @@ class Aggregator
                     //If there are more than one line, we need to check or combine the columns.
                     foreach ($aObservations as $i => $aVariantObservation) {
                        $aVariantObservation['annotation'] = json_decode($aVariantObservation['annotation'], true);
-                       //This function combines multiple columns to combine them into the column 'annotation'.
+                       // This function will combine the columns 'gene', 'transcript', 'cDNA', and 'protein' into one array
+                       //  which will be combined with the existing column 'annotation' to form the new 'annotation' column.
                        Aggregator::createReportedAs($aVariantObservation);
                        //Adding classifications to annotation, this way the original classification is saved if the
                        //classification column is changed to something else.
                        $aVariantObservation['annotation']['classification'] = $aVariantObservation['classification'];
                        $aVariantObservations[$i] = $aVariantObservation;
                     }
+                    // This is where the data is saved after checking what needs to be done with the value of each column
+                    //  if multiple of the same variant were found within the same center.
                     $aMergedVariant = [];
                     foreach (array_keys($aVariantObservations[0]) as $sColumn) {
+                        // For each column the information of one variant (which has been found multiple times in the same center)
+                        //  will be combined in $aValues. This way the values can be compared based on column.
                         $aValues = [];
                         foreach ($aVariantObservations as $aVariantObservation) {
                             $aValues[] = $aVariantObservation[$sColumn];
                         }
-                        //This is where the other columns are checked or combined.
+                        // The columns 'type', 'genomic_liftover_normalized', 'classification', 'annotation'
+                        //  'genomic_native_reported', and 'genomic_liftover_reported' will be compared individually.
+                        // Different strategies will be applied in the process of comparing values.
+                        // For some columns the values MUST be unique, otherwise the script will be stopped.
+                        // The values of the column 'classifications' will be handled separately.
+                        // The column 'annotation' will be merged recursively.
+                        // For each of the remaining columns the values are combined into a single string.
                         if ($sColumn == 'type' || $sColumn == 'genomic_liftover_normalized') {
                             $aMergedVariant[$sColumn] = Aggregator::checkUniqueOrDie($aValues);
                         } elseif ($sColumn == 'classification') {
@@ -143,8 +163,15 @@ class Aggregator
 
     public function createReportedAs(array &$aVariantObservation)
     {
-        //This function combines the columns: 'gene', 'transcript', 'cDNA', and 'protein' are combined
-        //to create the column 'reported_as' in 'annotation'.
+        // This function combines the columns: 'gene', 'transcript', 'cDNA', and 'protein' are combined
+        //  to create the string 'reported_as' in 'annotation'.
+        // The string 'reported_as' will follow a specific format, but because
+        //  there is a possibility not all columns contain values the format may not always
+        //  be complete, this is the reason if-loops are used to check.
+        // The format is as follows: gene transcript:cDNA (protein)
+        // Examples:
+        // "reported_as":"NM_002529.4" (contains only transcript)
+        // "reported_as":"FAM87A NM_005874.1 (NP_560236.2)" (contains gene, transcript, and protein)
         $sReportedAs = '';
         if ($aVariantObservation['gene']) {
             $sReportedAs .= $aVariantObservation['gene'];
@@ -193,14 +220,22 @@ class Aggregator
         if (count(array_unique($aClassifications)) == 1) {
             $sClassification = $aClassifications[0];
         } else {
-            $aClassificationsFlip = array_flip($aClassifications);
-            if ((isset($aClassificationsFlip['B']) || isset($aClassificationsFlip['LB']))
-                    && (isset($aClassificationsFlip['P']) || isset($aClassificationsFlip['LP']))) {
+            // We have seen multiple classifications of this variant.
+            // Rules: report opposites; */VUS to VUS; LB/B to LB; LP/P to LP.
+            // Flipping the array makes the values unique and makes it easier to work with the values;
+            //  isset()s are faster than array_search() and in_array().
+            $aClassifications = array_flip($aClassifications);
+            if ((isset($aClassifications['B']) || isset($aClassifications['LB']))
+                    && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
+                // Internal conflict within center. These are reported in the opposites file.
+                // Change column 'classification' to conflicting, we want to store the conflict to report this in LOVD in a non-public entry.
                 $sClassification = 'conflicting';
-            } elseif (isset($aClassificationsFlip['VUS'])) {
+            } elseif (isset($aClassifications['VUS'])) {
+                // VUS and something else, not a conflict. OK, VUS then.
                 $sClassification = 'VUS';
             } else {
-                if (isset($aClassificationsFlip['B']) && isset($aClassificationsFlip['LB'])) {
+                // Still multiple values. LB/B to LB, LP/P to LP.
+                if (isset($aClassifications['B']) && isset($aClassifications['LB'])) {
                     $sClassification = 'LB';
                 } elseif(isset($aClassificationsFlip['P']) && isset($aClassificationsFlip['LP'])) {
                     $sClassification = 'LP';
@@ -223,8 +258,15 @@ class Aggregator
         } elseif (count($aAnnotation) == 1) {
             return array_values($aAnnotation);
         } else {
-            $aMerged = array_merge_recursive(...$aAnnotation);
-            return array_map(function($aUniqueValue){
+            // This is where the arrays in $aAnnotations are merged recursively,
+            //  this way the arrays are merged correctly.
+            // This way the zygosity, protocol, and reported_as stay seperated.
+            $aMerged = array_merge_recursive(...$aAnnotations);
+            // Now the arrays are merged, the next step is to check for each
+            //  part (zygosity, protocol, and reported_as) to see if they are an array.
+            // If it is an array, only the unique values are used.
+            // If it is not an array, it means there is only one value.
+            return array_map(function($aUniqueValue) {
                 if (is_array($aUniqueValue)) {
                     return array_unique($aUniqueValue);
                 } else {
@@ -236,7 +278,11 @@ class Aggregator
 
     public function Merge($aCreateUniqueValues): string
     {
-        //This function merges the other columns that have not been checked by the other functions.
+        // For the columns 'genomic_native_reported' and 'genomic_liftover_reported' they can contain
+        // multiple unique value. For each of these columns the values will be merged if there are
+        // multiple values.
+        
+        // This function merges the other columns that have not been checked by the other functions.
         $aCreateUniqueValues = array_filter($aCreateUniqueValues);
         if (count(array_unique($aCreateUniqueValues)) == 1) {
             $sUniqueValues = $aCreateUniqueValues[0];
@@ -273,16 +319,25 @@ class Aggregator
                 if (count($aClassifications) == 1) {
                     $this->data[$sVariant][$sCenter]['status'] = 'single_lab';
                 } elseif (count($aClassifications) > 1) {
-                    //If there are more than one center for the variant, the classifications
-                    //are compared to decide the status.
+                    // If there are more than one center for the variant, the classifications
+                    // are compared to decide the status.
+                    // Flipping the array makes the values unique and makes it easier to work with the values;
+                    // This way we can count the amount of keys, the classifications have become the keys.
                     $aClassificationsFlip = array_flip($aClassifications);
-                    if (count(array_unique($aClassificationsFlip)) == 1) {
+                    if (count($aClassificationsFlip) == 1) {
+                        // If the classifications align, we get here.
+                        // One unique value, everybody agrees.
                         foreach ($aClassifications as $sCenter => $sClassification) {
                             $this->data[$sVariant][$sCenter]['status'] = 'consensus';
                         }
                     } else {
+                         // We get here if the classifications are different between centers.
+                         // isset()s are faster than array_search() and in_array().
                          if ((isset($aClassificationsFlip['B']) || isset($aClassificationsFlip['LB']))
                                 && (isset($aClassificationsFlip['P']) || isset($aClassificationsFlip['LP']))) {
+                             // Opposite.
+                             // A string is built with the classification for each center, this way the user
+                             //  can sort based on center and still get the information on why there is a conflict.
                              $sClassifications = '';
                              foreach ($aClassifications as $sCenters => $aClassification) {
                                  if ($sClassifications == '') {
@@ -292,9 +347,9 @@ class Aggregator
                                  }
                              }
                             foreach ($aClassifications as $sCenter => $sClassification) {
-                                //This is where the created line will be written into the output file.
+                                // This is where the created line will be saved if no error or conflict occurred.
                                 $this->data[$sVariant][$sCenter]['status'] = 'external_opposite';
-                                //This is where the data will be written into another output file if a conflict occured.
+                                // This is where the data will be saved if the classification resulted in a conflict.
                                 $this->data_rejected[$sVariant][$sCenter]['type'] = $this->data[$sVariant][$sCenter]['type'];
                                 $this->data_rejected[$sVariant][$sCenter]['genomic_native_reported'] = $this->data[$sVariant][$sCenter]['genomic_native_reported'];
                                 $this->data_rejected[$sVariant][$sCenter]['classifications'] = $sClassifications;
@@ -341,7 +396,7 @@ class Aggregator
         }
         $aData[] = '';
 
-        //This is where the filled data file is returned to 'run_pipeline.php' where it is saved as a file.
+        // Save the data.
         return (bool) File_put_contents(
                 $sOutputFile,
                 implode("\r\n", $aData)
@@ -375,8 +430,9 @@ class Aggregator
             }
         }
         $aData[] = '';
-        //This is where the filled data file is returned to 'run_pipeline.php' where it is saved as a file.
-        return (bool) File_put_contents(
+
+        // Save the data.
+        return (bool) file_put_contents(
                 $sConflictOutputFile,
                 implode("\r\n", $aData)
         );
