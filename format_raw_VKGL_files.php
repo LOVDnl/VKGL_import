@@ -5,14 +5,17 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2026-01-15
- * Version     : 0.2.4
+ * Modified    : 2026-05-20
+ * Version     : 0.2.5
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.2.4  2026-01-15
+ * Changelog   : 0.2.5  2026-05-20
+ *               Add support for the Illumina Emedgene format and fixed a bug
+ *               with inversions in the LUMC format.
+ *               0.2.4  2026-01-15
  *               Add support for two new file formats; the new NKI tsv format
  *               and the new UMCG JSON format.
  *               0.2.3  2025-09-25
@@ -21,10 +24,10 @@
  *               0.2.2  2025-08-11
  *               Allow for genomic variants starting with "m."; this is normal
  *               for mitochondrial genes.
- *             : 0.2.1  2025-05-01
+ *               0.2.1  2025-05-01
  *               Added more variant types to lovd_HGVStoVCF();
  *               deletion-insertions and inversions.
- * Changelog   : 0.2.0  2025-02-07
+ *               0.2.0  2025-02-07
  *               Re-implement the storage of variants and the filtering of
  *               duplicates completely. We were losing variants when only a
  *               single center reported multiple classifications. Fixed that and
@@ -90,7 +93,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.2.4',
+    'version' => '0.2.5',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -242,8 +245,9 @@ function lovd_HGVStoVCF ($sVariant) {
     } elseif (preg_match('/^[gm]\.([0-9]+)_([0-9]+)inv$/', $sVariant, $aRegs)) {
         // Inversions.
         $aVCF['pos'] = $aRegs[1];
-        $aVCF['ref'] = str_repeat('N', ($aRegs[2] - $aRegs[1]) + 1);
-        $aVCF['alt'] = $aVCF['ref'];
+        // Fake an inversion by introducing an A+ to T+ change (AA to TT, AAA to TTT, etc).
+        $aVCF['ref'] = str_repeat('A', ($aRegs[2] - $aRegs[1]) + 1);
+        $aVCF['alt'] = str_repeat('T', ($aRegs[2] - $aRegs[1]) + 1);
 
     } else {
         return false;
