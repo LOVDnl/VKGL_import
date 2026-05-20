@@ -118,6 +118,10 @@ $_CONFIG = array(
         // 2024-02 + 2024-04; Due to a personnel change at Alissa without a proper handover, manual exports are being generated with yet another signature.
         'alt;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa',
 
+        // Emedgene (Illumina):
+        'alt;chromosome;created reference build;diseases (omim id);end;error;overlap %;pathogenicity;position;ref;transcript;vartype' => 'emedgene_csv',
+        'alt;chromosome;created reference build;end;pathogenicity;position;ref;transcript;vartype' => 'emedgene-small_csv',
+
         // LUMC:
         'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc',
 
@@ -563,6 +567,13 @@ foreach ($aFiles as $sFile => $sCenter) {
         die(EXIT_ERROR_INPUT_CANT_OPEN);
     }
 
+    // Illumina Emedgene gives us .csv files. Just convert to TSV.
+    if (strrchr($sFile, '.') == '.csv') {
+        foreach ($aLines as $i => $sLine) {
+            $aLines[$i] = str_replace(',', "\t", $sLine);
+        }
+    }
+
     // The Radboud data doesn't have a header :(
     if ($sCenter == 'radboud_mumc') {
         // Invent the header.
@@ -803,6 +814,29 @@ foreach ($aFiles as $sFile => $sCenter) {
                     'protein' => str_replace('NULL', '', $aDataLine['p_nomen']),
                     $sCenter => str_replace(array('_', 'vous'), array(' ', 'VUS'), strtolower($aDataLine['classification'])),
                     $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['last_updated_by'],
+                );
+                break;
+
+            case 'emedgene_csv':
+            case 'emedgene-small_csv':
+                // We'll have to ignore hg38 and CNVs for now.
+                if ($aDataLine['created reference build'] != 'GRCh37' || $aDataLine['vartype'] != 'SNV') {
+                    continue 2;
+                }
+
+                $sVariantKey = implode('|', array(
+                        $aDataLine['chromosome'],
+                        $aDataLine['position'],
+                        $aDataLine['ref'],
+                        $aDataLine['alt'],
+                        '',
+                        $aDataLine['transcript'],
+                        '',
+                ));
+                $aValues = array(
+                        'protein' => '',
+                        $sCenter => str_replace(array('vus'), array('VUS'), $aDataLine['pathogenicity']),
+                        $sCenter . $_CONFIG['columns_center_suffix'] => ($aDataLine['diseases (omim id)'] ?? ''),
                 );
                 break;
 
