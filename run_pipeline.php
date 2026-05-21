@@ -16,10 +16,12 @@
 define('ROOT_PATH', __DIR__);
 require_once(ROOT_PATH . '/aggregator.php');
 require_once(ROOT_PATH . '/formatter.php');
+require_once(ROOT_PATH . '/validator.php');
 require_once(ROOT_PATH . '/log.php');
 require_once(ROOT_PATH . '/settings.php');
 use LOVD\VKGL\Formatter;
 use LOVD\VKGL\Aggregator;
+use LOVD\VKGL\Validator;
 use LOVD\Log;
 use LOVD\Settings;
 $Settings = new Settings();
@@ -288,6 +290,18 @@ if ($Status->get('step') < $nStep) {
         $Log->add("Conflicts occurred, successfully created $sConflictOutputFile.", 'OK');
         $Status->set('error_files|aggregated', $sConflictOutputFile);
     }
-
-    //$Status->set('step', $nStep);
+    $Status->set('step', $nStep);
 }
+//Validator
+if ($nReleaseMonth == end($aMonths)) {
+    // If the current release month is the first of the year, the last
+    //  release must be set to the last release date (month and year)
+    $nOldReleaseMonth = reset($aMonths);
+    $nReleaseYear = $nReleaseYear - 1;
+} else {
+    $nOldReleaseMonth = $aMonths[array_search($nReleaseMonth, $aMonths)+1];
+}
+$sOldDirectory = $nReleaseYear . '-' . str_pad($nOldReleaseMonth, 2, '0', STR_PAD_LEFT);
+$OldReleasePath = preg_replace('/(\d+)-(\d+)$/',$sOldDirectory, RELEASE_PATH);
+$OldStatus = new Settings($OldReleasePath . '/status.json');
+$aVariantsDeletedCreatedUpdated = Validator::validate($Status->get('output_files|aggregated'), $OldReleasePath ."/" . $OldStatus->get('output_files|aggregated'));
