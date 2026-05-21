@@ -302,16 +302,32 @@ if ($Status->get('step') < $nStep) {
     }
     $Status->set('step', $nStep);
 }
-//Validator
-if ($nReleaseMonth == end($aMonths)) {
-    // If the current release month is the first of the year, the last
-    //  release must be set to the last release date (month and year)
-    $nOldReleaseMonth = reset($aMonths);
-    $nReleaseYear = $nReleaseYear - 1;
-} else {
-    $nOldReleaseMonth = $aMonths[array_search($nReleaseMonth, $aMonths)+1];
+
+
+
+
+
+// Step 5: Validator
+$nStep ++;
+if ($Status->get('step') < $nStep) {
+    $Log->add("Parsing the VKGL data files...");
+    if ($nReleaseMonth == end($aMonths)) {
+        // If the current release month is the first release of the year, the last
+        //  release must be set to the last release date (month and year)
+        $nOldReleaseMonth = reset($aMonths);
+        $nReleaseYear = $nReleaseYear - 1;
+    } else {
+        $nOldReleaseMonth = $aMonths[array_search($nReleaseMonth, $aMonths)+1];
+    }
+    $sOldDirectory = $nReleaseYear . '-' . str_pad($nOldReleaseMonth, 2, '0', STR_PAD_LEFT);
+    $OldReleasePath = preg_replace('/(\d+)-(\d+)$/',$sOldDirectory, RELEASE_PATH);
+    $OldStatus = new Settings($OldReleasePath . '/status.json');
+    try {
+        $o = Validator::validate($Status->get('output_files|aggregated'), $OldReleasePath ."/" . $OldStatus->get('output_files|aggregated'));
+    } catch (Exception $e) {
+        $Log->add("Failed to parse the data files.\n" . $e->getMessage() . '.', '!!');
+        die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
+    }
+    $Log->add("Successfully validated the aggregator script.", 'OK');
+    $Status->set('step', $nStep);
 }
-$sOldDirectory = $nReleaseYear . '-' . str_pad($nOldReleaseMonth, 2, '0', STR_PAD_LEFT);
-$OldReleasePath = preg_replace('/(\d+)-(\d+)$/',$sOldDirectory, RELEASE_PATH);
-$OldStatus = new Settings($OldReleasePath . '/status.json');
-$aVariantsDeletedCreatedUpdated = Validator::validate($Status->get('output_files|aggregated'), $OldReleasePath ."/" . $OldStatus->get('output_files|aggregated'));
