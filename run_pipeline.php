@@ -5,10 +5,11 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-23
- * Modified    : 2026-03-10
+ * Modified    : 2026-05-21
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
- * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
+ * Programmers  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
+ *                Marit de Koster <m.de_koster@lumc.nl>
  *
  *************/
 
@@ -258,9 +259,18 @@ if ($Status->get('step') < $nStep) {
 
     $Status->set('step', $nStep);
 }
+
+
+
+
+
 // Step 3: Normalizer
 $nStep++;
 //This is where the normalizer script will be called and executed.
+
+
+
+
 
 // Step 4: Aggregator
 $nStep++;
