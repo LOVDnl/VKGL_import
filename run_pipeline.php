@@ -260,7 +260,7 @@ if ($Status->get('step') < $nStep) {
 $nStep++;
 //This is where the normalizer script will be called and executed.
 
-// Step 4: aggregator
+// Step 4: Aggregator
 $nStep++;
 if ($Status->get('step') < $nStep) {
     $Log->add("Parsing the VKGL data files...");
@@ -272,16 +272,16 @@ if ($Status->get('step') < $nStep) {
     }
 
     $sOutputFile = 'vkgl_data.03-aggregated.' . date('Y-m-d.H.i.s') . '.tsv';
-    if (!$o->saveFile($sOutputFile)) {
+    if (!$o->save($sOutputFile)) {
         $Log->add("Failed to save the result to $sOutputFile.", '!!');
         die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
     }
     $Log->add("Successfully created $sOutputFile.", 'OK');
     $Status->set('output_files|aggregated', $sOutputFile);
 
-    if ($o->hasConflicts()) {
+    if ($o->hasErrors()) {
         $sConflictOutputFile = str_replace('.tsv', '.errors.tsv', $sOutputFile);
-        if (!$o->saveConflicts($sConflictOutputFile)) {
+        if (!$o->saveErrors($sConflictOutputFile)) {
             $Log->add("Failed to save the errors to $sConflictOutputFile.", '!!');
             die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
         }
