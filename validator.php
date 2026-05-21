@@ -4,11 +4,12 @@
  *
  * VKGL-LOVD data pipeline.
  *
- * Created     : 2026-05-12 (based on format_raw_VKGL_files.php)
+ * Created     : 2026-05-12
  * Modified    : 2026-05-20
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
- * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>, Marit de Koster
+ * Programmers  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
+ *                Marit de Koster <m.de_koster@lumc.nl>
  *
  *************/
 
