@@ -8,8 +8,8 @@
  * Modified    : 2026-05-18
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
- * Programmers  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
- *                Marit de Koster <m.de_koster@lumc.nl>
+ * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
+ *               Marit de Koster <M.de_Koster@LUMC.nl>
  *
  *************/
 
@@ -17,6 +17,7 @@ namespace LOVD\VKGL;
 
 class Aggregator
 {
+    // Class abstracting the aggregation of all variant observations within one center, and checking the variant's classifications between centers.
     private array $data = [];
     private array $data_rejected = [];
     private array $data_output_header = [
@@ -45,6 +46,7 @@ class Aggregator
 
     public static function aggregate (string $sFile): Aggregator
     {
+        // Group all variant observations within a center and compare the classifications between centers.
         $o = new Aggregator();
         $o->parse($sFile);
         $o->groupByCenter();
@@ -363,38 +365,43 @@ class Aggregator
 
     public function parse (string $sFile): bool
     {
-        // Parse every file, and add the contents to $this->data.
+        // Parse the data file and add the contents to $this->data.
         if (!file_exists($sFile) || !is_readable($sFile)) {
-            throw new Exception("File $sFile does not exist or is not readable");
+            throw new \Exception("File $sFile does not exist or is not readable");
         }
-        $aLines = file($sFile, FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES);
+
+        $aLines = file($sFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         if (!$aLines) {
             throw new \Exception("File $sFile could not be opened");
         }
 
-        // First line should be headers.
+        // First line should be headers. No need to use strtolower() here, this is our own format.
         $aHeaders = explode("\t", array_shift($aLines));
         $nHeaders = count($aHeaders);
-        $aHeaders = array_map('trim', $aHeaders, array_fill(0,$nHeaders,'"'));
+        $aHeaders = array_map('trim', $aHeaders, array_fill(0, $nHeaders, '"'));
 
         foreach ($aLines as $nLine => $sLine) {
             $aDataLine = explode("\t", rtrim($sLine));
             // Trim quotes off of the data.
             $aDataLine = array_map(function($sData) {
-                return trim($sData,'"');
+                return trim($sData, '"');
             }, $aDataLine);
             $nDataColumns = count($aDataLine);
             if ($nHeaders > $nDataColumns) {
                 // We accidentally trimmed off empty fields.
                 $aDataLine = array_pad($aDataLine, $nHeaders, '');
             }
+
             $aVariantObservations = array_combine($aHeaders, $aDataLine);
-            // Creating format in which the data will be stored.
+            // Store the data grouped by the normalized variant description, then per center.
+            // This allows us to easily group the multiple observations within one center and then compare the data
+            //  between centers.
             $sGenomicNativeNormalized = $aVariantObservations['genomic_native_normalized'];
             $sCenter = $aVariantObservations['center'];
             unset($aVariantObservations['genomic_native_normalized'],$aVariantObservations['center']);
             $this->data[$sGenomicNativeNormalized][$sCenter][] = $aVariantObservations;
         }
+
         return true;
     }
 
@@ -465,6 +472,5 @@ class Aggregator
             implode("\r\n", $aData)
         );
     }
-
 }
 ?>
