@@ -8,8 +8,8 @@
  * Modified    : 2026-05-21
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
- * Programmers  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
- *                Marit de Koster <m.de_koster@lumc.nl>
+ * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
+ *               Marit de Koster <M.de_Koster@LUMC.nl>
  *
  *************/
 
@@ -272,14 +272,15 @@ $nStep++;
 
 
 
-// Step 4: Aggregator
+// Step 4: Aggregate all variants.
 $nStep++;
 if ($Status->get('step') < $nStep) {
-    $Log->add("Parsing the VKGL data files...");
+    // Aggregate all variants per center, and compare the classifications between centers.
+    $Log->add("Aggregating the normalized variants...");
     try {
         $o = Aggregator::aggregate($Status->get('output_files|normalized'));
     } catch (Exception $e) {
-        $Log->add("Failed to parse the data files.\n" . $e->getMessage() . '.', '!!');
+        $Log->add("Failed to aggregate the data.\n" . $e->getMessage() . '.', '!!');
         die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
     }
 
@@ -292,14 +293,15 @@ if ($Status->get('step') < $nStep) {
     $Status->set('output_files|aggregated', $sOutputFile);
 
     if ($o->hasErrors()) {
-        $sConflictOutputFile = str_replace('.tsv', '.errors.tsv', $sOutputFile);
-        if (!$o->saveErrors($sConflictOutputFile)) {
-            $Log->add("Failed to save the errors to $sConflictOutputFile.", '!!');
+        $sErrorOutputFile = str_replace('.tsv', '.errors.tsv', $sOutputFile);
+        if (!$o->saveErrors($sErrorOutputFile)) {
+            $Log->add("Failed to save the errors to $sErrorOutputFile.", '!!');
             die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
         }
-        $Log->add("Conflicts occurred, successfully created $sConflictOutputFile.", 'OK');
-        $Status->set('error_files|aggregated', $sConflictOutputFile);
+        $Log->add("Errors occurred, successfully created $sErrorOutputFile.", 'OK');
+        $Status->set('error_files|aggregated', $sErrorOutputFile);
     }
+
     $Status->set('step', $nStep);
 }
 
