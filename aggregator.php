@@ -398,7 +398,6 @@ class Aggregator
             //  between centers.
             $sGenomicNativeNormalized = $aVariantObservations['genomic_native_normalized'];
             $sCenter = $aVariantObservations['center'];
-            unset($aVariantObservations['genomic_native_normalized'],$aVariantObservations['center']);
             $this->data[$sGenomicNativeNormalized][$sCenter][] = $aVariantObservations;
         }
 
@@ -409,16 +408,12 @@ class Aggregator
 
 
 
-    public function save ($sFile): bool
+    public function save (string $sFile): bool
     {
         // Save the data to disk.
         $aData = [implode("\t", $this->data_output_header)];
         foreach ($this->data as $sVariant => $aVariantObservations) {
             foreach ($aVariantObservations as $sCenter => $aVariantObservation) {
-                // This is where the columns 'genomic_native_normalized' and 'center' are
-                // added to the final file.
-                $aVariantObservation['genomic_native_normalized'] = $sVariant;
-                $aVariantObservation['center'] = $sCenter;
                 // Creating an array which contains all information of the variant.
                 $aLine = [];
                 foreach ($this->data_output_header as $sField) {
@@ -451,10 +446,6 @@ class Aggregator
         $aData = [implode("\t", $this->data_rejected_output_header)];
         foreach ($this->data_rejected as $sVariant => $aVariantObservations) {
             foreach ($aVariantObservations as $sCenter => $aVariantObservation) {
-                // This is where the columns 'genomic_native_normalized' and 'center' are
-                // added to the final file.
-                $aVariantObservation['genomic_native_normalized'] = $sVariant;
-                $aVariantObservation['center'] = $sCenter;
                 // Creating an array which contains all information of the variant.
                 $aLine = [];
                 foreach ($this->data_rejected_output_header as $sField) {
