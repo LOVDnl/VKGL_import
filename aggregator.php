@@ -95,38 +95,32 @@ class Aggregator
 
     public function mergeClassifications ($aClassifications): string
     {
-        // Merge all classifications for this variant. If there is more than one unique classification,
-        //  try to come up with a single conclusion. Note that $aClassifications only contains unique values.
+        // Merge all classifications for this variant. We only use this method if we have more than one classification,
+        //  so try to come up with a single conclusion.
 
-        if (count($aClassifications) == 1) {
-            $sClassification = current($aClassifications);
+        // Rules: report opposites; */VUS to VUS; LB/B to LB; LP/P to LP.
+        // Flipping the array makes it easier to work with the values;
+        //  isset()s are faster than array_search() and in_array().
+        $aClassifications = array_flip($aClassifications);
+        if ((isset($aClassifications['B']) || isset($aClassifications['LB']))
+            && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
+            // Internal conflict within center. These are reported in the error file. Change column 'classification'
+            // to conflicting, we want to store the conflict to report this in LOVD in a non-public entry.
+            $sClassification = 'conflicting';
+
+        } elseif (isset($aClassifications['VUS'])) {
+            // VUS and something else, not a conflict. OK, VUS then.
+            $sClassification = 'VUS';
 
         } else {
-            // So we have multiple classifications for this variant.
-            // Rules: report opposites; */VUS to VUS; LB/B to LB; LP/P to LP.
-            // Flipping the array makes it easier to work with the values;
-            //  isset()s are faster than array_search() and in_array().
-            $aClassifications = array_flip($aClassifications);
-            if ((isset($aClassifications['B']) || isset($aClassifications['LB']))
-                && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
-                // Internal conflict within center. These are reported in the error file. Change column 'classification'
-                // to conflicting, we want to store the conflict to report this in LOVD in a non-public entry.
-                $sClassification = 'conflicting';
-
-            } elseif (isset($aClassifications['VUS'])) {
-                // VUS and something else, not a conflict. OK, VUS then.
-                $sClassification = 'VUS';
-
+            // Still multiple values. LB/B to LB, LP/P to LP.
+            if (isset($aClassifications['B']) && isset($aClassifications['LB'])) {
+                $sClassification = 'LB';
+            } elseif (isset($aClassifications['P']) && isset($aClassifications['LP'])) {
+                $sClassification = 'LP';
             } else {
-                // Still multiple values. LB/B to LB, LP/P to LP.
-                if (isset($aClassifications['B']) && isset($aClassifications['LB'])) {
-                    $sClassification = 'LB';
-                } elseif (isset($aClassifications['P']) && isset($aClassifications['LP'])) {
-                    $sClassification = 'LP';
-                } else {
-                    // This should never happen, but still.
-                    throw new \Exception("Variant merging conflict for classifications " . implode(', ', array_keys($aClassifications)));
-                }
+                // This should never happen, but still.
+                throw new \Exception("Variant merging conflict for classifications " . implode(', ', array_keys($aClassifications)));
             }
         }
 
@@ -295,7 +289,16 @@ class Aggregator
                             $aValues[] = $aObservation[$sColumn];
                         }
                         // Only store the unique, non-empty values.
-                        $aValues = array_unique(array_filter($aValues));
+                        $aValues = array_unique(array_filter($aValues), SORT_REGULAR);
+
+                        // Handle empty fields and unique values directly.
+                        if (!$aValues) {
+                            $aMergedVariant[$sColumn] = '';
+                            continue;
+                        } elseif (count($aValues) == 1) {
+                            $aMergedVariant[$sColumn] = current($aValues);
+                            continue;
+                        }
 
                         // Different strategies will be applied in the process of comparing values.
                         // For some columns the values MUST be unique, otherwise the script will be stopped.
@@ -304,11 +307,7 @@ class Aggregator
                         // For each of the remaining columns, the values are combined into a single string.
                         if ($sColumn == 'type' || $sColumn == 'genomic_liftover_normalized') {
                             // Disallow having more than one unique value.
-                            if (count($aValues) == 1) {
-                                $aMergedVariant[$sColumn] = current($aValues);
-                            } else {
-                                throw new \Exception("Variant merging conflict for $sVariant in $sCenter, field $sColumn contains non-unique values " . implode(', ', $aValues));
-                            }
+                            throw new \Exception("Variant merging conflict for $sVariant in $sCenter, field $sColumn contains non-unique values " . implode(', ', $aValues));
 
                         } elseif ($sColumn == 'classification') {
                             // Compare all classifications and try to come up with a consensus value.
