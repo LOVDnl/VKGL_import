@@ -58,35 +58,28 @@ class Aggregator
 
 
 
-    public function checkAnnotation ($aAnnotations): array
+    public function mergeAnnotations ($aAnnotations): array
     {
-        // This function checks if the column 'annotation' is empty or not.
-        // If it is empty it will be returned as an empty array.
-        // If there is one 'annotation' array it will be returned with no changes.
-        // If there are multiple 'annotation' arrays, they will be merged to form
-        // one 'annotation' array. The merged array is returned.
-        $aAnnotations = array_filter($aAnnotations);
-        if (!$aAnnotations) {
-            return [];
-        } elseif (count($aAnnotations) == 1) {
-            return current($aAnnotations);
-        } else {
-            // This is where the arrays in $aAnnotations are merged recursively,
-            //  this way the arrays are merged correctly.
-            // This way the zygosity, protocol, and reported_as stay seperated.
-            $aMerged = array_merge_recursive(...$aAnnotations);
-            // Now the arrays are merged, the next step is to check for each
-            //  part (zygosity, protocol, and reported_as) to see if they are an array.
-            // If it is an array, only the unique values are used.
-            // If it is not an array, it means there is only one value.
-            return array_map(function($aUniqueValue) {
-                if (is_array($aUniqueValue)) {
-                    return array_unique($aUniqueValue);
+        // Merge the given annotations into one larger array.
+        // We only use this method if we have more than one annotation array.
+
+        // Merge $aAnnotations recursively and then go and check the results for each field.
+        $aMerged = array_merge_recursive(...$aAnnotations);
+        // Check each field in the annotations; if it is an array, only the unique values are used.
+        // Avoid using arrays when possible.
+        return array_map(function ($Value)
+        {
+            if (is_array($Value)) {
+                $aValues = array_unique(array_filter($Value));
+                if (count($aValues) == 1) {
+                    return current($aValues);
                 } else {
-                    return $aUniqueValue;
+                    return $aValues;
                 }
-            }, $aMerged);
-        }
+            } else {
+                return $Value;
+            }
+        }, $aMerged);
     }
 
 
@@ -315,7 +308,8 @@ class Aggregator
 
                         } elseif ($sColumn == 'annotation') {
                             // Merge the annotation arrays recursively.
-                            $aMergedVariant[$sColumn] = Aggregator::checkAnnotation($aValues);
+                            $aMergedVariant[$sColumn] = Aggregator::mergeAnnotations($aValues);
+
                         } else {
                             // For all other columns, simply combine the values into a single string.
                             $aMergedVariant[$sColumn] = implode(', ', array_unique(array_filter($aValues)));
