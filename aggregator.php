@@ -131,29 +131,6 @@ class Aggregator
 
 
 
-    public function checkUniqueOrDie ($aMustBeUnique): string
-    {
-        // This functions checks if the values are the same by checking if
-        //  there is only one unique value.
-        // If there are more than one unique value, the script will stop.
-        $aMustBeUnique = array_unique($aMustBeUnique);
-        if (count($aMustBeUnique) == 1) {
-            $sUnique = $aMustBeUnique[0];
-        } else {
-            $aMustBeUnique = array_filter($aMustBeUnique);
-            if (count($aMustBeUnique) == 1) {
-                $sUnique = current($aMustBeUnique);
-            } else {
-                throw new \Exception("Variant merging conflict for " . implode(", ", $aMustBeUnique));
-            }
-        }
-        return $sUnique;
-    }
-
-
-
-
-
     public function compareCenters (): bool
     {
         // In this function the values between different centers will be compared.
@@ -311,6 +288,8 @@ class Aggregator
                         foreach ($aObservations as $aObservation) {
                             $aValues[] = $aObservation[$sColumn];
                         }
+                        // Only store the unique, non-empty values.
+                        $aValues = array_unique(array_filter($aValues));
 
                         // Different strategies will be applied in the process of comparing values.
                         // For some columns the values MUST be unique, otherwise the script will be stopped.
@@ -319,7 +298,12 @@ class Aggregator
                         // For each of the remaining columns, the values are combined into a single string.
                         if ($sColumn == 'type' || $sColumn == 'genomic_liftover_normalized') {
                             // Disallow having more than one unique value.
-                            $aMergedVariant[$sColumn] = Aggregator::checkUniqueOrDie($aValues);
+                            if (count($aValues) == 1) {
+                                $aMergedVariant[$sColumn] = current($aValues);
+                            } else {
+                                throw new \Exception("Variant merging conflict for $sVariant in $sCenter, field $sColumn contains non-unique values " . implode(', ', $aValues));
+                            }
+
                         } elseif ($sColumn == 'classification') {
                             // Compare all classifications and try to come up with a consensus value.
                             $aMergedVariant[$sColumn] = Aggregator::checkClassifications($aValues);
