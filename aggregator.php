@@ -93,37 +93,43 @@ class Aggregator
 
 
 
-    public function checkClassifications ($aClassifications): string
+    public function mergeClassifications ($aClassifications): string
     {
-        // In this function the classifications are compared.
-        // If there is one unique classification, it is kept.
-        // If there are more than one unique classification, they need to be compared.
-        // A conclusion will be drawn from the comparison.
-        if (count(array_unique($aClassifications)) == 1) {
-            $sClassification = $aClassifications[0];
+        // Merge all classifications for this variant. If there is more than one unique classification,
+        //  try to come up with a single conclusion. Note that $aClassifications only contains unique values.
+
+        if (count($aClassifications) == 1) {
+            $sClassification = current($aClassifications);
+
         } else {
-            // We have seen multiple classifications of this variant.
+            // So we have multiple classifications for this variant.
             // Rules: report opposites; */VUS to VUS; LB/B to LB; LP/P to LP.
-            // Flipping the array makes the values unique and makes it easier to work with the values;
+            // Flipping the array makes it easier to work with the values;
             //  isset()s are faster than array_search() and in_array().
             $aClassifications = array_flip($aClassifications);
             if ((isset($aClassifications['B']) || isset($aClassifications['LB']))
-                    && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
-                // Internal conflict within center. These are reported in the opposites file.
-                // Change column 'classification' to conflicting, we want to store the conflict to report this in LOVD in a non-public entry.
+                && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
+                // Internal conflict within center. These are reported in the error file. Change column 'classification'
+                // to conflicting, we want to store the conflict to report this in LOVD in a non-public entry.
                 $sClassification = 'conflicting';
+
             } elseif (isset($aClassifications['VUS'])) {
                 // VUS and something else, not a conflict. OK, VUS then.
                 $sClassification = 'VUS';
+
             } else {
                 // Still multiple values. LB/B to LB, LP/P to LP.
                 if (isset($aClassifications['B']) && isset($aClassifications['LB'])) {
                     $sClassification = 'LB';
                 } elseif (isset($aClassifications['P']) && isset($aClassifications['LP'])) {
                     $sClassification = 'LP';
+                } else {
+                    // This should never happen, but still.
+                    throw new \Exception("Variant merging conflict for classifications " . implode(', ', array_keys($aClassifications)));
                 }
             }
         }
+
         return $sClassification;
     }
 
@@ -306,7 +312,8 @@ class Aggregator
 
                         } elseif ($sColumn == 'classification') {
                             // Compare all classifications and try to come up with a consensus value.
-                            $aMergedVariant[$sColumn] = Aggregator::checkClassifications($aValues);
+                            $aMergedVariant[$sColumn] = Aggregator::mergeClassifications($aValues);
+
                         } elseif ($sColumn == 'annotation') {
                             // Merge the annotation arrays recursively.
                             $aMergedVariant[$sColumn] = Aggregator::checkAnnotation($aValues);
