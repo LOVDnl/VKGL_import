@@ -40,7 +40,7 @@ class Aggregator
         'type',
         'genomic_native_normalized',
         'genomic_native_reported',
-        'classification',
+        'classifications',
         'status',
     ];
 
@@ -213,7 +213,7 @@ class Aggregator
                                 $this->data_rejected[$sVariant][$sCenter] = [
                                     'type' => $this->data[$sVariant][$sCenter]['type'],
                                     'genomic_native_reported' => $this->data[$sVariant][$sCenter]['genomic_native_reported'],
-                                    'classification' => $sClassifications,
+                                    'classifications' => $sClassifications,
                                     'status' => 'external_opposite'
                                 ];
                             }
@@ -298,7 +298,7 @@ class Aggregator
                         Aggregator::createReportedAs($aObservation);
                         // Also add the classification to the annotation, so we can always find back the original
                         //  classifications of all observations (we may update the classification after this).
-                        $aObservation['annotation']['classification'] = $aObservation['classification'];
+                        $aObservation['annotation']['classifications'] = $aObservation['classification'];
                         // Note that this leaves the annotation field unpacked.
                         $aObservations[$i] = $aObservation;
                     }
@@ -328,7 +328,7 @@ class Aggregator
                             $aMergedVariant[$sColumn] = Aggregator::checkAnnotation($aValues);
                         } else {
                             // For all other columns, simply combine the values into a single string.
-                            $aMergedVariant[$sColumn] = implode(", ", array_unique(array_filter($aValues)));
+                            $aMergedVariant[$sColumn] = implode(', ', array_unique(array_filter($aValues)));
                         }
                     }
 
@@ -341,7 +341,7 @@ class Aggregator
                         $this->data_rejected[$sVariant][$sCenter] = [
                             'type' => $this->data[$sVariant][$sCenter]['type'],
                             'genomic_native_reported' => $this->data[$sVariant][$sCenter]['genomic_native_reported'],
-                            'classification' => implode(", ",$this->data[$sVariant][$sCenter]['annotation']['classification']),
+                            'classifications' => implode(', ', $this->data[$sVariant][$sCenter]['annotation']['classifications']),
                             'status' => 'internal_opposite'
                         ];
                     }
