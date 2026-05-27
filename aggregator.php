@@ -38,10 +38,9 @@ class Aggregator
     private array $data_rejected_output_header = [
         'center',
         'type',
+        'error',
         'genomic_native_normalized',
         'genomic_native_reported',
-        'classifications',
-        'status',
     ];
 
     public static function aggregate (string $sFile): Aggregator
@@ -248,6 +247,7 @@ class Aggregator
         //  description, and we'll check all fields. Some fields are merged (e.g., annotation), some fields are compared
         //  carefully to create a new value (e.g., classification), and some fields MUST have the same value
         //  (e.g., type).
+
         foreach ($this->data as $sVariant => $aCenters) {
             foreach ($aCenters as $sCenter => $aObservations) {
                 if (count($aObservations) == 1) {
@@ -312,7 +312,7 @@ class Aggregator
 
                         } else {
                             // For all other columns, simply combine the values into a single string.
-                            $aMergedVariant[$sColumn] = implode(', ', array_unique(array_filter($aValues)));
+                            $aMergedVariant[$sColumn] = implode(', ', $aValues);
                         }
                     }
 
@@ -321,13 +321,13 @@ class Aggregator
 
                     // If comparing the classifications resulted in an internal conflict,
                     //  store the data in a report file that will be sent to the labs.
-                    if ($this->data[$sVariant][$sCenter]['classification'] == 'conflicting') {
-                        $this->data_rejected[$sVariant][$sCenter] = [
-                            'type' => $this->data[$sVariant][$sCenter]['type'],
-                            'genomic_native_reported' => $this->data[$sVariant][$sCenter]['genomic_native_reported'],
-                            'classifications' => implode(', ', $this->data[$sVariant][$sCenter]['annotation']['classifications']),
-                            'status' => 'internal_opposite'
-                        ];
+                    if ($aMergedVariant['classification'] == 'conflicting') {
+                        $this->data_rejected[$sVariant][$sCenter] = array_merge(
+                            $aMergedVariant,
+                            [
+                                'error' => 'Internal conflict, classifications: ' . implode(', ', $aMergedVariant['annotation']['classifications']) . '.',
+                            ]
+                        );
                     }
                 }
             }
