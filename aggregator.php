@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-04-28
- * Modified    : 2026-05-18
+ * Modified    : 2026-05-27
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -392,13 +392,11 @@ class Aggregator
                 $aDataLine = array_pad($aDataLine, $nHeaders, '');
             }
 
-            $aVariantObservations = array_combine($aHeaders, $aDataLine);
+            $aVariant = array_combine($aHeaders, $aDataLine);
             // Store the data grouped by the normalized variant description, then per center.
             // This allows us to easily group the multiple observations within one center and then compare the data
             //  between centers.
-            $sGenomicNativeNormalized = $aVariantObservations['genomic_native_normalized'];
-            $sCenter = $aVariantObservations['center'];
-            $this->data[$sGenomicNativeNormalized][$sCenter][] = $aVariantObservations;
+            $this->data[$aVariant['genomic_native_normalized']][$aVariant['center']][] = $aVariant;
         }
 
         return true;
