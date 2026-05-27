@@ -237,37 +237,34 @@ class Aggregator
 
 
 
-    public function createReportedAs (array &$aVariantObservation)
+    public function createReportedAs (array &$aVariant): void
     {
-        // This function combines the columns: 'gene', 'transcript', 'cDNA', and 'protein' are combined
-        //  to create the string 'reported_as' in 'annotation'.
-        // The string 'reported_as' will follow a specific format, but because
-        //  there is a possibility not all columns contain values the format may not always
-        //  be complete, this is the reason if-loops are used to check.
-        // The format is as follows: gene transcript:cDNA (protein)
-        // Examples:
-        // "reported_as":"NM_002529.4" (contains only transcript)
-        // "reported_as":"FAM87A NM_005874.1 (NP_560236.2)" (contains gene, transcript, and protein)
-        $sReportedAs = '';
-        if ($aVariantObservation['gene']) {
-            $sReportedAs .= $aVariantObservation['gene'];
+        // Combine the "gene", "transcript", "cDNA", and "protein" columns into one description for the "reported_as"
+        //  field in the "annotation" column. Not all fields may be present, so we'll need to check all combinations.
+        // The full format is "GENE transcript:cDNA (protein)". When fewer fields are present, the missing fields will
+        //  be adapted, e.g.:
+        // "IVD NM_002225.5:c.265G>A (p.(Val89Ile))",
+        // "IVD NM_002225.5",
+        // "IVD c.265G>A",
+        // "NM_002225.5:c.265G>A",
+        // "IVD NM_002225.5 p.(Val89Ile)", etc.
+        $sReportedAs = $aVariant['gene'];
+        if ($aVariant['transcript']) {
+            $sReportedAs .= (!$sReportedAs? '' : ' ') . $aVariant['transcript'];
         }
-        if ($aVariantObservation['transcript'] && $aVariantObservation['gene']) {
-            $sReportedAs .= " " . $aVariantObservation['transcript'];
-        } elseif ($aVariantObservation['transcript']) {
-            $sReportedAs .= $aVariantObservation['transcript'];
+        if ($aVariant['cDNA']) {
+            $sReportedAs .= (!$sReportedAs? '' : ($aVariant['transcript']? ':' : ' ')) . $aVariant['cDNA'];
         }
-        if ($aVariantObservation['cDNA'] && $aVariantObservation['transcript']) {
-            $sReportedAs .= ":" . $aVariantObservation['cDNA'];
-        } elseif ($aVariantObservation['cDNA']) {
-            $sReportedAs .= " " . $aVariantObservation['cDNA'];
+        if ($aVariant['protein']) {
+            if ($aVariant['cDNA']) {
+                $sReportedAs .= ' (' . $aVariant['protein'] . ')';
+            } else {
+                $sReportedAs .= (!$sReportedAs? '' : ' ') . $aVariant['protein'];
+            }
         }
-        if ($aVariantObservation['protein']) {
-            $sReportedAs .= " (" . $aVariantObservation['protein'] . ")";
-        }
-        $sReportedAs = ltrim($sReportedAs, " ");
-        $aVariantObservation['annotation']['reported_as'] = $sReportedAs;
-        unset($aVariantObservation['gene'], $aVariantObservation['transcript'], $aVariantObservation['cDNA'], $aVariantObservation['protein']);
+        $aVariant['annotation']['reported_as'] = $sReportedAs;
+        // Remove the fields from the data to save memory.
+        unset($aVariant['gene'], $aVariant['transcript'], $aVariant['cDNA'], $aVariant['protein']);
     }
 
 
