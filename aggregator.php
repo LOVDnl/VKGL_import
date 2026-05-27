@@ -273,65 +273,70 @@ class Aggregator
 
     public function groupByCenter (): bool
     {
-        // In this function the data is grouped based on center, this way
-        //  all variants from the same center are together.
-        // The next step is to check the amount of a variant within one center.
-        // If there are more than one, the columns are compared to see if they are different.
-        // Some columns will be merged (example: if there are different genes), some will give
-        //  an error (example: if the type is different), and sometimes a conclusion is drawn
-        //  based on the difference (example: the classification will say 'conflicting'
-        //  if the classifications are opposite).
-        foreach ($this->data as $sVariant => $aData) {
-            foreach ($aData as $sCenter => $aObservations) {
+        // Group all observations of the same variant within one center. We can have multiple observations because
+        //  variants aren't always reported using the same description. However, we've grouped on the normalized variant
+        //  description, and we'll check all fields. Some fields are merged (e.g., annotation), some fields are compared
+        //  carefully to create a new value (e.g., classification), and some fields MUST have the same value
+        //  (e.g., type).
+        foreach ($this->data as $sVariant => $aCenters) {
+            foreach ($aCenters as $sCenter => $aObservations) {
                 if (count($aObservations) == 1) {
-                    // If the variant is found once in a center, the 'annotation' column is decoded to be able to add
-                    //  different values to the column. In this case the columns 'gene', 'transcript', 'cDNA', 'protein'
-                    //  will combine in an array with key 'reported_as' which will be added to 'annotation'.
+                    // If the variant is found once in a center, we don't need to group anything.
+                    // However, we will create the "reported_as" field and add that to the "annotation" column.
                     $aObservations[0]['annotation'] = json_decode($aObservations[0]['annotation'], true);
+                    // Note that this method also removes redundant fields from $aObservations[0].
                     Aggregator::createReportedAs($aObservations[0]);
+                    // Note that this leaves the annotation field unpacked.
                     $this->data[$sVariant][$sCenter] = $aObservations[0];
+
                 } else {
-                    // If there are more than one line, we need to check or combine the columns.
+                    // We have more than one observation of the same variant. Check or combine the columns.
                     foreach ($aObservations as $i => $aObservation) {
+                        // First, create the "reported_as" field and add that to the "annotation" column.
                         $aObservation['annotation'] = json_decode($aObservation['annotation'], true);
-                        // This function will combine the columns 'gene', 'transcript', 'cDNA', and 'protein' into one array
-                        //  which will be combined with the existing column 'annotation' to form the new 'annotation' column.
+                        // Note that this method also removes redundant fields from $aObservation.
                         Aggregator::createReportedAs($aObservation);
-                        // Adding classifications to annotation, this way the original classification is saved if the
-                        //  classification column is changed to something else.
+                        // Also add the classification to the annotation, so we can always find back the original
+                        //  classifications of all observations (we may update the classification after this).
                         $aObservation['annotation']['classification'] = $aObservation['classification'];
+                        // Note that this leaves the annotation field unpacked.
                         $aObservations[$i] = $aObservation;
                     }
-                    // This is where the data is saved after checking what needs to be done with the value of each column
-                    //  if multiple of the same variant were found within the same center.
+
+                    // Per column, check how we will merge the variant observations, and then build up the new entry.
                     $aMergedVariant = [];
                     foreach (array_keys($aObservations[0]) as $sColumn) {
-                        // For each column the information of one variant (which has been found multiple times in the same center)
-                        //  will be combined in $aValues. This way the values can be compared based on column.
+                        // Combine all values for this column in $aValues, then check the column to see how to proceed.
                         $aValues = [];
                         foreach ($aObservations as $aObservation) {
                             $aValues[] = $aObservation[$sColumn];
                         }
-                        // The columns 'type', 'genomic_liftover_normalized', 'classification', 'annotation'
-                        //  'genomic_native_reported', and 'genomic_liftover_reported' will be compared individually.
+
                         // Different strategies will be applied in the process of comparing values.
                         // For some columns the values MUST be unique, otherwise the script will be stopped.
                         // The values of the column 'classifications' will be handled separately.
                         // The column 'annotation' will be merged recursively.
-                        // For each of the remaining columns the values are combined into a single string.
+                        // For each of the remaining columns, the values are combined into a single string.
                         if ($sColumn == 'type' || $sColumn == 'genomic_liftover_normalized') {
+                            // Disallow having more than one unique value.
                             $aMergedVariant[$sColumn] = Aggregator::checkUniqueOrDie($aValues);
                         } elseif ($sColumn == 'classification') {
+                            // Compare all classifications and try to come up with a consensus value.
                             $aMergedVariant[$sColumn] = Aggregator::checkClassifications($aValues);
                         } elseif ($sColumn == 'annotation') {
+                            // Merge the annotation arrays recursively.
                             $aMergedVariant[$sColumn] = Aggregator::checkAnnotation($aValues);
                         } else {
+                            // For all other columns, simply combine the values into a single string.
                             $aMergedVariant[$sColumn] = implode(", ", array_unique(array_filter($aValues)));
                         }
                     }
-                    // This is where the created line will be saved if no error or conflict occurred.
+
+                    // Save the merged entry, regardless of whether a conflict occurred.
                     $this->data[$sVariant][$sCenter] = $aMergedVariant;
-                    // This is where the data will be saved if the classification resulted in a conflict.
+
+                    // If comparing the classifications resulted in an internal conflict,
+                    //  store the data in a report file that will be sent to the labs.
                     if ($this->data[$sVariant][$sCenter]['classification'] == 'conflicting') {
                         $this->data_rejected[$sVariant][$sCenter] = [
                             'type' => $this->data[$sVariant][$sCenter]['type'],
@@ -343,6 +348,7 @@ class Aggregator
                 }
             }
         }
+
         return true;
     }
 
