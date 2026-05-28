@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-04-28
- * Modified    : 2026-05-27
+ * Modified    : 2026-05-28
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -49,7 +49,7 @@ class Aggregator
         $o = new Aggregator();
         $o->parse($sFile);
         $o->groupByCenter();
-        $o->compareCenters();
+        $o->determineOverallVariantStatus();
         return $o;
     }
 
@@ -123,9 +123,11 @@ class Aggregator
 
 
 
-    public function compareCenters (): bool
+    public function determineOverallVariantStatus (): bool
     {
-        // In this function the values between different centers will be compared.
+        // For each unique variant, compare the observations in the different centers and determine the status of the
+        //  variant in the VKGL release; single lab, consensus, non-consensus, or opposite.
+
         foreach ($this->data as $sVariant => $aCenters) {
             if (count($aCenters) == 1) {
                 // If there is one center for a variant, we are looking at the classification to decide the status.
@@ -135,23 +137,27 @@ class Aggregator
                 } else {
                     $this->data[$sVariant][$sCenter]['status'] = 'single_lab';
                 }
+
             } else {
                 $aClassifications = [];
-                // If there are multiple centers for one variant, it is checked if one or more
-                // of the centers have 'conflicting' as the classification.
+                // There are multiple centers for this variant; check if one or more of the centers have 'conflicting'
+                //  as the classification. If so, exclude them from this comparison.
                 foreach ($aCenters as $sCenter => $aVariantObservation) {
                     if ($aVariantObservation['classification'] == 'conflicting') {
                         $this->data[$sVariant][$sCenter]['status'] = 'internal_opposite';
                     } else {
+                        // Gather all remaining classifications, so we can compare them.
                         $aClassifications[$sCenter] = $aVariantObservation['classification'];
                     }
                 }
-                // Then it will be checked if there are still multiple centers for this variant.
+
+                // Do we still have multiple centers for this variant?
                 if (count($aClassifications) == 1) {
                     $this->data[$sVariant][array_key_first($aClassifications)]['status'] = 'single_lab';
+
                 } elseif (count($aClassifications) > 1) {
-                    // If there are more than one center for the variant, the classifications
-                    // are compared to decide the status.
+                    // We still have more than one center left. Determine the status of the variant; consensus,
+                    //  non-consensus, or opposite?
                     // Flipping the array makes the values unique and makes it easier to work with the values;
                     // This way we can count the amount of keys, the classifications have become the keys.
                     $aClassificationsFlip = array_flip($aClassifications);
@@ -161,9 +167,9 @@ class Aggregator
                         foreach ($aClassifications as $sCenter => $sClassification) {
                             $this->data[$sVariant][$sCenter]['status'] = 'consensus';
                         }
+
                     } else {
-                        // We get here if the classifications are different between centers.
-                        // isset()s are faster than array_search() and in_array().
+                        // We have multiple classifications for this variant.
                         if ((isset($aClassificationsFlip['B']) || isset($aClassificationsFlip['LB']))
                                 && (isset($aClassificationsFlip['P']) || isset($aClassificationsFlip['LP']))) {
                             // Opposite.
@@ -192,6 +198,8 @@ class Aggregator
                         } else {
                             $sStatus = 'consensus';
                         }
+
+                        // Store the same status for all centers that have classifications.
                         foreach ($aClassifications as $sCenter => $sClassification) {
                             $this->data[$sVariant][$sCenter]['status'] = $sStatus;
                         }
@@ -199,6 +207,7 @@ class Aggregator
                 }
             }
         }
+
         return true;
     }
 
