@@ -158,42 +158,38 @@ class Aggregator
                 } elseif (count($aClassifications) > 1) {
                     // We still have more than one center left. Determine the status of the variant; consensus,
                     //  non-consensus, or opposite?
-                    // Flipping the array makes the values unique and makes it easier to work with the values;
-                    // This way we can count the amount of keys, the classifications have become the keys.
-                    $aClassificationsFlip = array_flip($aClassifications);
-                    if (count($aClassificationsFlip) == 1) {
+                    if (count(array_unique(array_keys($aClassifications))) == 1) {
                         // There is only one unique classification between the centers.
                         $sStatus = 'consensus';
 
                     } else {
-                        // We have multiple classifications for this variant.
-                        if ((isset($aClassificationsFlip['B']) || isset($aClassificationsFlip['LB']))
-                                && (isset($aClassificationsFlip['P']) || isset($aClassificationsFlip['LP']))) {
-                            // Opposite.
-                            // A string is built with the classification for each center, this way the user
-                            //  can sort based on center and still get the information on why there is a conflict.
-                            $sClassifications = '';
+                        // We have multiple classifications for this variant. Although mergeClassifications() was built
+                        //  for merging the classifications within one center, we can re-use its logic, so we don't have
+                        //  to repeat that here.
+                        $sStatus = match(Aggregator::mergeClassifications($aClassifications)) {
+                            'conflicting' => 'external_opposite',
+                            'VUS' => 'non-consensus',
+                            default => 'consensus',
+                        };
+
+                        if ($sStatus == 'external_opposite') {
+                            // Log this opposite for the labs, so they can fix it. Build a string with the
+                            //  classifications for each center, so the labs can see what's going on.
+                            $sClassifications = implode(', ',
+                                array_map(function ($sCenter, $sClassification)
+                                {
+                                    return $sCenter . ': ' . $sClassification;
+                                }, array_keys($aClassifications), $aClassifications)
+                            );
+                            // Now log this opposite, once for each center so they can easily search the error file.
                             foreach ($aClassifications as $sCenter => $sClassification) {
-                                if ($sClassifications == '') {
-                                    $sClassifications .= $sCenter . ": " . $sClassification;
-                                } else {
-                                    $sClassifications .= ", " . $sCenter . ": " . $sClassification;
-                                }
+                                $this->data_rejected[$sVariant][$sCenter] = array_merge(
+                                    $aCenters[$sCenter],
+                                    [
+                                        'error' => "External conflict (opposite), classifications: $sClassifications.",
+                                    ]
+                                );
                             }
-                            foreach ($aClassifications as $sCenter => $sClassification) {
-                                // This is where the data will be saved if the classification resulted in a conflict.
-                                $this->data_rejected[$sVariant][$sCenter] = [
-                                    'type' => $this->data[$sVariant][$sCenter]['type'],
-                                    'genomic_native_reported' => $this->data[$sVariant][$sCenter]['genomic_native_reported'],
-                                    'classifications' => $sClassifications,
-                                    'status' => 'external_opposite'
-                                ];
-                            }
-                            $sStatus = 'external_opposite';
-                        } elseif (isset($aClassificationsFlip['VUS'])) {
-                            $sStatus = 'non_consensus';
-                        } else {
-                            $sStatus = 'consensus';
                         }
                     }
 
