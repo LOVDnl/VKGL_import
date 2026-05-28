@@ -219,6 +219,7 @@ class Aggregator
         // "IVD c.265G>A",
         // "NM_002225.5:c.265G>A",
         // "IVD NM_002225.5 p.(Val89Ile)", etc.
+
         $sReportedAs = $aVariant['gene'];
         if ($aVariant['transcript']) {
             $sReportedAs .= (!$sReportedAs? '' : ' ') . $aVariant['transcript'];
@@ -344,7 +345,6 @@ class Aggregator
 
     public function hasErrors (): bool
     {
-        // This functions checks if there are conflicts found in the data.
         return (bool) count($this->data_rejected);
     }
 
@@ -399,18 +399,16 @@ class Aggregator
     {
         // Save the data to disk.
         $aData = [implode("\t", $this->data_output_header)];
-        foreach ($this->data as $sVariant => $aVariantObservations) {
-            foreach ($aVariantObservations as $sCenter => $aVariantObservation) {
-                // Creating an array which contains all information of the variant.
+        foreach ($this->data as $aVariants) {
+            foreach ($aVariants as $aVariant) {
                 $aLine = [];
                 foreach ($this->data_output_header as $sField) {
-                    $Value = ($aVariantObservation[$sField] ?? '');
+                    $Value = ($aVariant[$sField] ?? '');
                     if ($sField == 'annotation' && $Value) {
                         $Value = json_encode($Value, JSON_UNESCAPED_UNICODE);
                     }
                     $aLine[] = $Value;
                 }
-                // Imploding the array, which results in all values going in the correct column.
                 $aData[] = implode("\t", $aLine);
             }
         }
@@ -431,14 +429,12 @@ class Aggregator
     {
         // Save errors to disk.
         $aData = [implode("\t", $this->data_rejected_output_header)];
-        foreach ($this->data_rejected as $sVariant => $aVariantObservations) {
-            foreach ($aVariantObservations as $sCenter => $aVariantObservation) {
-                // Creating an array which contains all information of the variant.
+        foreach ($this->data_rejected as $aVariants) {
+            foreach ($aVariants as $aVariant) {
                 $aLine = [];
                 foreach ($this->data_rejected_output_header as $sField) {
-                    $aLine[] = ($aVariantObservation[$sField] ?? '');
+                    $aLine[] = ($aVariant[$sField] ?? '');
                 }
-                // Imploding the array, which results in all values going in the correct column.
                 $aData[] = implode("\t", $aLine);
             }
         }
