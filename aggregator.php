@@ -166,7 +166,7 @@ class Aggregator
                         // We have multiple classifications for this variant. Although mergeClassifications() was built
                         //  for merging the classifications within one center, we can re-use its logic, so we don't have
                         //  to repeat that here.
-                        $sStatus = match(Aggregator::mergeClassifications($aClassifications)) {
+                        $sStatus = match($this->mergeClassifications($aClassifications)) {
                             'conflicting' => 'external_opposite',
                             'VUS' => 'non-consensus',
                             default => 'consensus',
@@ -257,7 +257,7 @@ class Aggregator
                     // However, we will create the "reported_as" field and add that to the "annotation" column.
                     $aObservations[0]['annotation'] = json_decode($aObservations[0]['annotation'], true);
                     // Note that this method also removes redundant fields from $aObservations[0].
-                    Aggregator::createReportedAs($aObservations[0]);
+                    $this->createReportedAs($aObservations[0]);
                     // Note that this leaves the annotation field unpacked.
                     $this->data[$sVariant][$sCenter] = $aObservations[0];
 
@@ -267,7 +267,7 @@ class Aggregator
                         // First, create the "reported_as" field and add that to the "annotation" column.
                         $aObservation['annotation'] = json_decode($aObservation['annotation'], true);
                         // Note that this method also removes redundant fields from $aObservation.
-                        Aggregator::createReportedAs($aObservation);
+                        $this->createReportedAs($aObservation);
                         // Also add the classification to the annotation, so we can always find back the original
                         //  classifications of all observations (we may update the classification after this).
                         $aObservation['annotation']['classifications'] = $aObservation['classification'];
@@ -306,11 +306,11 @@ class Aggregator
 
                         } elseif ($sColumn == 'classification') {
                             // Compare all classifications and try to come up with a consensus value.
-                            $aMergedVariant[$sColumn] = Aggregator::mergeClassifications($aValues);
+                            $aMergedVariant[$sColumn] = $this->mergeClassifications($aValues);
 
                         } elseif ($sColumn == 'annotation') {
                             // Merge the annotation arrays recursively.
-                            $aMergedVariant[$sColumn] = Aggregator::mergeAnnotations($aValues);
+                            $aMergedVariant[$sColumn] = $this->mergeAnnotations($aValues);
 
                         } else {
                             // For all other columns, simply combine the values into a single string.
