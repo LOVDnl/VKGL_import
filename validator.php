@@ -39,9 +39,9 @@ class Validator
         // The created files (old and new) from the aggregator script are compared to decide if variants were
         //  deleted, created or updated.
         // The next step is to add information of the newest aggregator file to statistics.json.
-        // The amount per center, the amount per status, and the amount of internal_opposites per center.
-        $oSettingsCutoff = new Settings(substr_replace(RELEASE_PATH, '', -8, 8) . '/settings.json');
-        $oStatistics = new Settings(substr_replace(RELEASE_PATH, '', -8, 8) . '/statistics.json');
+        // The number per center, the number per status, and the number of internal_opposites per center.
+        $Settings = new Settings(substr_replace(RELEASE_PATH, '', -8, 8) . '/settings.json');
+        $Statistics = new Settings(substr_replace(RELEASE_PATH, '', -8, 8) . '/statistics.json');
         // The name of the current directory, so it can be used later.
         $sDirectory = substr(RELEASE_PATH, -7);
         // To see if a variant was deleted or created.
@@ -66,14 +66,14 @@ class Validator
             }
         }
         $nTotal = count($aUpdated) + count($aUnchanged) + count($aCreated);
-        $SaveStatistics = $oSettingsCutoff->get('validation_cutoffs|aggregated');
-        // Check if to many variants have changed (deletion, creation or updated).
-        if (round(count($aUpdated) / $nTotal * 100, 2) > $SaveStatistics['updated']) {
-            throw new \Exception("The amount of variants updated is to high!");
-        } elseif (round(count($aCreated) / $nTotal * 100, 2) > $SaveStatistics['created']) {
-            throw new \Exception("The amount of variants created is to high!");
-        } elseif (round(count($aDeleted) / $nTotal * 100, 2) > $SaveStatistics['deleted']) {
-            throw new \Exception("The amount of variants deleted is to high!");
+        $aValidationCutoffs = $Settings->get('validation_cutoffs|aggregated');
+        // Check if too many variants have changed (deletion, creation or updated).
+        if (round(count($aUpdated) / $nTotal * 100, 2) > $aValidationCutoffs['updated']) {
+            throw new \Exception("The number of variants updated is too high");
+        } elseif (round(count($aCreated) / $nTotal * 100, 2) > $aValidationCutoffs['created']) {
+            throw new \Exception("The number of variants created is too high");
+        } elseif (round(count($aDeleted) / $nTotal * 100, 2) > $aValidationCutoffs['deleted']) {
+            throw new \Exception("The number of variants deleted is too high");
         } else {
             // This where the data will be saved to set it in statistics.json.
             $aCenters = [];
@@ -81,7 +81,7 @@ class Validator
             $aInternalConflicts = [];
             foreach ($aArrayNew as $sKeyNew => $aObservations) {
                 $aCenters[] = strtolower($aObservations['center']);
-                // Because the amount of external_opposites per center are saved separately,
+                // Because the number of external_opposites per center are saved separately,
                 //  only external_opposite will be saved in status and can be changed to opposite.
                 if ($aObservations['status'] == 'external_opposite') {
                     $aObservations['status'] = 'opposite';
@@ -90,11 +90,11 @@ class Validator
                 }
                 $aStatus[] = $aObservations['status'];
             }
-            // Counts the amount of variants per center.
+            // Counts the number of variants per center.
             $aCountCenters = array_count_values($aCenters);
-            // Counts the amount of variants per status.
+            // Counts the number of variants per status.
             $aCountStatus = array_count_values($aStatus);
-            // Counts the amount of internal_opposites per center.
+            // Counts the number of internal_opposites per center.
             $aCountInternalConflicts = array_count_values($aInternalConflicts);
             // Because internal_opposite is saved separately, it is not needed in status.
             unset($aCountStatus['internal_opposite']);
@@ -108,7 +108,7 @@ class Validator
                 'internal_conflicts' => $aCountInternalConflicts,
             ];
             // Created data is set in statistics.json.
-            $oStatistics->set($sDirectory, $aStatistics);
+            $Statistics->set($sDirectory, $aStatistics);
         }
         return true;
     }
