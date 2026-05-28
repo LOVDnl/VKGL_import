@@ -57,66 +57,35 @@ class Aggregator
 
 
 
-    public function mergeAnnotations ($aAnnotations): array
+    public function createReportedAs (array &$aVariant): void
     {
-        // Merge the given annotations into one larger array.
-        // We only use this method if we have more than one annotation array.
+        // Combine the "gene", "transcript", "cDNA", and "protein" columns into one description for the "reported_as"
+        //  field in the "annotation" column. Not all fields may be present, so we'll need to check all combinations.
+        // The full format is "GENE transcript:cDNA (protein)". When fewer fields are present, the missing fields will
+        //  be adapted, e.g.:
+        // "IVD NM_002225.5:c.265G>A (p.(Val89Ile))",
+        // "IVD NM_002225.5",
+        // "IVD c.265G>A",
+        // "NM_002225.5:c.265G>A",
+        // "IVD NM_002225.5 p.(Val89Ile)", etc.
 
-        // Merge $aAnnotations recursively and then go and check the results for each field.
-        $aMerged = array_merge_recursive(...$aAnnotations);
-        // Check each field in the annotations; if it is an array, only the unique values are used.
-        // Avoid using arrays when possible.
-        return array_map(function ($Value)
-        {
-            if (is_array($Value)) {
-                $aValues = array_unique(array_filter($Value));
-                if (count($aValues) == 1) {
-                    return current($aValues);
-                } else {
-                    return $aValues;
-                }
+        $sReportedAs = $aVariant['gene'];
+        if ($aVariant['transcript']) {
+            $sReportedAs .= (!$sReportedAs? '' : ' ') . $aVariant['transcript'];
+        }
+        if ($aVariant['cDNA']) {
+            $sReportedAs .= (!$sReportedAs? '' : ($aVariant['transcript']? ':' : ' ')) . $aVariant['cDNA'];
+        }
+        if ($aVariant['protein']) {
+            if ($aVariant['cDNA']) {
+                $sReportedAs .= ' (' . $aVariant['protein'] . ')';
             } else {
-                return $Value;
-            }
-        }, $aMerged);
-    }
-
-
-
-
-
-    public function mergeClassifications ($aClassifications): string
-    {
-        // Merge all classifications for this variant. We only use this method if we have more than one classification,
-        //  so try to come up with a single conclusion.
-
-        // Rules: report opposites; */VUS to VUS; LB/B to LB; LP/P to LP.
-        // Flipping the array makes it easier to work with the values;
-        //  isset()s are faster than array_search() and in_array().
-        $aClassifications = array_flip($aClassifications);
-        if ((isset($aClassifications['B']) || isset($aClassifications['LB']))
-            && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
-            // Internal conflict within center. These are reported in the error file. Change column 'classification'
-            // to conflicting, we want to store the conflict to report this in LOVD in a non-public entry.
-            $sClassification = 'conflicting';
-
-        } elseif (isset($aClassifications['VUS'])) {
-            // VUS and something else, not a conflict. OK, VUS then.
-            $sClassification = 'VUS';
-
-        } else {
-            // Still multiple values. LB/B to LB, LP/P to LP.
-            if (isset($aClassifications['B']) && isset($aClassifications['LB'])) {
-                $sClassification = 'LB';
-            } elseif (isset($aClassifications['P']) && isset($aClassifications['LP'])) {
-                $sClassification = 'LP';
-            } else {
-                // This should never happen, but still.
-                throw new \Exception("Variant merging conflict for classifications " . implode(', ', array_keys($aClassifications)));
+                $sReportedAs .= (!$sReportedAs? '' : ' ') . $aVariant['protein'];
             }
         }
-
-        return $sClassification;
+        $aVariant['annotation']['reported_as'] = $sReportedAs;
+        // Remove the fields from the data to save memory.
+        unset($aVariant['gene'], $aVariant['transcript'], $aVariant['cDNA'], $aVariant['protein']);
     }
 
 
@@ -186,7 +155,7 @@ class Aggregator
                                 $this->data_rejected[$sVariant][$sCenter] = array_merge(
                                     $aCenters[$sCenter],
                                     [
-                                        'error' => "External conflict (opposite), classifications: $sClassifications.",
+                                            'error' => "External conflict (opposite), classifications: $sClassifications.",
                                     ]
                                 );
                             }
@@ -202,41 +171,6 @@ class Aggregator
         }
 
         return true;
-    }
-
-
-
-
-
-    public function createReportedAs (array &$aVariant): void
-    {
-        // Combine the "gene", "transcript", "cDNA", and "protein" columns into one description for the "reported_as"
-        //  field in the "annotation" column. Not all fields may be present, so we'll need to check all combinations.
-        // The full format is "GENE transcript:cDNA (protein)". When fewer fields are present, the missing fields will
-        //  be adapted, e.g.:
-        // "IVD NM_002225.5:c.265G>A (p.(Val89Ile))",
-        // "IVD NM_002225.5",
-        // "IVD c.265G>A",
-        // "NM_002225.5:c.265G>A",
-        // "IVD NM_002225.5 p.(Val89Ile)", etc.
-
-        $sReportedAs = $aVariant['gene'];
-        if ($aVariant['transcript']) {
-            $sReportedAs .= (!$sReportedAs? '' : ' ') . $aVariant['transcript'];
-        }
-        if ($aVariant['cDNA']) {
-            $sReportedAs .= (!$sReportedAs? '' : ($aVariant['transcript']? ':' : ' ')) . $aVariant['cDNA'];
-        }
-        if ($aVariant['protein']) {
-            if ($aVariant['cDNA']) {
-                $sReportedAs .= ' (' . $aVariant['protein'] . ')';
-            } else {
-                $sReportedAs .= (!$sReportedAs? '' : ' ') . $aVariant['protein'];
-            }
-        }
-        $aVariant['annotation']['reported_as'] = $sReportedAs;
-        // Remove the fields from the data to save memory.
-        unset($aVariant['gene'], $aVariant['transcript'], $aVariant['cDNA'], $aVariant['protein']);
     }
 
 
@@ -346,6 +280,72 @@ class Aggregator
     public function hasErrors (): bool
     {
         return (bool) count($this->data_rejected);
+    }
+
+
+
+
+
+    public function mergeAnnotations ($aAnnotations): array
+    {
+        // Merge the given annotations into one larger array.
+        // We only use this method if we have more than one annotation array.
+
+        // Merge $aAnnotations recursively and then go and check the results for each field.
+        $aMerged = array_merge_recursive(...$aAnnotations);
+        // Check each field in the annotations; if it is an array, only the unique values are used.
+        // Avoid using arrays when possible.
+        return array_map(function ($Value)
+        {
+            if (is_array($Value)) {
+                $aValues = array_unique(array_filter($Value));
+                if (count($aValues) == 1) {
+                    return current($aValues);
+                } else {
+                    return $aValues;
+                }
+            } else {
+                return $Value;
+            }
+        }, $aMerged);
+    }
+
+
+
+
+
+    public function mergeClassifications ($aClassifications): string
+    {
+        // Merge all classifications for this variant. We only use this method if we have more than one classification,
+        //  so try to come up with a single conclusion.
+
+        // Rules: report opposites; */VUS to VUS; LB/B to LB; LP/P to LP.
+        // Flipping the array makes it easier to work with the values;
+        //  isset()s are faster than array_search() and in_array().
+        $aClassifications = array_flip($aClassifications);
+        if ((isset($aClassifications['B']) || isset($aClassifications['LB']))
+            && (isset($aClassifications['P']) || isset($aClassifications['LP']))) {
+            // Internal conflict within center. These are reported in the error file. Change column 'classification'
+            // to conflicting, we want to store the conflict to report this in LOVD in a non-public entry.
+            $sClassification = 'conflicting';
+
+        } elseif (isset($aClassifications['VUS'])) {
+            // VUS and something else, not a conflict. OK, VUS then.
+            $sClassification = 'VUS';
+
+        } else {
+            // Still multiple values. LB/B to LB, LP/P to LP.
+            if (isset($aClassifications['B']) && isset($aClassifications['LB'])) {
+                $sClassification = 'LB';
+            } elseif (isset($aClassifications['P']) && isset($aClassifications['LP'])) {
+                $sClassification = 'LP';
+            } else {
+                // This should never happen, but still.
+                throw new \Exception("Variant merging conflict for classifications " . implode(', ', array_keys($aClassifications)));
+            }
+        }
+
+        return $sClassification;
     }
 
 
