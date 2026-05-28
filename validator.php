@@ -34,24 +34,6 @@ class Validator
 
 
 
-    public function checkIfFileExistAndReadable(string $sFile): array
-    {
-        // Checking if the files (old and new) created by the aggregator script exist,
-        //  are readable, and can be opened.
-        if (!file_exists($sFile) || !is_readable($sFile)) {
-            throw new \Exception("File {$sFile} does not exist or is not readable!");
-        }
-        $aLines = file($sFile, FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES);
-        if (!$aLines) {
-            throw new \Exception("File {$sFile} could not be opened!");
-        }
-        return $aLines;
-    }
-
-
-
-
-
     public function CompareOldAndNew (array $aArrayOld, array $aArrayNew): bool
     {
         // The created files (old and new) from the aggregator script are compared to decide if variants were
@@ -140,23 +122,22 @@ class Validator
         // Parse the given data file and return the data as an array.
 
         // Check if the file exists, is readable, and can be opened.
-        $aLines = Validator::checkIfFileExistAndReadable($sFile);
-        $aArray = Validator::putFileintoArray($aLines);
-        return $aArray;
-    }
+        if (!file_exists($sFile) || !is_readable($sFile)) {
+            throw new \Exception("File $sFile does not exist or is not readable");
+        }
+        $aLines = file($sFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if (!$aLines) {
+            throw new \Exception("File $sFile could not be opened");
+        }
 
-
-
-
-
-    public function putFileintoArray(array $aLinesFile): array
-    {
-        // First line should be headers.
-        $aHeaders = explode("\t", array_shift($aLinesFile));
+        // Read the data and construct an array.
+        // First line should be headers. No need to use strtolower() here, this is our own format.
+        $aHeaders = explode("\t", array_shift($aLines));
         $nHeaders = count($aHeaders);
         $aHeaders = array_map('trim', $aHeaders, array_fill(0, $nHeaders, '"'));
+
         $aData = [];
-        foreach ($aLinesFile as $nLine => $sLine) {
+        foreach ($aLines as $nLine => $sLine) {
             $aDataLine = explode("\t", rtrim($sLine));
             // Trim quotes off of the data.
             $aDataLine = array_map(function($sData) {
@@ -164,14 +145,16 @@ class Validator
             }, $aDataLine);
             $nDataColumns = count($aDataLine);
             if ($nHeaders > $nDataColumns) {
-                // We accidentally trimmed off empty field(s).
+                // We accidentally trimmed off empty fields.
                 $aDataLine = array_pad($aDataLine, $nHeaders, '');
             }
+
             $aVariant = array_combine($aHeaders, $aDataLine);
-            $sCenterVariant = $aVariant['center'] . ':' . $aVariant['genomic_native_normalized'];
-            // Creating format in which the data will be stored.
-            $aData[$sCenterVariant] = $aVariant;
+            // Store the data grouped by the center and normalized variant description together in one key value.
+            // This allows us to easily run diffs.
+            $aData[$aVariant['center'] . ':' . $aVariant['genomic_native_normalized']] = $aVariant;
         }
+
         return $aData;
     }
 }
