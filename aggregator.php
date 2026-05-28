@@ -162,11 +162,8 @@ class Aggregator
                     // This way we can count the amount of keys, the classifications have become the keys.
                     $aClassificationsFlip = array_flip($aClassifications);
                     if (count($aClassificationsFlip) == 1) {
-                        // If the classifications align, we get here.
-                        // One unique value, everybody agrees.
-                        foreach ($aClassifications as $sCenter => $sClassification) {
-                            $this->data[$sVariant][$sCenter]['status'] = 'consensus';
-                        }
+                        // There is only one unique classification between the centers.
+                        $sStatus = 'consensus';
 
                     } else {
                         // We have multiple classifications for this variant.
@@ -198,11 +195,11 @@ class Aggregator
                         } else {
                             $sStatus = 'consensus';
                         }
+                    }
 
-                        // Store the same status for all centers that have classifications.
-                        foreach ($aClassifications as $sCenter => $sClassification) {
-                            $this->data[$sVariant][$sCenter]['status'] = $sStatus;
-                        }
+                    // Store the same status for all centers that have classifications.
+                    foreach ($aClassifications as $sCenter => $sClassification) {
+                        $this->data[$sVariant][$sCenter]['status'] = $sStatus;
                     }
                 }
             }
