@@ -5,11 +5,11 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-12
- * Modified    : 2026-05-20
+ * Modified    : 2026-05-28
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
- * Programmers  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
- *                Marit de Koster <m.de_koster@lumc.nl>
+ * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
+ *               Marit de Koster <m.de_koster@lumc.nl>
  *
  *************/
 
@@ -19,10 +19,14 @@ use LOVD\Settings;
 
 class Validator
 {
+    // Class abstracting the validation of the aggregated data by comparing it to the previous release's data file.
+
     public static function validate (string $sFileNew, string $sFileOld): Validator
     {
         $o = new Validator();
-        $o->parse($sFileNew, $sFileOld);
+        $aPreviousData = $o->parse($sFileOld);
+        $aCurrentData = $o->parse($sFileNew);
+        $o->compareOldAndNew($aPreviousData, $aCurrentData);
         return $o;
     }
 
@@ -48,7 +52,7 @@ class Validator
 
 
 
-    public function CompareOldAndNew(array $aArrayNew, array $aArrayOld): bool
+    public function CompareOldAndNew (array $aArrayOld, array $aArrayNew): bool
     {
         // The created files (old and new) from the aggregator script are compared to decide if variants were
         //  deleted, created or updated.
@@ -131,19 +135,14 @@ class Validator
 
 
 
-    public function parse(string $sFileNew, string $sFileOld): bool
+    public function parse (string $sFile): array
     {
-        // $sFileNew.
-        // Checks if the new file exist, is readable, and can be opened.
-        $aLinesNew = Validator::checkIfFileExistAndReadable($sFileNew);
-        $aArrayNew = Validator::putFileintoArray($aLinesNew);
-        // $sFileOld.
-        // Check if the old file exists, is readable, and can be opened.
-        $aLinesOld = Validator::checkIfFileExistAndReadable($sFileOld);
-        $aArrayOld = Validator::putFileintoArray($aLinesOld);
-        // Compares the new and old files to see if there are variants deleted, created, or updated.
-        Validator::CompareOldAndNew($aArrayNew, $aArrayOld);
-        return true;
+        // Parse the given data file and return the data as an array.
+
+        // Check if the file exists, is readable, and can be opened.
+        $aLines = Validator::checkIfFileExistAndReadable($sFile);
+        $aArray = Validator::putFileintoArray($aLines);
+        return $aArray;
     }
 
 
