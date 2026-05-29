@@ -326,8 +326,18 @@ if ($Status->get('step') < $nStep) {
         $nPreviousReleaseMonth = $aMonths[array_search($nReleaseMonth, $aMonths) + 1];
     }
 
+    // Load the previous release's status.json. Note that the Settings class will try to create the file if it doesn't
+    //  exist; it won't complain unless the directory also doesn't exist.
     define('PREVIOUS_RELEASE_PATH', dirname(RELEASE_PATH) . '/' . $nPreviousReleaseYear . '-' . str_pad($nPreviousReleaseMonth, 2, '0', STR_PAD_LEFT));
+    $sPreviousStatus = PREVIOUS_RELEASE_PATH . '/status.json';
+    if (!file_exists($sPreviousStatus) || !is_readable($sPreviousStatus)) {
+        // Handle this kindly instead of throwing a hard exception.
+        $Log->add("Failed to find the previous release's status. Has the directory been moved?", '!!');
+        die($Settings->get('error_codes|EXIT_ERROR_INPUT_CANT_OPEN'));
+    }
     $PreviousStatus = new Settings(PREVIOUS_RELEASE_PATH . '/status.json');
+
+    // Now call the validator and pass on the files that need validation (i.e., their contents are compared).
     try {
         $o = Validator::validate($Status->get('output_files|aggregated'), PREVIOUS_RELEASE_PATH . '/' . $PreviousStatus->get('output_files|aggregated'));
     } catch (Exception $e) {
