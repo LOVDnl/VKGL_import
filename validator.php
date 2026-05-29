@@ -54,24 +54,23 @@ class Validator
         // If the values are the same, the variant is unchanged, otherwise it has been updated.
         $aDifferentKeys = array_intersect($aKeysNew, $aKeysOld);
         $aUpdated = [];
-        $aUnchanged = [];
         foreach ($aDifferentKeys as $sDifferentKey) {
             $aCurrentValues = $aCurrentData[$sDifferentKey];
             $aPreviousValues = $aPreviousData[$sDifferentKey];
             if ($aCurrentValues !== $aPreviousValues) {
                 $aUpdated[] = $sDifferentKey;
-            } else {
-                $aUnchanged[] = $sDifferentKey;
             }
         }
-        $nTotal = count($aUpdated) + count($aUnchanged) + count($aCreated);
+        $nTotalChanges = count($aCreated) + count($aUpdated) + count($aDeleted);
         // Check if too many variants have changed (deletion, creation or updated).
-        if (round(count($aUpdated) / $nTotal * 100, 2) > ($aValidationCutoffs['updated'] ?? 0)) {
+        if (count($aUpdated) > ($aValidationCutoffs['updated'] ?? 0)) {
             throw new \Exception("The number of variants updated is too high");
-        } elseif (round(count($aCreated) / $nTotal * 100, 2) > ($aValidationCutoffs['created'] ?? 0)) {
+        } elseif (count($aCreated) > ($aValidationCutoffs['created'] ?? 0)) {
             throw new \Exception("The number of variants created is too high");
-        } elseif (round(count($aDeleted) / $nTotal * 100, 2) > ($aValidationCutoffs['deleted'] ?? 0)) {
+        } elseif (count($aDeleted) > ($aValidationCutoffs['deleted'] ?? 0)) {
             throw new \Exception("The number of variants deleted is too high");
+        } elseif (!$nTotalChanges) {
+            throw new \Exception("There is nothing to do; this release does not introduce any changes");
         } else {
             // This where the data will be saved to set it in statistics.json.
             $aCenters = [];
