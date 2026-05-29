@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-12
- * Modified    : 2026-05-28
+ * Modified    : 2026-05-29
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -21,11 +21,11 @@ class Validator
 {
     // Class abstracting the validation of the aggregated data by comparing it to the previous release's data file.
 
-    public static function validate (string $sFileNew, string $sFileOld): Validator
+    public static function validate (string $sPreviousFile, string $sCurrentFile): Validator
     {
         $o = new Validator();
-        $aPreviousData = $o->parse($sFileOld);
-        $aCurrentData = $o->parse($sFileNew);
+        $aPreviousData = $o->parse($sPreviousFile);
+        $aCurrentData = $o->parse($sCurrentFile);
         $o->compareOldAndNew($aPreviousData, $aCurrentData);
         return $o;
     }
@@ -34,7 +34,7 @@ class Validator
 
 
 
-    public function CompareOldAndNew (array $aArrayOld, array $aArrayNew): bool
+    public function CompareOldAndNew (array $aPreviousData, array $aCurrentData): bool
     {
         // The created files (old and new) from the aggregator script are compared to decide if variants were
         //  deleted, created or updated.
@@ -45,8 +45,8 @@ class Validator
         // The name of the current directory, so it can be used later.
         $sDirectory = substr(RELEASE_PATH, -7);
         // To see if a variant was deleted or created.
-        $aKeysNew = array_keys($aArrayNew);
-        $aKeysOld = array_keys($aArrayOld);
+        $aKeysNew = array_keys($aCurrentData);
+        $aKeysOld = array_keys($aPreviousData);
         // Saves the variants in an array.
         $aCreated = array_diff($aKeysNew, $aKeysOld);
         $aDeleted = array_diff($aKeysOld, $aKeysNew);
@@ -57,9 +57,9 @@ class Validator
         $aUpdated = [];
         $aUnchanged = [];
         foreach ($aDifferentKeys as $sDifferentKey) {
-            $aValuesNew = $aArrayNew[$sDifferentKey];
-            $aValuesOld = $aArrayOld[$sDifferentKey];
-            if ($aValuesNew !== $aValuesOld) {
+            $aCurrentValues = $aCurrentData[$sDifferentKey];
+            $aPreviousValues = $aPreviousData[$sDifferentKey];
+            if ($aCurrentValues !== $aPreviousValues) {
                 $aUpdated[] = $sDifferentKey;
             } else {
                 $aUnchanged[] = $sDifferentKey;
@@ -79,7 +79,7 @@ class Validator
             $aCenters = [];
             $aStatus = [];
             $aInternalConflicts = [];
-            foreach ($aArrayNew as $sKeyNew => $aObservations) {
+            foreach ($aCurrentData as $aObservations) {
                 $aCenters[] = strtolower($aObservations['center']);
                 // Because the number of external_opposites per center are saved separately,
                 //  only external_opposite will be saved in status and can be changed to opposite.
