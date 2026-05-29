@@ -122,7 +122,7 @@ class Validator
         // Parse the given data file and return the data as an array.
 
         // Check if the file exists, is readable, and can be opened.
-        if (!file_exists($sFile) || !is_readable($sFile)) {
+        if (!file_exists($sFile) || !is_readable($sFile) || !is_file($sFile)) {
             throw new \Exception("File $sFile does not exist or is not readable");
         }
         $aLines = file($sFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);

@@ -332,7 +332,7 @@ if ($Status->get('step') < $nStep) {
     $sPreviousStatus = PREVIOUS_RELEASE_PATH . '/status.json';
     if (!file_exists($sPreviousStatus) || !is_readable($sPreviousStatus)) {
         // Handle this kindly instead of throwing a hard exception.
-        $Log->add("Failed to find the previous release's status. Has the directory been moved?", '!!');
+        $Log->add("Failed to find the previous release's status file: $sPreviousStatus.\nHas the directory been moved?", '!!');
         die($Settings->get('error_codes|EXIT_ERROR_INPUT_CANT_OPEN'));
     }
     $PreviousStatus = new Settings(PREVIOUS_RELEASE_PATH . '/status.json');
