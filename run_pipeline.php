@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-23
- * Modified    : 2026-05-21
+ * Modified    : 2026-05-29
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -309,27 +309,32 @@ if ($Status->get('step') < $nStep) {
 
 
 
-// Step 5: Validator
+// Step 5: Validate the aggregated output.
 $nStep ++;
 if ($Status->get('step') < $nStep) {
-    $Log->add("Parsing the VKGL data files...");
-    if ($nReleaseMonth == end($aMonths)) {
+    // Compare the aggregated data file with the file from the previous release and validate the resulting diff.
+    $Log->add("Validating the diff with the previous release...");
+
+    // First, we'll need to determine where to find that previous file.
+    $nPreviousReleaseYear = $nReleaseYear;
+    if ($nReleaseMonth == $aMonths[array_key_last($aMonths)]) {
         // If the current release month is the first release of the year, the last
-        //  release must be set to the last release date (month and year)
-        $nOldReleaseMonth = reset($aMonths);
-        $nReleaseYear = $nReleaseYear - 1;
+        //  release must be set to the last release of the last year.
+        $nPreviousReleaseMonth = $aMonths[0];
+        $nPreviousReleaseYear --;
     } else {
-        $nOldReleaseMonth = $aMonths[array_search($nReleaseMonth, $aMonths)+1];
+        $nPreviousReleaseMonth = $aMonths[array_search($nReleaseMonth, $aMonths) + 1];
     }
-    $sOldDirectory = $nReleaseYear . '-' . str_pad($nOldReleaseMonth, 2, '0', STR_PAD_LEFT);
-    $OldReleasePath = preg_replace('/(\d+)-(\d+)$/',$sOldDirectory, RELEASE_PATH);
-    $OldStatus = new Settings($OldReleasePath . '/status.json');
+
+    define('PREVIOUS_RELEASE_PATH', dirname(RELEASE_PATH) . '/' . $nPreviousReleaseYear . '-' . str_pad($nPreviousReleaseMonth, 2, '0', STR_PAD_LEFT));
+    $PreviousStatus = new Settings(PREVIOUS_RELEASE_PATH . '/status.json');
     try {
-        $o = Validator::validate($Status->get('output_files|aggregated'), $OldReleasePath ."/" . $OldStatus->get('output_files|aggregated'));
+        $o = Validator::validate($Status->get('output_files|aggregated'), PREVIOUS_RELEASE_PATH . '/' . $PreviousStatus->get('output_files|aggregated'));
     } catch (Exception $e) {
-        $Log->add("Failed to parse the data files.\n" . $e->getMessage() . '.', '!!');
+        $Log->add("Failed to validate the aggregated output.\n" . $e->getMessage() . '.', '!!');
         die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
     }
-    $Log->add("Successfully validated the aggregator script.", 'OK');
+
+    $Log->add("Successfully validated the aggregated output.", 'OK');
     $Status->set('step', $nStep);
 }
