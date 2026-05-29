@@ -74,41 +74,36 @@ class Validator
             throw new \Exception("The number of variants deleted is too high");
         } elseif (!$nTotalChanges) {
             throw new \Exception("There is nothing to do; this release does not introduce any changes");
-        } else {
-            // This where the data will be saved to set it in statistics.json.
-            $aCenters = [];
-            $aStatus = [];
-            $aInternalConflicts = [];
-            foreach ($aCurrentData as $aObservations) {
-                $aCenters[] = strtolower($aObservations['center']);
-                // Because the number of external_opposites per center are saved separately,
-                //  only external_opposite will be saved in status and can be changed to opposite.
-                if ($aObservations['status'] == 'external_opposite') {
-                    $aObservations['status'] = 'opposite';
-                } elseif ($aObservations['status'] == 'internal_opposite') {
-                    $aInternalConflicts[] = strtolower($aObservations['center']);
-                }
-                $aStatus[] = $aObservations['status'];
-            }
-            // Counts the number of variants per center.
-            $aCountCenters = array_count_values($aCenters);
-            // Counts the number of variants per status.
-            $aCountStatus = array_count_values($aStatus);
-            // Counts the number of internal_opposites per center.
-            $aCountInternalConflicts = array_count_values($aInternalConflicts);
-            // Because internal_opposite is saved separately, it is not needed in status.
-            unset($aCountStatus['internal_opposite']);
-            // Sorts the key values in alphabetical order.
-            ksort($aCountCenters);
-            ksort($aCountStatus);
-            ksort($aCountInternalConflicts);
-            $aStatistics = [
-                'centers' => $aCountCenters,
-                'status' => $aCountStatus,
-                'internal_conflicts' => $aCountInternalConflicts,
-            ];
-            $this->statistics = $aStatistics;
         }
+
+        // Now, collect the statistics, so the pipeline can collect it from us.
+        $aStatistics = [
+            'centers' => [],
+            'status' => [],
+            'internal_conflicts' => [],
+        ];
+
+        foreach ($aCurrentData as $aVariant) {
+            // Store the number of variants per center.
+            $aStatistics['centers'][$aVariant['center']] = ($aStatistics['centers'][$aVariant['center']] ?? 0) + 1;
+
+            // Store the number of variants per status, but store internal conflicts separately.
+            // Also, external opposites are stored simply as "opposite" as the distinction is no longer relevant.
+            if ($aVariant['status'] == 'internal_opposite') {
+                $aStatistics['internal_conflicts'][$aVariant['center']] = ($aStatistics['internal_conflicts'][$aVariant['center']] ?? 0) + 1;
+            } elseif ($aVariant['status'] == 'external_opposite') {
+                $aStatistics['status']['opposite'] = ($aStatistics['status']['opposite'] ?? 0) + 1;
+            } else {
+                $aStatistics['status'][$aVariant['status']] = ($aStatistics['status'][$aVariant['status']] ?? 0) + 1;
+            }
+        }
+
+        // Sort the key values in alphabetical order and then store the statistics internally.
+        ksort($aStatistics['centers']);
+        ksort($aStatistics['status']);
+        ksort($aStatistics['internal_conflicts']);
+        $this->statistics = $aStatistics;
+
         return true;
     }
 
