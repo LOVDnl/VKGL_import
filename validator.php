@@ -21,12 +21,12 @@ class Validator
 {
     // Class abstracting the validation of the aggregated data by comparing it to the previous release's data file.
 
-    public static function validate (string $sPreviousFile, string $sCurrentFile): Validator
+    public static function validate (string $sPreviousFile, string $sCurrentFile, array $aCutoffs): Validator
     {
         $o = new Validator();
         $aPreviousData = $o->parse($sPreviousFile);
         $aCurrentData = $o->parse($sCurrentFile);
-        $o->compareOldAndNew($aPreviousData, $aCurrentData);
+        $o->compareOldAndNew($aPreviousData, $aCurrentData, $aCutoffs);
         return $o;
     }
 
@@ -34,13 +34,12 @@ class Validator
 
 
 
-    public function CompareOldAndNew (array $aPreviousData, array $aCurrentData): bool
+    public function CompareOldAndNew (array $aPreviousData, array $aCurrentData, array $aValidationCutoffs): bool
     {
         // The created files (old and new) from the aggregator script are compared to decide if variants were
         //  deleted, created or updated.
         // The next step is to add information of the newest aggregator file to statistics.json.
         // The number per center, the number per status, and the number of internal_opposites per center.
-        $Settings = new Settings(substr_replace(RELEASE_PATH, '', -8, 8) . '/settings.json');
         $Statistics = new Settings(substr_replace(RELEASE_PATH, '', -8, 8) . '/statistics.json');
         // The name of the current directory, so it can be used later.
         $sDirectory = substr(RELEASE_PATH, -7);
@@ -66,13 +65,12 @@ class Validator
             }
         }
         $nTotal = count($aUpdated) + count($aUnchanged) + count($aCreated);
-        $aValidationCutoffs = $Settings->get('validation_cutoffs|aggregated');
         // Check if too many variants have changed (deletion, creation or updated).
-        if (round(count($aUpdated) / $nTotal * 100, 2) > $aValidationCutoffs['updated']) {
+        if (round(count($aUpdated) / $nTotal * 100, 2) > ($aValidationCutoffs['updated'] ?? 0)) {
             throw new \Exception("The number of variants updated is too high");
-        } elseif (round(count($aCreated) / $nTotal * 100, 2) > $aValidationCutoffs['created']) {
+        } elseif (round(count($aCreated) / $nTotal * 100, 2) > ($aValidationCutoffs['created'] ?? 0)) {
             throw new \Exception("The number of variants created is too high");
-        } elseif (round(count($aDeleted) / $nTotal * 100, 2) > $aValidationCutoffs['deleted']) {
+        } elseif (round(count($aDeleted) / $nTotal * 100, 2) > ($aValidationCutoffs['deleted'] ?? 0)) {
             throw new \Exception("The number of variants deleted is too high");
         } else {
             // This where the data will be saved to set it in statistics.json.

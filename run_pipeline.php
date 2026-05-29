@@ -339,7 +339,7 @@ if ($Status->get('step') < $nStep) {
 
     // Now call the validator and pass on the files that need validation (i.e., their contents are compared).
     try {
-        $o = Validator::validate(PREVIOUS_RELEASE_PATH . '/' . $PreviousStatus->get('output_files|aggregated'), $Status->get('output_files|aggregated'));
+        $o = Validator::validate(PREVIOUS_RELEASE_PATH . '/' . $PreviousStatus->get('output_files|aggregated'), $Status->get('output_files|aggregated'), ($Settings->get('validation_cutoffs|aggregated') ?? []));
     } catch (Exception $e) {
         $Log->add("Failed to validate the aggregated output.\n" . $e->getMessage() . '.', '!!');
         die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
