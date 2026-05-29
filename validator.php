@@ -14,12 +14,11 @@
  *************/
 
 namespace LOVD\VKGL;
-require_once(ROOT_PATH . '/settings.php');
-use LOVD\Settings;
 
 class Validator
 {
     // Class abstracting the validation of the aggregated data by comparing it to the previous release's data file.
+    private array $statistics = [];
 
     public static function validate (string $sPreviousFile, string $sCurrentFile, array $aCutoffs): Validator
     {
@@ -34,15 +33,20 @@ class Validator
 
 
 
+    public function getStatistics (): array
+    {
+        return $this->statistics;
+    }
+
+
+
+
+
     public function CompareOldAndNew (array $aPreviousData, array $aCurrentData, array $aValidationCutoffs): bool
     {
         // The created files (old and new) from the aggregator script are compared to decide if variants were
         //  deleted, created or updated.
-        // The next step is to add information of the newest aggregator file to statistics.json.
-        // The number per center, the number per status, and the number of internal_opposites per center.
-        $Statistics = new Settings(substr_replace(RELEASE_PATH, '', -8, 8) . '/statistics.json');
-        // The name of the current directory, so it can be used later.
-        $sDirectory = substr(RELEASE_PATH, -7);
+
         // To see if a variant was deleted or created.
         $aKeysNew = array_keys($aCurrentData);
         $aKeysOld = array_keys($aPreviousData);
@@ -104,8 +108,7 @@ class Validator
                 'status' => $aCountStatus,
                 'internal_conflicts' => $aCountInternalConflicts,
             ];
-            // Created data is set in statistics.json.
-            $Statistics->set($sDirectory, $aStatistics);
+            $this->statistics = $aStatistics;
         }
         return true;
     }
