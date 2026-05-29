@@ -25,7 +25,7 @@ class Validator
         $o = new Validator();
         $aPreviousData = $o->parse($sPreviousFile);
         $aCurrentData = $o->parse($sCurrentFile);
-        $o->compareOldAndNew($aPreviousData, $aCurrentData, $aCutoffs);
+        $o->validateAggregatedData($aPreviousData, $aCurrentData, $aCutoffs);
         return $o;
     }
 
@@ -42,36 +42,35 @@ class Validator
 
 
 
-    public function CompareOldAndNew (array $aPreviousData, array $aCurrentData, array $aValidationCutoffs): bool
+    public function validateAggregatedData (array $aPreviousData, array $aCurrentData, array $aValidationCutoffs): bool
     {
-        // The created files (old and new) from the aggregator script are compared to decide if variants were
-        //  deleted, created or updated.
+        // The aggregated data file is compared to the previous release's aggregated data file
+        //  to measure the number of created, updated, and deleted variants.
 
-        // To see if a variant was deleted or created.
-        $aKeysNew = array_keys($aCurrentData);
-        $aKeysOld = array_keys($aPreviousData);
-        // Saves the variants in an array.
-        $aCreated = array_diff($aKeysNew, $aKeysOld);
-        $aDeleted = array_diff($aKeysOld, $aKeysNew);
-        // Check if the keys are the same.
-        // If the keys are the same, the values are compared.
-        // If the values are the same, the variant is unchanged, otherwise it has been updated.
-        $aDifferentKeys = array_intersect($aKeysNew, $aKeysOld);
-        $aUpdated = [];
-        foreach ($aDifferentKeys as $sDifferentKey) {
-            $aCurrentValues = $aCurrentData[$sDifferentKey];
-            $aPreviousValues = $aPreviousData[$sDifferentKey];
-            if ($aCurrentValues !== $aPreviousValues) {
-                $aUpdated[] = $sDifferentKey;
+        // The arrays have keys in "center:variant" format, so we can do quick checks on those.
+        $aPreviousVariants = array_keys($aPreviousData);
+        $aCurrentVariants = array_keys($aCurrentData);
+
+        // Now, we can easily determine counts for created and deleted variants.
+        $nCreated = count(array_diff($aCurrentVariants, $aPreviousVariants));
+        $nDeleted = count(array_diff($aPreviousVariants, $aCurrentVariants));
+
+        // Now, check all variants in both data sets to see if they have been updated.
+        $aUpdatedVariantKeys = array_intersect($aCurrentVariants, $aPreviousVariants);
+        $nUpdated = 0;
+        foreach ($aUpdatedVariantKeys as $sVariantKey) {
+            if ($aCurrentData[$sVariantKey] !== $aPreviousData[$sVariantKey]) {
+                $nUpdated ++;
             }
         }
-        $nTotalChanges = count($aCreated) + count($aUpdated) + count($aDeleted);
-        // Check if too many variants have changed (deletion, creation or updated).
-        if (count($aUpdated) > ($aValidationCutoffs['updated'] ?? 0)) {
-            throw new \Exception("The number of variants updated is too high");
-        } elseif (count($aCreated) > ($aValidationCutoffs['created'] ?? 0)) {
+        $nTotalChanges = $nCreated + $nUpdated + $nDeleted;
+
+        // Check if the counts are below the expected values, using cutoffs that we got from the settings.
+        if ($nCreated > ($aValidationCutoffs['created'] ?? 0)) {
             throw new \Exception("The number of variants created is too high");
-        } elseif (count($aDeleted) > ($aValidationCutoffs['deleted'] ?? 0)) {
+        } elseif ($nUpdated > ($aValidationCutoffs['updated'] ?? 0)) {
+            throw new \Exception("The number of variants updated is too high");
+        } elseif ($nDeleted > ($aValidationCutoffs['deleted'] ?? 0)) {
             throw new \Exception("The number of variants deleted is too high");
         } elseif (!$nTotalChanges) {
             throw new \Exception("There is nothing to do; this release does not introduce any changes");
