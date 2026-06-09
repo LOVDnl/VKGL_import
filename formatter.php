@@ -115,6 +115,7 @@ class Formatter
             'change;chromosome;classification;classification date;classification system;classification tags;conditions;end;gene summary;genes;genome build;inheritance;interpretation text;references;source;start;submitter;submitting org' => 'franklin_cnv_tsv',
             'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc_snv_tsv',
             'alt;category;chromosome;classification;cnomen;effect;end;exon;gene;pnomen;position;ref;region;strand;transcript' => 'nki_snv_tsv',
+            'chromosome;clinical phenotypes;cnv classification;constitutional/acquired variant;end postition;flanking normals - pter;flanking normals - qter;genome build;genomic nomenclature;inheritance;internal identifier;international system for human cytogenomic nomenclature;lab upload date;list of overlapping genes (hgnc);number of copies / upd;parental origin;phenotype (hpo);start and end chromosome band;start position;timestamp last processed;type of cnv;type of platform;type of test' => 'nxclinical_cnv_tsv',
             'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud_snv_tsv',
             default => false,
         };
@@ -312,6 +313,58 @@ class Formatter
                             'transcript' => $aVariant['transcript'],
                             'cDNA' => $aVariant['cnomen'],
                             'protein' => $aVariant['pnomen'],
+                    ];
+                    break;
+
+                case 'nxclinical_cnv_tsv':
+                    // NxClinical format, which is a manual export and won't be updated often.
+
+                    // Collect the parts needed to build the HGVS description.
+                    switch ($aVariant['number of copies / upd']) {
+                        // The copy number represents the number of times the sequence is present, where
+                        //  0 means a homozygous deletion,
+                        //  1 means a heterozygous deletion,
+                        //  3 means a heterozygous duplication, and
+                        //  4 means a homozygous duplication (all for autosomes only).
+                        // This number is sometimes missing for variants affecting the X/Y chromosomes.
+                        case '0':
+                            $sVariantType = 'del';
+                            $sZygosity = 'homozygote';
+                            break;
+
+                        case '1':
+                            $sVariantType = 'del';
+                            $sZygosity = 'heterozygote';
+                            break;
+
+                        case '3':
+                            $sVariantType = 'dup';
+                            $sZygosity = 'heterozygote';
+                            break;
+
+                        case '4':
+                            $sVariantType = 'dup';
+                            $sZygosity = 'homozygote';
+                            break;
+
+                        case '':
+                            // We didn't get a copy number, so we'll have to guess it.
+                            // This only happens with chrX and chrY.
+                            // Take the variant type from a different field.
+                            $sVariantType = ($aVariant['type of cnv'] == 'gain'? 'dup' : 'del');
+                            $sZygosity = 'unknown'; // The default.
+                            break;
+                    }
+
+                    // Store what we have.
+                    $this->data[$sCenter][$sDataType][] = [
+                        'genomic_native' => "{$aVariant['chromosome']}({$aVariant['genome build']}):g.{$aVariant['start position']}_{$aVariant['end postition']}" . $sVariantType,
+                        'classification' => $this->convertClassification($aVariant['cnv classification']),
+                        'annotation' => [
+                            'source' => 'NxClinical',
+                            'platform' => $aVariant['type of platform'],
+                            'zygosity' => $sZygosity,
+                        ],
                     ];
                     break;
 
