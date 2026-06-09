@@ -112,6 +112,7 @@ class Formatter
             // 2024-02 + 2024-04; Due to a personnel change at Alissa without a proper handover, manual exports are being generated with yet another signature.
             'alt;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa_snv_tsv',
             // Other:
+            'change;chromosome;classification;classification date;classification system;classification tags;conditions;end;gene summary;genes;genome build;inheritance;interpretation text;references;source;start;submitter;submitting org' => 'franklin_cnv_tsv',
             'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc_snv_tsv',
             'alt;category;chromosome;classification;cnomen;effect;end;exon;gene;pnomen;position;ref;region;strand;transcript' => 'nki_snv_tsv',
             'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud_snv_tsv',
@@ -245,6 +246,37 @@ class Formatter
                         'genomic_native' => $sVariant,
                         'classification' => $this->convertClassification($aVariant['pathogenicity']),
                         'transcript' => $aVariant['transcript'],
+                    ];
+                    break;
+
+                case 'franklin_cnv_tsv':
+                    // Filtering is needed. Somehow, there is quite some useless data here.
+                    // Insertions can't be used. The positions are often the same, and if they're not, the descriptions
+                    //  clearly indicate it's not a dup of the region indicated by the positions. This makes no sense.
+                    if ($aVariant['change'] == 'INSERTION') {
+                        continue 2;
+                    }
+
+                    // Then there are "breakends". Start and end are always the same. No clue what this is.
+                    if ($aVariant['change'] == 'BREAKEND') {
+                        continue 2;
+                    }
+
+                    // The classification can be set to FALSE or NONE. Erm...
+                    if ($aVariant['classification'] == 'FALSE' || $aVariant['classification'] == 'NONE') {
+                        continue 2;
+                    }
+
+                    // Store what we have.
+                    $this->data[$sCenter][$sDataType][] = [
+                        'genomic_native' => "{$aVariant['chromosome']}({$aVariant['genome build']}):g.{$aVariant['start']}_{$aVariant['end']}" . strtolower(substr($aVariant['change'], 0, 3)),
+                        'classification' => $this->convertClassification($aVariant['classification']),
+                        // 'gene' => $aVariant['genes'], // We can have many genes here, but this isn't useful to store for CNVs.
+                        'annotation' => [
+                            'source' => 'Franklin',
+                            'submitter' => $aVariant['submitter'],
+                            'classification_date' => $aVariant['classification date'],
+                        ],
                     ];
                     break;
 
