@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-27 (based on format_raw_VKGL_files.php)
- * Modified    : 2026-04-28
+ * Modified    : 2026-06-09
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -51,7 +51,7 @@ class Formatter
         foreach ($aFiles as $sFile => $sCenter) {
             if (is_int($sFile)) {
                 // Looks like we got a "normal" array instead of an associative array.
-                throw new \Exception("Invalid argument format — the formatter requires the list of files as an associative array: [file => center].");
+                throw new \Exception("Invalid argument format — the formatter requires the list of files as an associative array: [file => center]");
             }
             $o->parse($sFile, $sCenter);
         }
@@ -222,6 +222,7 @@ class Formatter
                         'cDNA' => $aVariant['c_nomen'],
                         'protein' => str_replace('NULL', '', $aVariant['p_nomen']),
                         'annotation' => [
+                            'source' => 'Alissa',
                             'last_updated_by' => $aVariant['last_updated_by'],
                             'last_updated_on' => strstr($aVariant['last_updated_on'], '.', true),
                         ],
@@ -240,6 +241,7 @@ class Formatter
                     }
 
                     $this->data[$sCenter][$aVariant['vartype']][] = [
+                        'source' => 'Emedgene',
                         'genomic_native' => $sVariant,
                         'classification' => $this->convertClassification($aVariant['pathogenicity']),
                         'transcript' => $aVariant['transcript'],
