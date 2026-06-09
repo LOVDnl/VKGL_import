@@ -585,33 +585,33 @@ foreach ($aFiles as $sFile => $sCenter) {
                         //To validate this data we're checking if the output matches with our expectation
                         //description is used to see if the line goes through this statement, and then looking at the number
                         //at the end of description. In this case this is 0.
-                        //Because it's 0, we expect that the output will say del homozygote.
+                        //Because it's 0, we expect that the output will say del homozygous.
                         $sVariantType = 'del';
-                        $sHomOrHet = 'homozygote';
+                        $sHomOrHet = 'homozygous';
                     } elseif ($sCount == '1'){
                         $sVariantType = 'del';
-                        $sHomOrHet = 'heterozygote';
+                        $sHomOrHet = 'heterozygous';
                     } elseif ($sCount == '2'){
                         //Deciding the variant based on column I ('type')
                         if ($aDataLine['type'] == 'DUPLICATION') {
                             $sVariantType = 'dup';
-                            $sHomOrHet = 'heterozygote';
+                            $sHomOrHet = 'heterozygous';
                         } elseif ($aDataLine['type'] == 'DELETION') {
                             $sVariantType = 'del';
-                            $sHomOrHet = 'heterozygote';
+                            $sHomOrHet = 'heterozygous';
                         }elseif ($aDataLine['type'] == 'INSERTION') {
                             $sVariantType = 'ins';
-                            $sHomOrHet = 'homozygote';
+                            $sHomOrHet = 'homozygous';
                         }
                     } elseif ($sCount == '2~3' && strpos($aDataLine['description'],'pter')!==false && strpos($aDataLine['description'],'qter')!==false){
                         $sVariantType = 'sup';
                         $sHomOrHet = 'unknown';
                     } elseif ($sCount == '3' || $sCount == '2~3'){
                         $sVariantType = 'dup';
-                        $sHomOrHet = 'heterozygote';
+                        $sHomOrHet = 'heterozygous';
                     } elseif ($sCount == '4'){
                         $sVariantType = 'dup';
-                        $sHomOrHet = 'homozygote';
+                        $sHomOrHet = 'homozygous';
                     }
                     //Using the information from column A to make a HGVS description with the required information
                     //checking the information for mistakes (wrong order of numbers, value of -1, etc)
@@ -626,31 +626,31 @@ foreach ($aFiles as $sFile => $sCenter) {
                     //description is used to see if the line goes through this statement. In this case it's possible that
                     //the length of the array varies, so we're checking that the line goes through the right statement.
                     //Then we're going to look at the number at the end of description. In this case this is 3.
-                    //Because the length is 4 and the last number is 3, we expect that the output will say dup heterozygote.
+                    //Because the length is 4 and the last number is 3, we expect that the output will say dup heterozygous.
                     $nAantal = count($aRegs);
                     if ($nAantal <= '4') {
                         list(,,$sChrom, $sCount) = $aRegs;
                         if ($sCount == '0') {
                             $sVariantType = 'del';
-                            $sHomOrHet = 'homozygote';
+                            $sHomOrHet = 'homozygous';
                         } elseif ($sCount == '1') {
                             $sVariantType = 'del';
-                            $sHomOrHet = 'heterozygote';
+                            $sHomOrHet = 'heterozygous';
                         } elseif ($sCount == '2') {
                             $sVariantType = '=';
-                            $sHomOrHet = 'homozygote';
+                            $sHomOrHet = 'homozygous';
                         } elseif ($sCount == '3') {
                             $sVariantType = 'dup';
-                            $sHomOrHet = 'heterozygote';
+                            $sHomOrHet = 'heterozygous';
                         }
                     } else {
                         list(,,$sChrom1,$sCount1,,$sChrom2, $sCount2) = $aRegs;
                         if ($sCount1 == '1' && $sCount2 == '1') {
                             $sVariantType = '=';
-                            $sHomOrHet = 'homozygote';
+                            $sHomOrHet = 'homozygous';
                         } elseif ($sCount1 == '2' && $sCount2 == '0') {
                             $sVariantType = '=';
-                            $sHomOrHet = 'homozygote';
+                            $sHomOrHet = 'homozygous';
                         } elseif ($sCount1 == '2' && $sCount2 == '1') {
                             $sVariantType = 'sup';
                             $sHomOrHet = 'Klinefelter(xxy)';
@@ -665,18 +665,18 @@ foreach ($aFiles as $sFile => $sCenter) {
                     //To validate this data we're checking if the output matches with our expectation
                     //description is used to see if the line goes through this statement.
                     //In this case we're dealing with a trp, this means that the area on one
-                    //chromosome is tripled, which results in a homozygote duplication because
+                    //chromosome is tripled, which results in a homozygous duplication because
                     //there will be 4 examples in the 2 chromosomes.
-                    //we expect that the output will say dup homozygote.
+                    //we expect that the output will say dup homozygous.
                     //If it's not trp, we're going to use the one given (del/dup)
-                    //In this case there is no possibility for a homozygote deletion, because
+                    //In this case there is no possibility for a homozygous deletion, because
                     //we haven't encountered it.
                     list(,,$sVariantType,$schrom,) = $aRegs;
                     if ($sVariantType == 'trp'){
                         $sVariantType = 'dup';
-                        $sHomOrHet = 'homozygote';
+                        $sHomOrHet = 'homozygous';
                     }else {
-                        $sHomOrHet = 'heterozygote';
+                        $sHomOrHet = 'heterozygous';
                     }
                 } elseif (preg_match('/^((Seq|arr)\[GRCh(37|38)\] )?([0-9a-z]{2,4}\.?)+\(([0-9]+)(x)[0-9],([0-9]+)_([0-9]+)(x)([0-9]),([0-9]+)(x)([0-9])\)/', $aDataLine['description'], $aRegs)) {
                     //The description of line 38 (radboud_mumc.txt)is as follows:
@@ -685,8 +685,8 @@ foreach ($aFiles as $sFile => $sCenter) {
                     //description is used to see if the line goes through this statement.
                     //In this case it's visible which area is unchanged , because the x2 after the positions,
                     //The area that is changed has the positions with x1 behind it.
-                    //we expect that the output will say del heterozygote.
-                    $sHomOrHet = 'heterozygote';
+                    //we expect that the output will say del heterozygous.
+                    $sHomOrHet = 'heterozygous';
                     $sVariantType = 'del';
                     $aChecking[] = HGVS::check($sNC.":g.(".$aRegs[5]."_".$aRegs[7].")_(".$aRegs[8]."_".$aRegs[11].")". $sVariantType)->getCorrectedValue();
                 } else {
@@ -695,11 +695,11 @@ foreach ($aFiles as $sFile => $sCenter) {
                     //To validate this data we're checking if the output matches with our expectation
                     //description is used to see if the line goes through this statement.
                     //In this case we're dealing with a trp, this means that the area on one
-                    //chromosome is tripled, which results in a homozygote duplication because
+                    //chromosome is tripled, which results in a homozygous duplication because
                     //there will be 4 examples in the 2 chromosomes.
-                    //we expect that the output will say dup homozygote.
+                    //we expect that the output will say dup homozygous.
                     //If it's not trp, we're going to use the one given (del/dup)
-                    //In this case there is no possibility for a homozygote deletion, because
+                    //In this case there is no possibility for a homozygous deletion, because
                     //we haven't encountered it.
                     if (substr($aDataLine['HGVS'],0,2)=='NC') {
                         //The description of line 718 (radboud)mumc.txt) is as follows:
@@ -712,7 +712,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                         //We're looking at the column hgvs, but only the ones that start with NC.
                         //The hgvs of lin 718 is as follows:
                         //NC_000001.10:g.(227504883_227751395)_(249152520_qter)dup
-                        //We expect that the output says dup heterozygote
+                        //We expect that the output says dup heterozygous
                         $sVariable = HGVS::checkVariant($aDataLine['HGVS'])->getInfo();
                         $aInfo = $sVariable['data'];
                         if (empty($aInfo['type'])) {
@@ -722,7 +722,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                             continue 2;
                         } else {
                             $sVariantType = $aInfo["type"];
-                            $sHomOrHet = 'heterozygote';
+                            $sHomOrHet = 'heterozygous';
                         }
                     } else {
                         continue 2;

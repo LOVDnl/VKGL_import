@@ -329,22 +329,22 @@ class Formatter
                         // This number is sometimes missing for variants affecting the X/Y chromosomes.
                         case '0':
                             $sVariantType = 'del';
-                            $sZygosity = 'homozygote';
+                            $sZygosity = 'homozygous';
                             break;
 
                         case '1':
                             $sVariantType = 'del';
-                            $sZygosity = 'heterozygote';
+                            $sZygosity = 'heterozygous';
                             break;
 
                         case '3':
                             $sVariantType = 'dup';
-                            $sZygosity = 'heterozygote';
+                            $sZygosity = 'heterozygous';
                             break;
 
                         case '4':
                             $sVariantType = 'dup';
-                            $sZygosity = 'homozygote';
+                            $sZygosity = 'homozygous';
                             break;
 
                         case '':
