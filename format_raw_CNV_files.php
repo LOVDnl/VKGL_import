@@ -556,41 +556,7 @@ foreach ($aFiles as $sFile => $sCenter) {
                 $aChecking = array();
                 $aPositions = array();
                 $aDelDup = array();
-                $sChromosome = $aDataLine['chromosome'];
-                $sBuild = $aDataLine['build'];
-                $sNC = HGVS_Chromosome::check($sChromosome . '(' . $sBuild  . ')')->getCorrectedValue();
-                if ($aDataLine['outside start']==1 && $aDataLine['inside start']==1) {
-                    //If both starting positions are 1, we translate it to pter.
-                    $aDataLine['outside start'] = 'pter';
-                } elseif ($aDataLine['outside start']==-1 || $aDataLine['outside start']==1) {
-                    //If the outside start is -1 or outside start is 1, we translate to ?
-                    //The reason why we translate outside start to ? instead of pter is because the
-                    //inside start contains a position. We know that the first base is present, after that we're not sure.
-                    //So it's safer to use ? instead of pter.
-                    $aDataLine['outside start'] = '?';
-                }
-                if ($aDataLine['inside start']==1) {
-                    $aDataLine['inside start'] = 'pter';
-                }
-                if ($aDataLine['outside stop']==-1) {
-                    $aDataLine['outside stop'] = '?';
-                }
-                //This is where the third HGVS description is build.
-                //There are some cases where the inside start and the outside start, the inside stop en the outside stop are the same, in this case
-                //there will be two locations, there is no need for () then.
-                //Example (1000_1000)_(3000_3000) will become 1000_3000.
-                if ($aDataLine['outside start']== $aDataLine['inside start'] && $aDataLine['outside stop']== $aDataLine['inside stop']) {
-                    $aChecking[] = HGVS::check($sNC.":g.".$aDataLine['inside start']. "_". $aDataLine['inside stop'].$sVariantType)->getCorrectedValue();
-                } else {
-                    $aChecking[] = HGVS::check($sNC . ":g.(" . $aDataLine['outside start'] . "_" . $aDataLine['inside start'] . ")_(" . $aDataLine['inside stop'] . "_" . $aDataLine['outside stop'] . ")" . $sVariantType)->getCorrectedValue();
-                }
-                //This is a check on the build array for invalid values.
-                //If those are found, that HGVS description will not be used.
-                $aChecking = array_filter($aChecking, function ($sHGVS) {
-                    return HGVS::checkVariant($sHGVS)->isValid();
-                });
-                //
-                $aUnique = array_unique($aChecking);
+
                 //counting how many unique HGVS descriptions there are in the array
                 //If the amount is 1, the created HGVS descriptions are the same and correct
                 //they will be saved, otherwise they will be further inspected.

@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-27 (based on format_raw_VKGL_files.php)
- * Modified    : 2026-06-09
+ * Modified    : 2026-06-10
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -471,6 +471,66 @@ class Formatter
                             }
                         }
                     }
+
+                    // Create the third HGVS expression from the position fields.
+                    // Check the variant type first.
+                    $sVariantType = match ($aVariant['type']) {
+                        'ANEUPLOIDY' => 'sup',
+                        'DELETION' => 'del',
+                        'DUPLICATION' => 'dup',
+                        'INSERTION' => 'dup',
+                        'INVERSION' => 'inv',
+                        'TRIPLICATION' => 'dup',
+                        default => '',
+                    };
+
+                    if ($sVariantType) {
+                        // First, do some translations.
+                        // Use '?' for the outer positions when they are unknown.
+                        foreach (['outside start', 'outside stop'] as $sPosition) {
+                            if (in_array($aVariant[$sPosition], ['-1', '0', '1'])) {
+                                $aVariant[$sPosition] = '?';
+                            }
+                        }
+
+                        // Now, use the HGVS library to parse the full variant description.
+                        // If we get something valid out, we use that.
+                        $HGVS = HGVS::check(
+                            "{$aVariant['chromosome']}({$aVariant['build']}):g.({$aVariant['outside start']}_{$aVariant['inside start']})_({$aVariant['inside stop']}_{$aVariant['outside stop']}){$sVariantType}"
+                        );
+                        $sVariant = $HGVS->getCorrectedValue();
+
+                        if ($HGVS->isValid() || current($HGVS->getCorrectedValues()) > 0.1) {
+                            $aHGVSDescriptions[] = $sVariant;
+                        } else {
+                            // Double-check if we can trust the output.
+                            $aMessages = array_diff(
+                                array_keys($HGVS->getMessages()),
+                                [
+                                    'EPOSITIONLIMIT',
+                                    'WNOTSUPPORTED',
+                                    'WPOSITIONORDER',
+                                    'WREFSEQMISSING',
+                                ]
+                            );
+                            if (!$aMessages) {
+                                // Add anyway.
+                                $aHGVSDescriptions[] = $sVariant;
+                            } else {
+                                var_dump($HGVS->getInfo());exit;
+                            }
+                        }
+                    }
+
+                    // Remove all invalid descriptions. We filtered already, but clearly, not good enough.
+                    $aHGVSDescriptions = array_filter(
+                        $aHGVSDescriptions,
+                        function ($sHGVS)
+                        {
+                            return HGVS::checkVariant($sHGVS)->isValid();
+                        }
+                    );
+                    $aUnique = array_values(array_unique($aHGVSDescriptions));
 
                     break;
 
