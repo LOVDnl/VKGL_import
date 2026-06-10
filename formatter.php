@@ -16,6 +16,7 @@ namespace LOVD\VKGL;
 
 require_once(__DIR__ . '/libs/HGVS-syntax-checker/HGVS.php');
 use LOVD\HGVS\HGVS;
+use LOVD\HGVS\HGVS_CNV;
 
 class Formatter
 {
@@ -116,6 +117,7 @@ class Formatter
             'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc_snv_tsv',
             'alt;category;chromosome;classification;cnomen;effect;end;exon;gene;pnomen;position;ref;region;strand;transcript' => 'nki_snv_tsv',
             'chromosome;clinical phenotypes;cnv classification;constitutional/acquired variant;end postition;flanking normals - pter;flanking normals - qter;genome build;genomic nomenclature;inheritance;internal identifier;international system for human cytogenomic nomenclature;lab upload date;list of overlapping genes (hgnc);number of copies / upd;parental origin;phenotype (hpo);start and end chromosome band;start position;timestamp last processed;type of cnv;type of platform;type of test' => 'nxclinical_cnv_tsv',
+            'build;chromosome;classification;description;genes;hgvs;inside start;inside stop;location;outside start;outside stop;p/q arm;protocol;type' => 'radboud_cnv_tsv',
             'alt;chromosome;classification;empty;empty;empty;gene;location;ref;start;stop;transcript_or_dna' => 'radboud_snv_tsv',
             default => false,
         };
@@ -152,25 +154,52 @@ class Formatter
         // The Radboud data doesn't have a header :(
         if ($sCenter == 'radboud_mumc') {
             // Invent the header.
-            array_unshift(
-                $aLines,
-                implode("\t",
-                    [
-                        'chromosome',
-                        'start',
-                        'stop',
-                        'ref',
-                        'alt',
-                        'gene',
-                        'transcript_or_dna',
-                        'empty',
-                        'empty',
-                        'location',
-                        'empty',
-                        'classification',
-                    ]
-                )
-            );
+            if (substr_count(rtrim($aLines[0]), "\t") == 11 && str_starts_with($aLines[0], 'chr')) {
+                // Radboud SNV data, with 12 columns.
+                array_unshift(
+                    $aLines,
+                    implode("\t",
+                        [
+                            'chromosome',
+                            'start',
+                            'stop',
+                            'ref',
+                            'alt',
+                            'gene',
+                            'transcript_or_dna',
+                            'empty',
+                            'empty',
+                            'location',
+                            'empty',
+                            'classification',
+                        ]
+                    )
+                );
+
+            } elseif (substr_count($aLines[0], "\t") == 13 && in_array(substr($aLines[0], 0, 3), ['arr', 'seq'])) {
+                // Radboud CNV data, with 14 columns.
+                array_unshift(
+                    $aLines,
+                    implode("\t",
+                        [
+                            'description',    // seq[GRCh37] 11pterp15.5(0_926088)x3
+                            'HGVS',           // NC_000011.9:g.(0)_(926088_959436)dup
+                            'build',          // GRCh37
+                            'chromosome',     // chr11
+                            'inside start',   // 1
+                            'inside stop',    // 926088
+                            'outside start',  // 1
+                            'outside stop',   // 959436
+                            'type',           // DUPLICATION
+                            'p/q arm',        // pter
+                            'location',       // p15.5
+                            'genes',          // ANO9,AP006621.5,AP2A2,ATHL1,B4GALNT4,BET1L,(...etc...)
+                            'classification', // class 4
+                            'protocol',       // Exome
+                        ]
+                    )
+                );
+            }
         }
 
         // First line should be headers.
@@ -366,6 +395,35 @@ class Formatter
                             'zygosity' => $sZygosity,
                         ],
                     ];
+                    break;
+
+                case 'radboud_cnv_tsv':
+                    // This file contains lots of redundant information. Up to three completely separate variant
+                    //  descriptions can be created from the information in this file. To ensure data integrity, we'll
+                    //  store these variant descriptions in an array and compare them. If they conflict between each
+                    //  other, we'll discard the line.
+                    // The first variant description is based on the column 'description'.
+                    // The second one is located in the 'HGVS' column, but not always fully valid.
+                    // The third one has to be built by using multiple columns: 'inside start', 'inside stop',
+                    //  'outside start', 'outside stop', and the variant type.
+                    $aHGVSDescriptions = array();
+                    $sZygosity = 'Unknown';
+                    $sPlatform = '';
+
+                    // Start with creating the first HGVS expression from the CNV notation.
+                    $HGVS = HGVS_CNV::check($aVariant['description']);
+                    // If the corrected value gets full confidence, we'll take it.
+                    if (current($HGVS->getCorrectedValues()) == 1) {
+                        $sZygosity = $HGVS->getData()['zygosity'];
+                        $sPlatform = $HGVS->getData()['platform'];
+                        $aHGVSDescriptions[] = $HGVS->getCorrectedValue();
+
+                        // However, if we have a WT variant and the data indicates it's an inversion, fix this.
+                        if (substr(current($aHGVSDescriptions), -1) == '=' && $aVariant['type'] == 'INVERSION') {
+                            $aHGVSDescriptions = [substr(current($aHGVSDescriptions),0, -1) . 'inv'];
+                        }
+                    }
+
                     break;
 
                 case 'radboud_snv_tsv':
