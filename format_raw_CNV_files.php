@@ -575,22 +575,6 @@ foreach ($aFiles as $sFile => $sCenter) {
                 if ($aDataLine['outside stop']==-1) {
                     $aDataLine['outside stop'] = '?';
                 }
-                //This is where the second HGVS description is build.
-                if ($aDataLine['HGVS'] != "") {
-                    //Line 732
-                    if (substr($aDataLine['HGVS'], -3) == 'trp') {
-                        $aDataLine['HGVS'] = substr_replace($aDataLine['HGVS'],'dup',-3);
-                    }
-                    $sVariant = HGVS::check($aDataLine['HGVS'])->getCorrectedValue();
-                    $sVariant = preg_replace('/(:g\.)1_/','${1}pter_',$sVariant);
-                    //If the outside start position is pter or the outside stop position is qter, they will
-                    //be changed to ?. The reason for this, is that it's known that the first and/or last position is present.
-                    //which means that the deletion/duplication takes place somewhere in between the known position and pter/qter.
-                    //So it's safer to use ? instead of pter/qter.
-                    $sVariant = preg_replace('/(:g\.\()(1|pter)_/','${1}?_',$sVariant);
-                    $sVariant = preg_replace('/_qter\)(del|dup|inv)$/','_?)${1}',$sVariant);
-                    $aChecking[] = $sVariant;
-                }
                 //This is where the third HGVS description is build.
                 //There are some cases where the inside start and the outside start, the inside stop en the outside stop are the same, in this case
                 //there will be two locations, there is no need for () then.

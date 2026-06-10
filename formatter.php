@@ -407,7 +407,7 @@ class Formatter
                     // The third one has to be built by using multiple columns: 'inside start', 'inside stop',
                     //  'outside start', 'outside stop', and the variant type.
                     $aHGVSDescriptions = array();
-                    $sZygosity = 'Unknown';
+                    $sZygosity = 'unknown';
                     $sPlatform = '';
 
                     // Start with creating the first HGVS expression from the CNV notation.
@@ -421,6 +421,54 @@ class Formatter
                         // However, if we have a WT variant and the data indicates it's an inversion, fix this.
                         if (substr(current($aHGVSDescriptions), -1) == '=' && $aVariant['type'] == 'INVERSION') {
                             $aHGVSDescriptions = [substr(current($aHGVSDescriptions),0, -1) . 'inv'];
+                        }
+                    }
+
+                    // Create the second HGVS expression based on the HGVS field, which commonly contains mistakes.
+                    if (str_starts_with($aVariant['hgvs'], 'NC')) {
+                        // Replace trp by dup; trp isn't proper syntax.
+                        if (str_ends_with($aVariant['hgvs'], 'trp')) {
+                            $aVariant['hgvs'] = substr_replace($aVariant['hgvs'], 'dup', -3);
+                            if (!$sZygosity) {
+                                $sZygosity = 'homozygous';
+                            }
+                        }
+
+                        // Fix some issues with the HGVS expressions that our library doesn't handle.
+                        $aVariant['hgvs'] = str_replace('__', '_', $aVariant['hgvs']);
+                        $aVariant['hgvs'] = str_replace('-', '_', $aVariant['hgvs']);
+                        $aVariant['hgvs'] = str_replace('[pter_qter]', '(pter_qter)', $aVariant['hgvs']);
+
+                        // Now, use the HGVS library to parse the full variant description.
+                        // If we get something valid out, we use that.
+                        $HGVS = HGVS::check($aVariant['hgvs']);
+                        $sVariant = $HGVS->getCorrectedValue();
+
+                        // Replace g.(pter_...) by g.(?_...) and g.(..._qter) by g.(..._?) to increase the chances we'll
+                        //  have a HGVS description that matches the description we'll get from the position fields.
+                        $sVariant = preg_replace('/\(pter_(?!qter)/', '(?_', $sVariant);
+                        $sVariant = preg_replace('/(?<!pter)_qter\)/', '_?)', $sVariant);
+
+                        if ($HGVS->isValid() || current($HGVS->getCorrectedValues()) > 0.1) {
+                            $aHGVSDescriptions[] = $sVariant;
+                        } else {
+                            // Double-check if we can trust the output.
+                            $aMessages = array_diff(
+                                array_keys($HGVS->getMessages()),
+                                [
+                                    'EPOSITIONFORMAT',
+                                    'EPOSITIONLIMIT',
+                                    'WNOTSUPPORTED',
+                                    'WPOSITIONORDER',
+                                    'WTOOMANYPARENS',
+                                    'WTOOMUCHUNKNOWN',
+                                    'WWHITESPACE'
+                                ]
+                            );
+                            if (!$aMessages) {
+                                // Add anyway.
+                                $aHGVSDescriptions[] = $sVariant;
+                            }
                         }
                     }
 
