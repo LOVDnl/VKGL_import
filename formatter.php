@@ -530,8 +530,81 @@ class Formatter
                             return HGVS::checkVariant($sHGVS)->isValid();
                         }
                     );
-                    $aUnique = array_values(array_unique($aHGVSDescriptions));
+                    $aHGVSDescriptions = array_values(array_unique($aHGVSDescriptions));
 
+                    // If we have only one variant description, take that.
+                    if (count($aHGVSDescriptions) == 1) {
+                        $sVariant = current($aHGVSDescriptions);
+
+                    } else {
+                        // If the variant types are different, we can't use this variant.
+                        $aVariantTypes = array_map(
+                            function ($sHGVS)
+                            {
+                                return substr($sHGVS, -3);
+                            }, $aHGVSDescriptions
+                        );
+                        if (count(array_unique($aVariantTypes)) != 1) {
+                            $this->data_rejected[$sCenter][$sDataType][] = [
+                                'error' => 'Error: Variant types disagree.',
+                                'data' => json_encode($aVariant, JSON_UNESCAPED_UNICODE),
+                            ];
+                            continue 2;
+                        }
+
+                        // We'll give preference to variant descriptions with more positions, as they are deemed
+                        //  more specific. However, we will check if between descriptions, the positions match.
+                        $aPositions = array();
+                        foreach ($aHGVSDescriptions as $sHGVS) {
+                            preg_match_all('/([0-9]+)/', strstr($sHGVS, ':'), $aMatches);
+                            $aPositions[] = $aMatches[0];
+                        }
+                        $aPositionCounts = array_map('count', $aPositions);
+                        $nMaxPositions = max($aPositionCounts);
+                        $nWithMaxPositions = count(array_intersect($aPositionCounts, [$nMaxPositions]));
+
+                        // If we have more descriptions with the maximum amount of positions, we can't continue.
+                        if ($nWithMaxPositions > 1) {
+                            $this->data_rejected[$sCenter][$sDataType][] = [
+                                'error' => 'Error: Can not determine consensus variant description; positions are conflicting.',
+                                'data' => json_encode($aVariant, JSON_UNESCAPED_UNICODE),
+                            ];
+                            continue 2;
+                        }
+
+                        // Now, make sure that the shorter descriptions don't have positions that the longest
+                        //  description doesn't have.
+                        $iWithMaxPositions = array_search($nMaxPositions, $aPositionCounts);
+                        foreach ($aPositions as $i => $aVariantPositions) {
+                            if ($i == $iWithMaxPositions) {
+                                continue;
+                            }
+
+                            if (!empty(array_diff($aVariantPositions, $aPositions[$iWithMaxPositions]))) {
+                                $this->data_rejected[$sCenter][$sDataType][] = [
+                                    'error' => 'Error: Can not determine consensus variant description; positions are conflicting.',
+                                    'data' => json_encode($aVariant, JSON_UNESCAPED_UNICODE),
+                                ];
+                                continue 3;
+                            }
+                        }
+
+                        // If we get here, we have one description with the most positions, and all smaller descriptions
+                        //  have positions that are also found in the longest description. So take that.
+                        $sVariant = $aHGVSDescriptions[$iWithMaxPositions];
+                    }
+
+                    $aAnnotation = [
+                        'zygosity' => $sZygosity,
+                    ];
+                    if ($sPlatform) {
+                        $aAnnotation['platform'] = $sPlatform;
+                    }
+                    $this->data[$sCenter][$sDataType][] = [
+                        'genomic_native' => $sVariant,
+                        'classification' => $this->convertClassification($aVariant['classification']),
+                        'annotation' => $aAnnotation,
+                    ];
                     break;
 
                 case 'radboud_snv_tsv':
