@@ -102,6 +102,7 @@ class Formatter
             // CSV formats:
             // Illumina Emedgene:
             'alt;chromosome;created reference build;diseases (omim id);end;error;overlap %;pathogenicity;position;ref;transcript;vartype' => 'emedgene_csv',
+            'alt;chromosome;created reference build;end;pathogenicity;position;ref;transcript;vartype' => 'emedgene-small_csv',
 
             // TSV formats:
             // Alissa:
@@ -261,6 +262,7 @@ class Formatter
                     break;
 
                 case 'emedgene_csv':
+                case 'emedgene-small_csv':
                     // This format actually contains both CNVs and SNVs. We'll handle them both here.
                     if ($aVariant['vartype'] == 'SNV') {
                         // Simple SNV. Result will be, e.g., "GRCh37:1:211832061:CA:C".
