@@ -19,9 +19,11 @@ require_once(ROOT_PATH . '/aggregator.php');
 require_once(ROOT_PATH . '/formatter.php');
 require_once(ROOT_PATH . '/validator.php');
 require_once(ROOT_PATH . '/log.php');
+require_once(ROOT_PATH . '/normalizer.php');
 require_once(ROOT_PATH . '/settings.php');
 use LOVD\VKGL\Aggregator;
 use LOVD\VKGL\Formatter;
+use LOVD\VKGL\Normalizer;
 use LOVD\VKGL\Validator;
 use LOVD\Log;
 use LOVD\Settings;
@@ -277,9 +279,22 @@ if ($Status->get('step') < $nStep) {
 
 
 
-// Step 3: Normalizer
+// Step 3: Normalize all input to fully valid HGVS descriptions, also pulling in other data.
 $nStep++;
-//This is where the normalizer script will be called and executed.
+if ($Status->get('step') < $nStep) {
+    // Use the normalizer to convert all VCFs and other notations into HGVS and normalize, liftover, and map all data.
+    $Log->add("Normalizing the data... (this may take hours or days if there is a lot of new data)");
+    try {
+        $o = Normalizer::normalize($Status->get('output_files|formatted'), $Log);
+    } catch (Exception $e) {
+        $Log->add("Failed to normalize the data.\n" . $e->getMessage() . '.', '!!');
+        die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
+    }
+
+    // WIP.
+    exit;
+    $Status->set('step', $nStep);
+}
 
 
 
