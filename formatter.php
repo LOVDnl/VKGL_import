@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-27 (based on format_raw_VKGL_files.php)
- * Modified    : 2026-06-10
+ * Modified    : 2026-06-11
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -42,6 +42,7 @@ class Formatter
         'error',
         'data'
     ];
+    private array $statistics = [];
 
     public static function format (array $aFiles): Formatter
     {
@@ -74,6 +75,15 @@ class Formatter
             'pathogenic', '+', 'class 5' => 'P',
             default => $sClassification,
         };
+    }
+
+
+
+
+
+    public function getStatistics (): array
+    {
+        return $this->statistics;
     }
 
 
@@ -232,6 +242,7 @@ class Formatter
                     'error' => "Error: Data line $nLine has " . count($aDataLine) . " columns instead of the expected $nHeaders.",
                     'data' => json_encode($sLine, JSON_UNESCAPED_UNICODE),
                 ];
+                $this->statistics['errors'][$sCenter] = ($this->statistics['errors'][$sCenter] ?? 0) + 1;
                 continue;
             }
 
@@ -551,6 +562,7 @@ class Formatter
                                 'error' => 'Error: Variant types disagree.',
                                 'data' => json_encode($aVariant, JSON_UNESCAPED_UNICODE),
                             ];
+                            $this->statistics['errors'][$sCenter] = ($this->statistics['errors'][$sCenter] ?? 0) + 1;
                             continue 2;
                         }
 
@@ -571,6 +583,7 @@ class Formatter
                                 'error' => 'Error: Can not determine consensus variant description; positions are conflicting.',
                                 'data' => json_encode($aVariant, JSON_UNESCAPED_UNICODE),
                             ];
+                            $this->statistics['errors'][$sCenter] = ($this->statistics['errors'][$sCenter] ?? 0) + 1;
                             continue 2;
                         }
 
@@ -587,6 +600,7 @@ class Formatter
                                     'error' => 'Error: Can not determine consensus variant description; positions are conflicting.',
                                     'data' => json_encode($aVariant, JSON_UNESCAPED_UNICODE),
                                 ];
+                                $this->statistics['errors'][$sCenter] = ($this->statistics['errors'][$sCenter] ?? 0) + 1;
                                 continue 3;
                             }
                         }
@@ -734,6 +748,7 @@ class Formatter
                             'error' => 'Error: Variant does not contain a pathogenicity.',
                             'data' => json_encode($aVariant, JSON_UNESCAPED_UNICODE),
                         ];
+                        $this->statistics['errors'][$sCenter] = ($this->statistics['errors'][$sCenter] ?? 0) + 1;
                         continue 2;
                     }
 
@@ -751,6 +766,7 @@ class Formatter
                             'error' => 'Error: Variant does not contain any variant data.',
                             'data' => json_encode($aVariant, JSON_UNESCAPED_UNICODE),
                         ];
+                        $this->statistics['errors'][$sCenter] = ($this->statistics['errors'][$sCenter] ?? 0) + 1;
                         continue 2;
                     }
 
