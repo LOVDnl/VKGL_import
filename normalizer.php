@@ -80,21 +80,27 @@ class Normalizer
 
                 // First off, normalize the input. Also try to predict the build,
                 //  so the Caches class doesn't need to figure it out again.
+                $sBuild = false; // By default, we'll let Caches figure this one out.
                 if (str_starts_with($aVariant['genomic_native'], 'NC_')) {
                     // This is HGVS already.
                     $HGVS = HGVS::checkVariant($aVariant['genomic_native']);
-                    $sBuild = false; // Caches will figure this one out.
                 } else {
                     // We received VCF or VCF-like descriptions (CNVs).
                     if ($aVariant['type'] == 'SNV') {
                         // These are real VCFs and need to be processed as such.
+                        // E.g., "GRCh37:1:211832061:C:CAAAAAAAAAAAAAAAAAAA".
                         $HGVS = HGVS_VCF::check($aVariant['genomic_native']);
                         $sBuild = ($HGVS->Genome->getCorrectedValue() ?? false);
                     } else {
                         // CNVs aren't described as real VCFs, so need special handling.
                         $HGVS = HGVS::check($aVariant['genomic_native']);
-                        $sBuild = ($HGVS->ReferenceSequence->Genome->getCorrectedValue() ?? false);
-                        continue;
+                        if ($HGVS->ReferenceSequence->hasProperty('Genome')) {
+                            // CNV data formatted as, e.g., "GRCh37:1:1_1068640DEL".
+                            $sBuild = ($HGVS->ReferenceSequence->Genome->getCorrectedValue() ?? false);
+                        } elseif ($HGVS->ReferenceSequence->hasProperty('Chromosome') && $HGVS->ReferenceSequence->Chromosome->hasProperty('Genome')) {
+                            // CNV data formatted as, e.g., "chr16(HG38):g.2447302_2494972dup".
+                            $sBuild = ($HGVS->ReferenceSequence->Chromosome->Genome->getCorrectedValue() ?? false);
+                        }
                     }
                 }
             }
