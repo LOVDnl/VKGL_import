@@ -14,6 +14,9 @@
 
 namespace LOVD\VKGL;
 
+require_once(__DIR__ . '/libs/HGVS-syntax-checker/HGVS.php');
+use LOVD\HGVS\HGVS;
+use LOVD\HGVS\HGVS_VCF;
 use LOVD\Log;
 
 class Normalizer
@@ -51,7 +54,53 @@ class Normalizer
             $o->Log = $Log; // So we can log our progress, not leaving the user in the dark.
         }
         $o->parse($sFile);
+        $o->normalizeData();
         return $o;
+    }
+
+
+
+
+
+    public function normalizeData (): bool
+    {
+        // Normalize all the stored data, converting non-HGVS to HGVS, normalizing everything,
+        //  and collecting liftover and mapping information for all variants.
+
+        $nVariants = array_sum(array_map('count', $this->data));
+        $nLineLength = 80; // The width of the screen before we wrap to a new line.
+        $nCharactersPrinted = 0; // To count when we should wrap.
+        $iVariant = 0;
+        foreach ($this->data as $sCenter => $aVariants) {
+            foreach ($aVariants as $i => $aVariant) {
+                $iVariant++;
+                // Keep the reported as for reporting and to allow users to connect the results with their own data.
+                $aVariant['genomic_native_reported'] = $aVariant['genomic_native'];
+                $aVariant['genomic_liftover_reported'] = $aVariant['genomic_liftover'];
+
+                // First off, normalize the input. Also try to predict the build,
+                //  so the Caches class doesn't need to figure it out again.
+                if (str_starts_with($aVariant['genomic_native'], 'NC_')) {
+                    // This is HGVS already.
+                    $HGVS = HGVS::checkVariant($aVariant['genomic_native']);
+                    $sBuild = false; // Caches will figure this one out.
+                } else {
+                    // We received VCF or VCF-like descriptions (CNVs).
+                    if ($aVariant['type'] == 'SNV') {
+                        // These are real VCFs and need to be processed as such.
+                        $HGVS = HGVS_VCF::check($aVariant['genomic_native']);
+                        $sBuild = ($HGVS->Genome->getCorrectedValue() ?? false);
+                    } else {
+                        // CNVs aren't described as real VCFs, so need special handling.
+                        $HGVS = HGVS::check($aVariant['genomic_native']);
+                        $sBuild = ($HGVS->ReferenceSequence->Genome->getCorrectedValue() ?? false);
+                        continue;
+                    }
+                }
+            }
+        }
+
+        return true;
     }
 
 
