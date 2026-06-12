@@ -14,7 +14,9 @@
 
 namespace LOVD\VKGL;
 
+require_once(__DIR__ . '/libs/HGVS-syntax-checker/caches.php');
 require_once(__DIR__ . '/libs/HGVS-syntax-checker/HGVS.php');
+use LOVD\HGVS\Caches;
 use LOVD\HGVS\HGVS;
 use LOVD\HGVS\HGVS_VCF;
 use LOVD\Log;
@@ -46,7 +48,7 @@ class Normalizer
     ];
     private $Log; // Holding the Log object so we can log our progress.
 
-    public static function normalize (string $sFile, Log $Log = null): Normalizer
+    public static function normalize (string $sFile, Log $Log = null, array $aVV = []): Normalizer
     {
         // Parse the given file and normalize the data.
         $o = new Normalizer();
@@ -54,6 +56,7 @@ class Normalizer
             $o->Log = $Log; // So we can log our progress, not leaving the user in the dark.
         }
         $o->parse($sFile);
+        Caches::setVVOptions($aVV); // Pass on the VV settings that we got from the pipeline.
         $o->normalizeData();
         return $o;
     }

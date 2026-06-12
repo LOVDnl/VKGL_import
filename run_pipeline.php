@@ -285,8 +285,9 @@ if ($Status->get('step') < $nStep) {
     // Use the normalizer to convert all VCFs and other notations into HGVS and normalize, liftover, and map all data.
     $Log->add("Normalizing the data... (this may take hours or days if there is a lot of new data)");
     try {
-        $o = Normalizer::normalize($Status->get('output_files|formatted'), $Log);
+        $o = Normalizer::normalize($Status->get('output_files|formatted'), $Log, ($Settings->get('VV') ?? []));
     } catch (Exception $e) {
+        echo "\n"; // Clear the line as the normalizer has output of its own.
         $Log->add("Failed to normalize the data.\n" . $e->getMessage() . '.', '!!');
         die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
     }
