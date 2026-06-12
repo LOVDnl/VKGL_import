@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-03-10
- * Modified    : 2026-06-11
+ * Modified    : 2026-06-12
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -101,6 +101,51 @@ class Normalizer
                             // CNV data formatted as, e.g., "chr16(HG38):g.2447302_2494972dup".
                             $sBuild = ($HGVS->ReferenceSequence->Chromosome->Genome->getCorrectedValue() ?? false);
                         }
+                    }
+                }
+
+                // Check if the syntax is OK; if not, we can try to fix some issues.
+                if (!$HGVS->isValid()) {
+                    // Hmm... the variant is invalid. Only handle situations where we know what to do.
+                    // Especially CNVs can have some known issues; check these and ignore what we don't care about.
+                    $aMessages = array_diff_key(
+                        $HGVS->getMessages(),
+                        array_flip(
+                            [
+                                'WNOTSUPPORTED',  // Anything not supported by VV.
+                                'WREFSEQMISSING', // From "GRCh37:1:1_1068640DEL".
+                                'WPREFIXMISSING', // From "GRCh37:1:1_1068640DEL".
+                                'WWRONGCASE',     // From "GRCh37:1:1_1068640DEL".
+                                'WWRONGPREFIX',   // An chrM:g variant that got corrected to chrM:m, all good!
+                            ]
+                        )
+                    );
+
+                    if (array_keys($aMessages) == ['WVCFDOTREF']) {
+                        // An empty REF is bad. But there is a fix.
+                        // We verified that the most illogical fix is the correct one (Alissa has this issue).
+                        $HGVS->setCorrectedValue($HGVS->getCorrectedValue(1));
+
+                    } elseif ($aMessages) {
+                        // Currently, we get EPOSITIONLIMIT here or WSAMEPOSITIONS. Both are from CNVs only.
+                        // Report the variant instead of processing it any further. Let's collect some information.
+                        $aVariant['error'] = implode(
+                            ' ',
+                            array_map(
+                                function ($sCode, $sMessage)
+                                {
+                                    return "$sCode: $sMessage";
+                                }, array_keys($aMessages), array_values($aMessages)
+                            )
+                        );
+                        if ($aVariant['annotation']) {
+                            $aVariant['annotation'] = json_decode($aVariant['annotation'], true);
+                            if (!empty($aVariant['annotation']['source'])) {
+                                // Simply append the source to the reported description.
+                                $aVariant['genomic_native_reported'] .= ' (source: ' . $aVariant['annotation']['source'] . ')';
+                            }
+                        }
+                        $this->data_rejected[$sCenter][] = $aVariant;
                     }
                 }
             }
