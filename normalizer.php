@@ -149,7 +149,48 @@ class Normalizer
                             }
                         }
                         $this->data_rejected[$sCenter][] = $aVariant;
+                        continue;
                     }
+                }
+
+                // This still hasn't been validated on the sequence level.
+                $sVariant = $HGVS->getCorrectedValue();
+
+                // This checks if we have a VV corrected variant, and if we have some mapping/liftover info.
+                // If not, it calls VV and stores the VV corrected variant and mapping/liftover info.
+                $b = Caches::buildCaches($sVariant, $sBuild);
+                // null  : Internal failure with the cache files.
+                // true  : Success.
+                // 1     : Addition was not needed, variant already known (includes previously known errors, e.g., EREF).
+                // 0     : Internal failure with VV. Failure may be non-permanent.
+                // false : Internal failure when adding data to the cache. Failure is likely permanent.
+                if ($b === null) {
+                    throw new \Exception('Internal failure with the cache files');
+                } elseif ($b === true) {
+                    // Successfully added the variant.
+                    echo '+';
+                    $nCharactersPrinted ++;
+                } elseif ($b === 1) {
+                    // Nothing to do.
+                } elseif ($b === 0) {
+                    // This used to happen quite often, but not on the new VV API.
+                    // For now, die, but if this starts happening randomly, then make sure we simply try again.
+                    throw new \Exception("Failed to process the mapping data for {$aVariant['genomic_native']} ($sVariant), perhaps there is a data irregularity");
+                } else {
+                    throw new \Exception("Failed to store {$aVariant['genomic_native']} ($sVariant) in the cache");
+                }
+
+                if ($nCharactersPrinted >= $nLineLength || $iVariant == $nVariants) {
+                    $nPerc = round(($iVariant/$nVariants)*100);
+                    $s = "Processed $iVariant/$nVariants variants... ({$nPerc}%)";
+                    if ($this->Log) {
+                        // Log this, which means that it will end up on the screen as well.
+                        echo "\n";
+                        $this->Log->add($s);
+                    } else {
+                        echo "\n";
+                    }
+                    $nCharactersPrinted = 0;
                 }
             }
         }
