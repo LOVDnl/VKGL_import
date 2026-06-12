@@ -192,6 +192,31 @@ class Normalizer
                     }
                     $nCharactersPrinted = 0;
                 }
+
+                // If the variant is in error, reject it.
+                if (Caches::hasErrors($sVariant)) {
+                    // These are things like EREFs.
+                    // Report the variant instead of processing it any further. Let's collect some information.
+                    $aErrors = Caches::getErrors($sVariant);
+                    $aVariant['error'] = implode(
+                        ' ',
+                        array_map(
+                            function ($sCode, $sMessage)
+                            {
+                                return "$sCode: $sMessage";
+                            }, array_keys($aErrors), array_values($aErrors)
+                        )
+                    );
+                    if ($aVariant['annotation']) {
+                        $aVariant['annotation'] = json_decode($aVariant['annotation'], true);
+                        if (!empty($aVariant['annotation']['source'])) {
+                            // Simply append the source to the reported description.
+                            $aVariant['genomic_native_reported'] .= ' (source: ' . $aVariant['annotation']['source'] . ')';
+                        }
+                    }
+                    $this->data_rejected[$sCenter][] = $aVariant;
+                    continue;
+                }
             }
         }
 
