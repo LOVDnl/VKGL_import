@@ -291,8 +291,24 @@ if ($Status->get('step') < $nStep) {
         die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
     }
 
-    // WIP.
-    exit;
+    $sOutputFile = 'vkgl_data.02-normalized.' . date('Y-m-d.H.i.s') . '.tsv';
+    if (!$o->save($sOutputFile)) {
+        $Log->add("Failed to save the result to $sOutputFile.", '!!');
+        die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
+    }
+    $Log->add("Successfully created $sOutputFile.", 'OK');
+    $Status->set('output_files|normalized', $sOutputFile);
+
+    if ($o->hasErrors()) {
+        $sErrorOutputFile = str_replace('.tsv', '.errors.tsv', $sOutputFile);
+        if (!$o->saveErrors($sErrorOutputFile)) {
+            $Log->add("Failed to save the errors to $sErrorOutputFile.", '!!');
+            die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
+        }
+        $Log->add("Errors occurred, successfully created $sErrorOutputFile.", 'OK');
+        $Status->set('error_files|normalized', $sErrorOutputFile);
+    }
+
     $Status->set('step', $nStep);
 }
 

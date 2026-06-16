@@ -65,6 +65,15 @@ class Normalizer
 
 
 
+    public function hasErrors (): bool
+    {
+        return (bool) count($this->data_rejected);
+    }
+
+
+
+
+
     public function normalizeData (): bool
     {
         // Normalize all the stored data, converting non-HGVS to HGVS, normalizing everything,
@@ -284,6 +293,58 @@ class Normalizer
         }
 
         return true;
+    }
+
+
+
+
+
+    public function save (string $sFile): bool
+    {
+        // Save the data to disk.
+        $aData = [implode("\t", $this->data_output_header)];
+        foreach ($this->data as $aVariants) {
+            foreach ($aVariants as $aVariant) {
+                $aLine = [];
+                foreach ($this->data_output_header as $sField) {
+                    $aLine[] = ($aVariant[$sField] ?? '');
+                }
+                $aData[] = implode("\t", $aLine);
+            }
+        }
+        $aData[] = '';
+
+        // Save the data.
+        return (bool) file_put_contents(
+            $sFile,
+            implode("\r\n", $aData)
+        );
+    }
+
+
+
+
+
+    public function saveErrors (string $sFile): bool
+    {
+        // Save errors to disk.
+        $aData = [implode("\t", $this->data_rejected_output_header)];
+        foreach ($this->data_rejected as $aVariants) {
+            foreach ($aVariants as $aVariant) {
+                $aLine = [];
+                foreach ($this->data_rejected_output_header as $sField) {
+                    $aLine[] = ($aVariant[$sField] ?? '');
+                }
+                $aData[] = implode("\t", $aLine);
+            }
+        }
+        $aData[] = '';
+
+        // Save the data.
+        return (bool) file_put_contents(
+            $sFile,
+            implode("\r\n", $aData)
+        );
     }
 }
 ?>
