@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-03-10
- * Modified    : 2026-06-12
+ * Modified    : 2026-06-16
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -71,12 +71,13 @@ class Normalizer
         //  and collecting liftover and mapping information for all variants.
 
         $nVariants = array_sum(array_map('count', $this->data));
-        $nLineLength = 80; // The width of the screen before we wrap to a new line.
+        $nLineLength = 100; // The width of the screen before we wrap to a new line.
         $nCharactersPrinted = 0; // To count when we should wrap.
         $iVariant = 0;
         foreach ($this->data as $sCenter => $aVariants) {
             foreach ($aVariants as $i => $aVariant) {
                 $iVariant++;
+
                 // Keep the reported as for reporting and to allow users to connect the results with their own data.
                 $aVariant['genomic_native_reported'] = $aVariant['genomic_native'];
                 $aVariant['genomic_liftover_reported'] = $aVariant['genomic_liftover'];
@@ -171,7 +172,11 @@ class Normalizer
                     echo '+';
                     $nCharactersPrinted ++;
                 } elseif ($b === 1) {
-                    // Nothing to do.
+                    // Nothing to do. But we don't want to leave the user blind, either, when we don't have many new variants.
+                    if (($iVariant % 1000) === 0) {
+                        echo '.';
+                        $nCharactersPrinted ++;
+                    }
                 } elseif ($b === 0) {
                     // This used to happen quite often, but not on the new VV API.
                     // For now, die, but if this starts happening randomly, then make sure we simply try again.
