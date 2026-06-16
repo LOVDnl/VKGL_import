@@ -170,6 +170,7 @@ class Normalizer
                         }
                         $this->data_rejected[$sCenter][] = $aVariant;
                         $this->statistics['errors'][$sCenter] = ($this->statistics['errors'][$sCenter] ?? 0) + 1;
+                        unset($this->data[$sCenter][$i]); // Don't export this data.
                         continue;
                     }
                 }
@@ -241,6 +242,7 @@ class Normalizer
                     }
                     $this->data_rejected[$sCenter][] = $aVariant;
                     $this->statistics['errors'][$sCenter] = ($this->statistics['errors'][$sCenter] ?? 0) + 1;
+                    unset($this->data[$sCenter][$i]); // Don't export this data.
                     continue;
                 }
 
