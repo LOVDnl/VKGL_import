@@ -222,6 +222,23 @@ class Normalizer
                     $this->data_rejected[$sCenter][] = $aVariant;
                     continue;
                 }
+
+                // We didn't actually collect the results yet.
+                $sVariant = Caches::getCorrectedNC($sVariant);
+                $aLiftOver = Caches::getLiftOver($sVariant, $sBuild);
+                $aMappings = Caches::getMapping($sVariant, $sBuild);
+                if (!$sVariant || !$aLiftOver || !$aMappings) {
+                    throw new \Exception("Failed to retrieve the data for {$aVariant['genomic_native']} ($sVariant) from the cache");
+                }
+                if (!$sBuild) {
+                    $sBuild = array_search($sVariant, $aLiftOver);
+                }
+                $aVariant['genomic_native_normalized'] = $sVariant;
+                unset($aLiftOver[$sBuild]);
+                if ($aLiftOver) {
+                    $aVariant['genomic_liftover_normalized'] = current($aLiftOver);
+                }
+                $this->data[$aVariant['center']][$i] = $aVariant;
             }
         }
 
