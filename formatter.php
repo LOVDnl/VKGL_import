@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-27 (based on format_raw_VKGL_files.php)
- * Modified    : 2026-06-11
+ * Modified    : 2026-06-16
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -275,6 +275,15 @@ class Formatter
                 case 'emedgene_csv':
                 case 'emedgene-small_csv':
                     // This format actually contains both CNVs and SNVs. We'll handle them both here.
+                    if (empty($aVariant['pathogenicity'])) {
+                        $this->data_rejected[$sCenter]['SNV'][] = [
+                            'error' => 'Error: Variant does not contain a pathogenicity.',
+                            'data' => json_encode($aVariant, JSON_UNESCAPED_UNICODE),
+                        ];
+                        $this->statistics['errors'][$sCenter] = ($this->statistics['errors'][$sCenter] ?? 0) + 1;
+                        continue 2;
+                    }
+
                     if ($aVariant['vartype'] == 'SNV') {
                         // Simple SNV. Result will be, e.g., "GRCh37:1:211832061:CA:C".
                         $sVariant = "{$aVariant['created reference build']}:{$aVariant['chromosome']}:{$aVariant['position']}:{$aVariant['ref']}:{$aVariant['alt']}";
