@@ -46,6 +46,7 @@ class Normalizer
         'error',
         'genomic_native_reported',
     ];
+    private array $statistics = [];
     private $Log; // Holding the Log object so we can log our progress.
 
     public static function normalize (string $sFile, Log $Log = null, array $aVV = []): Normalizer
@@ -59,6 +60,15 @@ class Normalizer
         Caches::setVVOptions($aVV); // Pass on the VV settings that we got from the pipeline.
         $o->normalizeData();
         return $o;
+    }
+
+
+
+
+
+    public function getStatistics (): array
+    {
+        return $this->statistics;
     }
 
 
@@ -159,6 +169,7 @@ class Normalizer
                             }
                         }
                         $this->data_rejected[$sCenter][] = $aVariant;
+                        $this->statistics['errors'][$sCenter] = ($this->statistics['errors'][$sCenter] ?? 0) + 1;
                         continue;
                     }
                 }
@@ -229,6 +240,7 @@ class Normalizer
                         }
                     }
                     $this->data_rejected[$sCenter][] = $aVariant;
+                    $this->statistics['errors'][$sCenter] = ($this->statistics['errors'][$sCenter] ?? 0) + 1;
                     continue;
                 }
 
