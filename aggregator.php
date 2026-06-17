@@ -398,8 +398,18 @@ class Aggregator
     public function save (string $sFile): bool
     {
         // Save the data to disk.
+        // The data was stored per variant and then per center, but we want this sorted per center.
+        $aDataSorted = [];
+        foreach ($this->data as $aCenters) {
+            foreach ($aCenters as $sCenter => $aVariant) {
+                $aDataSorted[$sCenter][] = $aVariant;
+            }
+        }
+        ksort($aDataSorted);
+
+        // Now save the sorted data to disk.
         $aData = [implode("\t", $this->data_output_header)];
-        foreach ($this->data as $aVariants) {
+        foreach ($aDataSorted as $aVariants) {
             foreach ($aVariants as $aVariant) {
                 $aLine = [];
                 foreach ($this->data_output_header as $sField) {
