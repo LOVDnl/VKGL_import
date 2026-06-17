@@ -135,7 +135,7 @@ class Aggregator
                         // We have multiple classifications for this variant. Although mergeClassifications() was built
                         //  for merging the classifications within one center, we can re-use its logic, so we don't have
                         //  to repeat that here.
-                        $sStatus = match($this->mergeClassifications($aClassifications)) {
+                        $sStatus = match ($this->mergeClassifications($aClassifications)) {
                             'conflicting' => 'external_opposite',
                             'VUS' => 'non-consensus',
                             default => 'consensus',
@@ -152,10 +152,10 @@ class Aggregator
                             );
                             // Now log this opposite, once for each center so they can easily search the error file.
                             foreach ($aClassifications as $sCenter => $sClassification) {
-                                $this->data_rejected[$sVariant][$sCenter] = array_merge(
+                                $this->data_rejected[$sCenter][] = array_merge(
                                     $aCenters[$sCenter],
                                     [
-                                            'error' => "External conflict (opposite), classifications: $sClassifications.",
+                                        'error' => "External conflict (opposite), classifications: $sClassifications.",
                                     ]
                                 );
                             }
@@ -259,7 +259,7 @@ class Aggregator
                     // If comparing the classifications resulted in an internal conflict,
                     //  store the data in a report file that will be sent to the labs.
                     if ($aMergedVariant['classification'] == 'conflicting') {
-                        $this->data_rejected[$sVariant][$sCenter] = array_merge(
+                        $this->data_rejected[$sCenter][] = array_merge(
                             $aMergedVariant,
                             [
                                 'error' => 'Internal conflict, classifications: ' . implode(', ', $aMergedVariant['annotation']['classifications']) . '.',
@@ -429,6 +429,7 @@ class Aggregator
     {
         // Save errors to disk.
         $aData = [implode("\t", $this->data_rejected_output_header)];
+        ksort($this->data_rejected);
         foreach ($this->data_rejected as $aVariants) {
             foreach ($aVariants as $aVariant) {
                 $aLine = [];
