@@ -83,7 +83,14 @@ class Validator
         $aStatistics = [
             'centers' => [],
             'status' => [],
+            'errors' => [],
             'internal_conflicts' => [],
+            'diff' => [
+                'created' => $nCreated,
+                'updated' => $nUpdated,
+                'deleted' => $nDeleted,
+                'total' => $nTotalChanges,
+            ],
         ];
 
         foreach ($aCurrentData as $aVariant) {
