@@ -5,11 +5,11 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-12
- * Modified    : 2026-05-29
+ * Modified    : 2026-06-18
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
- *               Marit de Koster <m.de_koster@lumc.nl>
+ *               Marit de Koster <M.de_Koster@LUMC.nl>
  *
  *************/
 
@@ -66,12 +66,15 @@ class Validator
         $nTotalChanges = $nCreated + $nUpdated + $nDeleted;
 
         // Check if the counts are below the expected values, using cutoffs that we got from the settings.
-        if ($nCreated > ($aValidationCutoffs['created'] ?? 0)) {
-            throw new \Exception("The number of variants created is too high");
-        } elseif ($nUpdated > ($aValidationCutoffs['updated'] ?? 0)) {
-            throw new \Exception("The number of variants updated is too high");
-        } elseif ($nDeleted > ($aValidationCutoffs['deleted'] ?? 0)) {
-            throw new \Exception("The number of variants deleted is too high");
+        $nMaxCreated = ($aValidationCutoffs['created'] ?? 0);
+        $nMaxUpdated = ($aValidationCutoffs['updated'] ?? 0);
+        $nMaxDeleted = ($aValidationCutoffs['deleted'] ?? 0);
+        if ($nCreated > $nMaxCreated) {
+            throw new \Exception("The number of variants created ($nCreated) is too high (cutoff: $nMaxCreated)");
+        } elseif ($nUpdated > $nMaxUpdated) {
+            throw new \Exception("The number of variants updated ($nUpdated) is too high (cutoff: $nMaxUpdated)");
+        } elseif ($nDeleted > $nMaxDeleted) {
+            throw new \Exception("The number of variants deleted ($nDeleted) too high (cutoff: $nMaxDeleted)");
         } elseif (!$nTotalChanges) {
             throw new \Exception("There is nothing to do; this release does not introduce any changes");
         }
