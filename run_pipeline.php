@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-23
- * Modified    : 2026-06-16
+ * Modified    : 2026-06-25
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -21,12 +21,14 @@ require_once(ROOT_PATH . '/validator.php');
 require_once(ROOT_PATH . '/log.php');
 require_once(ROOT_PATH . '/normalizer.php');
 require_once(ROOT_PATH . '/settings.php');
+require_once(ROOT_PATH . '/ssh.php');
 use LOVD\VKGL\Aggregator;
 use LOVD\VKGL\Formatter;
 use LOVD\VKGL\Normalizer;
 use LOVD\VKGL\Validator;
 use LOVD\Log;
 use LOVD\Settings;
+use LOVD\SSH;
 $Settings = new Settings();
 
 // All PHP scripts use these error codes; store them in the settings if they are missing.
@@ -179,12 +181,13 @@ if ($Status->get('step') === null) {
 
 
 
-// Step 1: Check if we have all the files.
+// Step 1: Check if we have all the files; download them if possible.
 $nStep = 1;
 if ($Status->get('step') < $nStep) {
     // Check if we have all the files.
     $Log->add("Checking if we have all the required files...");
     $aFilesMissing = [];
+    $aSSHConnections = [];
     foreach ($Settings->get('centers') as $sCenter => $aCenter) {
         if (empty($aCenter['files'])) {
             $Log->add("Center $sCenter doesn't have files configured; please define what files to expect, or remove the center.", '!!');
@@ -193,7 +196,7 @@ if ($Status->get('step') < $nStep) {
 
         // Loop the file settings, and check everything.
         foreach ($aCenter['files'] as $sOrigin => $sFile) {
-            // Check if we have the file.
+            // Check if we have the file; if not, attempt to retrieve it.
             if (file_exists($sFile)) {
                 $Status->set("data_files|$sFile", $sCenter);
                 continue;
@@ -211,8 +214,52 @@ if ($Status->get('step') < $nStep) {
                 continue;
             }
 
-            $aFilesMissing[] = $sFile;
+            if (is_int($sOrigin)) {
+                // We don't have the file and don't know how to retrieve it; no origin was provided.
+                $Log->add("File $sFile missing for center $sCenter and no origin has been provided; I can't resolve this problem.", '!!');
+                $aFilesMissing[] = $sFile;
+            }
+
+            // Otherwise, connect to the host and download the file.
+            // Because all kinds of things can go wrong here, add a log entry so that we know what it was trying to do.
+            $Log->add("Trying to download {$sFile} from {$sOrigin}...");
+            list($sHost, $sRemotePath) = explode(':', $sOrigin);
+            if (!isset($aSSHConnections[$sHost])) {
+                $aSSHConnections[$sHost] = new SSH(
+                    $Settings->get("servers|{$sHost}|host"),
+                    $Settings->get("servers|{$sHost}|fingerprint"),
+                    $Settings->get("servers|{$sHost}|key"),
+                    ($aPassphrases[$aServer['key']] ?? '')
+                );
+            }
+
+            // Resolve the path by replacing some variables.
+            $sRemotePath = str_replace(['{YEAR}', '{MONTH}'], [$nReleaseYear, str_pad($nReleaseMonth, 2, '0', STR_PAD_LEFT)], $sRemotePath);
+            $sLocalPath = $sFile;
+            if (str_ends_with($sRemotePath, '.gz')) {
+                $sLocalPath .= '.gz';
+            }
+
+            $aSSHConnections[$sHost]->download($sRemotePath, $sLocalPath);
+            $Log->add("Successfully downloaded {$sLocalPath}.", 'OK');
+
+            // If these are compressed files, decompress them.
+            if (str_ends_with($sLocalPath, '.gz')) {
+                @exec('gunzip ' . escapeshellarg("$sFile.gz"), $aOutput, $nReturn);
+                if ($nReturn !== 0) {
+                    $Log->add("Failed to decompress $sFile.gz for center $sCenter.", '!!');
+                    die($Settings->get('error_codes|EXIT_ERROR_INPUT_UNREADABLE'));
+                }
+                $Log->add("Decompressed $sFile.gz for center $sCenter.", 'OK');
+            }
+            $Status->set("data_files|$sFile", $sCenter);
         }
+    }
+
+    // Make sure we disconnect everywhere.
+    foreach ($aSSHConnections as $sHost => $SSH) {
+        $SSH->disconnect();
+        unset($aSSHConnections[$sHost]);
     }
 
     // If we don't have all files, complain.
@@ -221,6 +268,7 @@ if ($Status->get('step') < $nStep) {
         die($Settings->get('error_codes|EXIT_ERROR_INPUT_NOT_A_FILE'));
     }
 
+    // Finally, log that we're done and continue.
     $Log->add("All files are present, ready for the next step.", 'OK');
     $Status->set('step', $nStep);
 }
