@@ -51,5 +51,54 @@ class SSH
         }
         $this->public_key = $sPublicKey;
         $this->passphrase = $sPassphrase;
+
+        // Connect to the server, check the fingerprint, and authenticate using the keys.
+        $this->connect();
+    }
+
+
+
+
+
+    private function connect (): void
+    {
+        // Connect to the server, check the fingerprint, and authenticate using the keys.
+        $this->connection = ssh2_connect($this->host, $this->port);
+        if (!$this->connection) {
+            throw new \Exception("Unable to connect to {$this->host}");
+        }
+
+        // To obtain the fingerprint from the server, first check what key is being used:
+        // var_dump(ssh2_methods_negotiated($this->connection)['hostkey']);
+        // Then, on the server:
+        // ssh-keygen -E md5 -lf /etc/ssh/ssh_host_ecdsa_key.pub
+        // Remove the colons and change to uppercase.
+        $sFingerprint = ssh2_fingerprint($this->connection);
+        if ($sFingerprint != $this->fingerprint) {
+            throw new \Exception("Finger print mismatch for host {$this->host} (received: {$sFingerprint})");
+        }
+
+        if (!ssh2_auth_pubkey_file(
+            $this->connection,
+            $this->username,
+            $this->public_key,
+            $this->private_key,
+            $this->passphrase
+        )) {
+            throw new \Exception("SSH authentication failed — check your keys and passphrase");
+        }
+    }
+
+
+
+
+
+    public function disconnect (): void
+    {
+        // Disconnect and destroy the resource.
+        if ($this->connection) {
+            ssh2_disconnect($this->connection);
+            $this->connection = null;
+        }
     }
 }
