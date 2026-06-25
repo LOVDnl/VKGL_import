@@ -101,4 +101,28 @@ class SSH
             $this->connection = null;
         }
     }
+
+
+
+
+
+    public function download (string $sRemoteFile, string $sLocalFile): void
+    {
+        // Download a file over SCP, or throw an exception.
+        if (!ssh2_scp_recv($this->connection, $sRemoteFile, $sLocalFile)) {
+            throw new \Exception("SCP download failed: {$sRemoteFile}");
+        }
+    }
+
+
+
+
+
+    public function upload (string $sLocalFile, string $sRemoteFile): void
+    {
+        // Upload a file over SCP, or throw an exception.
+        if (!ssh2_scp_send($this->connection, $sLocalFile, $sRemoteFile)) {
+            throw new \Exception("SCP upload failed: {$sRemoteFile}");
+        }
+    }
 }
