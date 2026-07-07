@@ -465,3 +465,32 @@ if ($Status->get('step') < $nStep) {
     $Log->add("Successfully validated the aggregated output and stored the statistics.", 'OK');
     $Status->set('step', $nStep);
 }
+
+
+
+
+
+// Step 6: Processor
+$nStep ++;
+require_once(CWD . '/processor.php');
+use LOVD\VKGL\Processor;
+if ($Status->get('step') < $nStep) {
+    $Log->add("Processing the aggregated data...");
+    try {
+        $o = Processor::process($Status->get('output_files|aggregated'), $Settings, $Log);
+    } catch (Exception $e) {
+        $Log->add("Failed to process the aggregated data file.\n" . $e->getMessage() . '.', '!!');
+        die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
+    }
+
+
+    $sErrorOutputFile = 'vkgl_data.04-processed.' . date('Y-m-d.H.i.s') . '.errors.tsv';
+    if ($o->hasErrors()) {
+        if (!$o->saveErrors($sErrorOutputFile)) {
+            $Log->add("Failed to save the errors to $sErrorOutputFile.", '!!');
+            die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
+        }
+        $Log->add("Errors occurred, successfully created $sErrorOutputFile.", 'OK');
+        $Status->set('error_files|processed', $sErrorOutputFile);
+    }
+}
