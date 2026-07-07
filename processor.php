@@ -791,5 +791,32 @@ class Processor
 
         return true;
     }
+
+
+
+
+
+    public function saveErrors (string $sFile): bool
+    {
+        // Save errors to disk.
+        $aData = [implode("\t", $this->data_rejected_output_header)];
+        ksort($this->data_rejected);
+        foreach ($this->data_rejected as $aVariants) {
+            foreach ($aVariants as $aVariant) {
+                $aLine = [];
+                foreach ($this->data_rejected_output_header as $sField) {
+                    $aLine[] = ($aVariant[$sField] ?? '');
+                }
+                $aData[] = implode("\t", $aLine);
+            }
+        }
+        $aData[] = '';
+
+        // Save the data.
+        return (bool) file_put_contents(
+                $sFile,
+                implode("\r\n", $aData)
+        );
+    }
 }
 ?>
