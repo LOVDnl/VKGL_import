@@ -110,5 +110,96 @@ class Processor
     {
         return (bool) count($this->data_rejected);
     }
+
+
+
+
+
+    public function parse(string $sFile): bool
+    {
+        // These variables are global scope, this way lovd function can access them.
+        global $_CONF, $_DB, $_TABLES, $_SETT;
+        // Parse every file, and add the contents to $this->data.
+        if (!file_exists($sFile) || !is_readable($sFile)) {
+            throw new \Exception("File $sFile does not exist or is not readable.");
+        }
+        $aLines = file($sFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if (!$aLines) {
+            throw new \Exception("File $sFile could not be opened.");
+        }
+        // First line should be headers.
+        $aHeaders = explode("\t", array_shift($aLines));
+        $nHeaders = count($aHeaders);
+        $aHeaders = array_map('trim', $aHeaders, array_fill(0, $nHeaders, '"'));
+        // Check given refseq build.
+        $nNoCorrectBuildFound = 0;
+        $sRefSeqBuildLOVD = $_DB->q('SELECT refseq_build FROM ' . TABLE_CONFIG)->fetchColumn();
+        foreach ($aLines as $nLine => $sLine) {
+            $aDataLine = explode("\t", rtrim($sLine));
+            // Trim quotes off of the data.
+            $aDataLine = array_map(function ($sData) {
+                return trim($sData, '"');
+            }, $aDataLine);
+            $nDataColumns = count($aDataLine);
+            if ($nHeaders > $nDataColumns) {
+                // We accidentally trimmed of empty fields.
+                $aDataLine = array_pad($aDataLine, $nHeaders, '');
+            }
+            $aVariant = array_combine($aHeaders, $aDataLine);
+            $sCenterName = strtolower($aVariant['center']);
+            if (!in_array($sCenterName, $this->aCentersFound)) {
+                $this->aCentersFound[] = $sCenterName;
+            }
+            $aNC = HGVS_Chromosome::getInfoByNC(strstr($aVariant['genomic_native_normalized'], ':', true));
+            $aVariant['native_build'] = $aNC['build'];
+            // Compare the build from the database to the build from genomic_native_normalized.
+            // If the build isn't the same, compare the build from the database to the build from genomic_liftover_normalized
+            //  to see if the builds match. If both builds from genomic_native_normalized and genomic_liftover_normalized
+            //  don't match the build from the database, the variant will not be added to the dataset.
+            // They will be saved in a separate file and a counter is user to track the amount of variants not added to
+            //  the dataset.
+            if ($aVariant['native_build'] != $sRefSeqBuildLOVD) {
+                $aNC = HGVS_Chromosome::getInfoByNC(strstr($aVariant['genomic_liftover_normalized'], ':', true));
+                if ($aNC == false || $aNC['build'] != $sRefSeqBuildLOVD) {
+                    $this->data_rejected[$nLine][] = array_merge(
+                        $aVariant,
+                        [
+                            'error' => "LOVD has been configured to use $sRefSeqBuildLOVD, this variant uses only {$aVariant['native_build']}.",
+                        ]
+                    );
+                    // A counter to see how many variants won't be added to the dataset.
+                    $nNoCorrectBuildFound++;
+                    continue;
+                } else {
+                    $sGenomicNormalized = $aVariant['genomic_liftover_normalized'];
+                }
+            } else {
+                $sGenomicNormalized = $aVariant['genomic_native_normalized'];
+            }
+            $nCenterID = $this->Settings->get("centers|$sCenterName|id");
+            if (!$nCenterID) {
+                throw new \Exception("Center $sCenterName does not exist, or ID does not exist.");
+            }
+            // Check if the id was already assigned to a different center.
+            if (in_array($nCenterID, $this->aCenterIDs)) {
+                if (!array_key_exists($sCenterName, $this->aCenterIDs)) {
+                    throw new \Exception("This ID is already assigned to a different center.");
+                } else {
+                    $this->aCenterIDs[$sCenterName] = $nCenterID;
+                }
+            } else {
+                $this->aCenterIDs[$sCenterName] = $nCenterID;
+            }
+            $this->aCenterIDs['VKGL'] = $this->Settings->get('vkgl_generic_id');
+            list($sRefSeq,) = explode(':', $sGenomicNormalized, 2);
+            // Use the variant description combined with the center id as key, this way it's easier to check if the variant is already in the database.
+            $nCenterID = str_pad($nCenterID,5, "0", STR_PAD_LEFT);
+            $this->data[$aNC["chr"]. ":" . $sRefSeq][$nCenterID . ":" .$sGenomicNormalized] = $aVariant;
+        }
+        $this->Log->add("There is/are " . $nNoCorrectBuildFound . " variant(s) of which the build doesn't align with the database.");
+        $this->aCentersFound = array_unique($this->aCentersFound);
+        $this->nCentersFound = count($this->aCentersFound);
+        return true;
+    }
 }
 ?>
