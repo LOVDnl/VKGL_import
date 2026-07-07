@@ -101,6 +101,14 @@ class Processor
         ini_set('display_errors', '1'); // We do want to see errors from here on.
         $this->Log->add("Connected...");
     }
-    
+
+
+
+
+
+    public function hasErrors (): bool
+    {
+        return (bool) count($this->data_rejected);
+    }
 }
 ?>
