@@ -201,5 +201,22 @@ class Processor
         $this->nCentersFound = count($this->aCentersFound);
         return true;
     }
+
+
+
+
+
+    public static function process(string $sFile, Settings $Settings, Log $Log = null): Processor
+    {
+        $o = new Processor();
+        $o->Settings = $Settings;
+        if ($Log) {
+            $o->Log = $Log;
+        }
+        $o->connectLOVD();
+        $o->parse($sFile);
+        $o->processingData($o);
+        return $o;
+    }
 }
 ?>
