@@ -546,6 +546,9 @@ class Processor
                                 $aTranscriptNoVersion = explode(".", $sTranscript);
                                 $HGVSMapping = HGVS::check($aMapping['c']);
                                 $HGVSMappingPos = $HGVSMapping->getData();
+                                if (!$aMapping['p']){
+                                    $aMapping['p'] ="-";
+                                }
                                 $aMapping['p'] = lovd_shortenString($aMapping['p'], $nMaxProteinLength);
                                 // Check if the transcript already exists in the database.
                                 // Starting with the newest version (from $aMappings),
