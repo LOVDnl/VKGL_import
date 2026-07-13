@@ -785,6 +785,11 @@ class Processor
         $this->statistics['deleted'] = array_sum($aVariantsDeleted);
         $this->statistics['skipped'] = array_sum($aVariantsSkipped);
 
+        $this->Log->add("Total variants created: " . array_sum($aVariantsCreated) .
+        "\nTotal variants updated: " . array_sum($aVariantsUpdated) .
+        "\nTotal variants deleted: " . array_sum($aVariantsDeleted) .
+        "\nTotal variants skipped: " . array_sum($aVariantsSkipped));
+
         if (!LOVD_plus) {
             // Update all gene's updated dates.
             // We're going to make this easy for us; all entries created or edited at $sNow,
