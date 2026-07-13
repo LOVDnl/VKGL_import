@@ -776,28 +776,7 @@ class Processor
                 "\n\tDeleted: " . $aVariantsDeleted[$sChromosome] .
                 "\n\tSkipped: " . $aVariantsSkipped[$sChromosome]);
 
-            if (!LOVD_plus) {
-                // Update all gene's updated dates.
-                // We're going to make this easy for us; all entries created or edited at $sNow,
-                //  we're going to assume are ours. Run on entire database.
-                $aGenesUpdated = $_DB->q('
-                    SELECT DISTINCT t.geneid
-                    FROM ' . TABLE_TRANSCRIPTS . ' AS t
-                        INNER JOIN ' . TABLE_VARIANTS_ON_TRANSCRIPTS . ' AS vot ON (t.id = vot.transcriptid)
-                        INNER JOIN ' . TABLE_VARIANTS . ' AS vog ON (vot.id = vog.id)
-                    WHERE vog.created_date = ? OR vog.edited_date = ?', array($sNow, $sNow))->fetchAllColumn();
 
-                if ($aGenesUpdated) {
-                    // We can't use lovd_setUpdatedDate(), since that contains $_AUTH checks that we won't be able to pass.
-                    $q = $_DB->q('
-                        UPDATE ' . TABLE_GENES . '
-                        SET updated_by = ?, updated_date = ?
-                        WHERE updated_date < ? AND id IN (?' . str_repeat(', ?', count($aGenesUpdated) - 1) . ')',
-                            array_merge(array(0, $sNow, $sNow), $aGenesUpdated), false);
-                    $nUpdated = $q->rowCount();
-                    $this->Log->add('[Totals] Gene(s) updated: ' . $nUpdated . '/' . count($aGenesUpdated) . '.');
-                }
-            }
         }
 
         // Total count of variants created, updated, deleted or skipped.
@@ -805,6 +784,29 @@ class Processor
         $this->statistics['updated'] = array_sum($aVariantsUpdated);
         $this->statistics['deleted'] = array_sum($aVariantsDeleted);
         $this->statistics['skipped'] = array_sum($aVariantsSkipped);
+
+        if (!LOVD_plus) {
+            // Update all gene's updated dates.
+            // We're going to make this easy for us; all entries created or edited at $sNow,
+            //  we're going to assume are ours. Run on entire database.
+            $aGenesUpdated = $_DB->q('
+                    SELECT DISTINCT t.geneid
+                    FROM ' . TABLE_TRANSCRIPTS . ' AS t
+                        INNER JOIN ' . TABLE_VARIANTS_ON_TRANSCRIPTS . ' AS vot ON (t.id = vot.transcriptid)
+                        INNER JOIN ' . TABLE_VARIANTS . ' AS vog ON (vot.id = vog.id)
+                    WHERE vog.created_date = ? OR vog.edited_date = ?', array($sNow, $sNow))->fetchAllColumn();
+
+            if ($aGenesUpdated) {
+                // We can't use lovd_setUpdatedDate(), since that contains $_AUTH checks that we won't be able to pass.
+                $q = $_DB->q('
+                        UPDATE ' . TABLE_GENES . '
+                        SET updated_by = ?, updated_date = ?
+                        WHERE updated_date < ? AND id IN (?' . str_repeat(', ?', count($aGenesUpdated) - 1) . ')',
+                        array_merge(array(0, $sNow, $sNow), $aGenesUpdated), false);
+                $nUpdated = $q->rowCount();
+                $this->Log->add('[Totals] Gene(s) updated: ' . $nUpdated . '/' . count($aGenesUpdated) . '.');
+            }
+        }
 
         return true;
     }
