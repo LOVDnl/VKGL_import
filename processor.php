@@ -106,6 +106,15 @@ class Processor
 
 
 
+    public function getStatistics(): array
+    {
+        return $this->statistics;
+    }
+
+
+
+
+
     public function hasErrors (): bool
     {
         return (bool) count($this->data_rejected);
