@@ -143,7 +143,6 @@ if ($nReleaseMonth === null) {
     $nReleaseMonth = max($aMonths);
 }
 $sRelease = $nReleaseYear . '-' . str_pad($nReleaseMonth, 2, '0', STR_PAD_LEFT);
-$sRelease = "2026-04";
 // If the release folder doesn't exist yet, create it.
 define('RELEASE_PATH', CWD . '/' . $sRelease);
 define('LOG_PATH', RELEASE_PATH . '/status.log');
