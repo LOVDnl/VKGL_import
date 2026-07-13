@@ -288,7 +288,9 @@ class Processor
         // Process updates per chromosome. So an update is given per chromosome,
         //  but at the end we show the total amount per category (created, updated, deleted, and skipped).
         // We won't process variants that we can't hold.
-        $nMaxDNALength = lovd_getColumnLength(TABLE_VARIANTS, 'VariantOnGenome/DNA');
+        $nMaxDNALength = lovd_getColumnLength(TABLE_VARIANTS, 'VariantOnGenome/DNA'); // Max is 255
+        $nMaxPublishedAsLength = lovd_getColumnLength(TABLE_VARIANTS, 'VariantOnGenome/Published_as'); // Max is 100
+        $nMaxProteinLength = lovd_getColumnLength(TABLE_VARIANTS_ON_TRANSCRIPTS, 'VariantOnTranscript/Protein'); // Max is 255
 
         foreach ($this->data as $sChromosomeRefSeq => $aVariants) {
             list($sChromosome, $sRefSeq) = explode(':', $sChromosomeRefSeq, 2);
@@ -449,8 +451,11 @@ class Processor
                 // Loop through centers who found this variant.
                 // Build variant entry.
                 $aPublishedAs = json_decode($aVariant['annotation'], true);
-                $aVariant['published_as'] = $aPublishedAs['reported_as'];
-                $sCenter = $aVariant['center'];
+                if (is_array($aPublishedAs['reported_as'])){
+                    $aPublishedAs['reported_as'] = implode(",", $aPublishedAs['reported_as']);
+                }
+                $aVariant['published_as'] = lovd_shortenString($aPublishedAs['reported_as'], $nMaxPublishedAsLength);
+                $sCenter = strtolower($aVariant['center']);
                 $nCenterID = str_pad($this->aCenterIDs[$sCenter],5, "0", STR_PAD_LEFT);
                 $sLOVDKey = $nCenterID . ":" . $sGenomicNormalized;
                 if (!$aVariant['published_as'] && $bPublishedAs) {
@@ -466,9 +471,9 @@ class Processor
                         // This decides which 'genomic_?_reported to take.
                         // Do limit the input a bit, 150 should be enough.
                         if ($aVariant['native_build'] == $sRefSeqBuildLOVD) {
-                            $aVariant['published_as'] = lovd_shortenString($aVariant['genomic_native_reported'], 150);
+                            $aVariant['published_as'] = lovd_shortenString($aVariant['genomic_native_reported'], $nMaxPublishedAsLength);
                         } else {
-                            $aVariant['published_as'] = lovd_shortenString($aVariant['genomic_liftover_reported'], 150);
+                            $aVariant['published_as'] = lovd_shortenString($aVariant['genomic_liftover_reported'], $nMaxPublishedAsLength);
                         }
                     } else {
                         $aVariant['published_as'] = $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'];
@@ -541,6 +546,7 @@ class Processor
                                 $aTranscriptNoVersion = explode(".", $sTranscript);
                                 $HGVSMapping = HGVS::check($aMapping['c']);
                                 $HGVSMappingPos = $HGVSMapping->getData();
+                                $aMapping['p'] = lovd_shortenString($aMapping['p'], $nMaxProteinLength);
                                 // Check if the transcript already exists in the database.
                                 // Starting with the newest version (from $aMappings),
                                 //  counting down the version number to see which version is present in the database ($aTranscripts).
