@@ -668,7 +668,6 @@ class Processor
                     if ($aDiff) {
                         // Update atomically, we don't want half updates.
                         $_DB->beginTransaction();
-
                         // Start with the VOTs.
                         if (isset($aDiff['vots'])) {
                             foreach (array_unique(array_merge(array_keys($aDiff['vots'][0]), array_keys($aDiff['vots'][1]))) as $nTranscriptID) {
