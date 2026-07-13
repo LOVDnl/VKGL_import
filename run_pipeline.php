@@ -494,4 +494,26 @@ if ($Status->get('step') < $nStep) {
         $Log->add("Errors occurred, successfully created $sErrorOutputFile.", 'OK');
         $Status->set('error_files|processed', $sErrorOutputFile);
     }
+
+    $aStatistics = $Statistics->get($sRelease.'|diff');
+    $aProcessorStatistics = $o->getStatistics();
+    $aCommonKeys = array_intersect_key($aStatistics, $aProcessorStatistics);
+    // $aCommonKeys has the values of $aStatistics.
+    $nMisMatch = 0;
+    $sShowExpectations = "results: Expected Reality\n";
+    foreach ($aCommonKeys as $Key => $Value) {
+        $sShowExpectations .= $Key . ": ". $aCommonKeys[$Key] . "\t " . $aProcessorStatistics[$Key] . "\n";
+        if ($aCommonKeys[$Key] != $aProcessorStatistics[$Key]) {
+            $nMisMatch ++;
+        }
+    }
+    $Log->add($sShowExpectations);
+    try {
+        if ($nMisMatch > 0) {
+            throw new Exception("The statistics don't match");
+        }
+    } catch (Exception $e) {
+        $Log->add("Something went wrong.\n" . $e->getMessage() . '.', '!!');
+        die($Settings->get('error_codes|EXIT_WARNINGS_OCCURRED'));
+    }
 }
