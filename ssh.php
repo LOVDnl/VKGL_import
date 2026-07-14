@@ -23,13 +23,10 @@ class SSH
     private string $host;
     private string $fingerprint;
     private string $username;
-    private string $private_key;
-    private string $public_key;
-    private string $passphrase;
     private int $port;
     private mixed $connection = null;
 
-    public function __construct (string $sHost, string $sFingerprint, string $sPrivateKey, string $sPassphrase)
+    public function __construct (string $sHost, string $sFingerprint)
     {
         $aHost = parse_url($sHost);
         if (!is_array($aHost) || empty($aHost['host']) || empty($aHost['user']) || empty($aHost['port'])) {
@@ -39,18 +36,6 @@ class SSH
         $this->username = $aHost['user'];
         $this->port = $aHost['port'];
         $this->fingerprint = $sFingerprint;
-
-        if (!file_exists($sPrivateKey) || !is_readable($sPrivateKey)) {
-            throw new \Exception("Private key not found or not readable: {$sPrivateKey}");
-        }
-        $this->private_key = $sPrivateKey;
-
-        $sPublicKey = $sPrivateKey . '.pub';
-        if (!file_exists($sPublicKey) || !is_readable($sPublicKey)) {
-            throw new \Exception("Public key not found or not readable: {$sPublicKey}");
-        }
-        $this->public_key = $sPublicKey;
-        $this->passphrase = $sPassphrase;
 
         // Connect to the server, check the fingerprint, and authenticate using the keys.
         $this->connect();
