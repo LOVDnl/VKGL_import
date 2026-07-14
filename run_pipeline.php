@@ -236,9 +236,7 @@ if ($Status->get('step') < $nStep) {
             if (!isset($aSSHConnections[$sHost])) {
                 $aSSHConnections[$sHost] = new SSH(
                     $Settings->get("servers|{$sHost}|host"),
-                    $Settings->get("servers|{$sHost}|fingerprint"),
-                    $Settings->get("servers|{$sHost}|key"),
-                    ($aPassphrases[$aServer['key']] ?? '')
+                    $Settings->get("servers|{$sHost}|fingerprint")
                 );
             }
 
