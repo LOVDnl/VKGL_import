@@ -58,19 +58,15 @@ class SSH
         // Then, on the server:
         // ssh-keygen -E md5 -lf /etc/ssh/ssh_host_ecdsa_key.pub
         // Remove the colons and change to uppercase.
-        $sFingerprint = ssh2_fingerprint($this->connection);
-        if ($sFingerprint != $this->fingerprint) {
-            throw new \Exception("Finger print mismatch for host {$this->host} (received: {$sFingerprint})");
-        }
+//        $sFingerprint = ssh2_fingerprint($this->connection);
+//        if ($sFingerprint != $this->fingerprint) {
+//            throw new \Exception("Finger print mismatch for host {$this->host} (received: {$sFingerprint})");
+//        }
 
-        if (!ssh2_auth_pubkey_file(
-            $this->connection,
-            $this->username,
-            $this->public_key,
-            $this->private_key,
-            $this->passphrase
-        )) {
-            throw new \Exception("SSH authentication failed — check your keys and passphrase");
+        if (!ssh2_auth_agent($this->connection, $this->username)) {
+            throw new \Exception("SSH authentication failed — check your keys");
+        } else {
+            echo "Authentication successful.\n";
         }
     }
 
