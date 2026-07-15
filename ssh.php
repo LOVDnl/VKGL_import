@@ -97,6 +97,46 @@ class SSH
 
 
 
+    public function execute (string $sCommand, string $sPath = ''): array
+    {
+        // Execute a command on the remote server, optionally changing to a certain path first.
+
+        if ($sPath) {
+            $sCommand = 'cd ' . escapeshellarg($sPath) . " && $sCommand";
+        }
+        // We also want to catch the return value... We need a trick for that. Add the last exit code to the output.
+        $sCommand .= '; echo $?';
+
+        $stream = ssh2_exec($this->connection, $sCommand);
+        if (!$stream) {
+            throw new \Exception("Unable to execute command");
+        }
+
+        // Now, separate the STDOUT from STDERR.
+        $STDOUT = ssh2_fetch_stream($stream, SSH2_STREAM_STDIO);
+        $STDERR = ssh2_fetch_stream($stream, SSH2_STREAM_STDERR);
+
+        // Block the streams, which means we'll wait until they're done.
+        stream_set_blocking($STDOUT, true);
+        stream_set_blocking($STDERR, true);
+
+        // Collect the output, and also fetch the return value.
+        $aOutput = explode("\n", rtrim(stream_get_contents($STDOUT)));
+        $nReturnValue = array_pop($aOutput);
+        $aErrors = explode("\n", rtrim(stream_get_contents($STDERR)));
+        fclose($stream);
+
+        return [
+            'output' => $aOutput,
+            'errors' => $aErrors,
+            'return_value' => (int) $nReturnValue
+        ];
+    }
+
+
+
+
+
     public function upload (string $sLocalFile, string $sRemoteFile): void
     {
         // Upload a file over SCP, or throw an exception.
