@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-03-10
- * Modified    : 2026-06-16
+ * Modified    : 2026-07-16
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -45,18 +45,22 @@ class Normalizer
         'error',
         'genomic_native_reported',
     ];
+    private array $settings = [];
     private array $statistics = [];
     private $Log; // Holding the Log object so we can log our progress.
 
-    public static function normalize (string $sFile, Log $Log = null, array $aVV = []): Normalizer
+    public static function normalize (string $sFile, Log $Log = null, array $aSettings = []): Normalizer
     {
         // Parse the given file and normalize the data.
         $o = new Normalizer();
         if ($Log) {
             $o->Log = $Log; // So we can log our progress, not leaving the user in the dark.
         }
+        if ($aSettings) {
+            $o->settings = $aSettings; // For the VV settings and to collect transcripts from the remote LOVDs.
+        }
         $o->parse($sFile);
-        Caches::setVVOptions($aVV); // Pass on the VV settings that we got from the pipeline.
+        Caches::setVVOptions($aSettings['VV'] ?? []); // Pass on the VV settings that we got from the pipeline.
         $o->normalizeData();
         return $o;
     }
