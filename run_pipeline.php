@@ -150,12 +150,12 @@ if ($Status->get('step') === null) {
 
 // Check if the statistics file exists and is writable, then fetch the statistics file.
 $sStatisticsFile = CWD . '/statistics.json';
+$Statistics = new Settings($sStatisticsFile);
 if (!file_exists($sStatisticsFile) || !is_writable($sStatisticsFile)) {
     // Handle this kindly instead of throwing a hard exception.
     $Log->add("General statistics file not found or not writable: $sStatisticsFile.", '!!');
     die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
 }
-$Statistics = new Settings($sStatisticsFile);
 
 
 
