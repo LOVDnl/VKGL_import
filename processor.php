@@ -77,7 +77,7 @@ class Processor
         // Open connection, and check if user accounts exist.
         $this->Log->add("Connecting to LOVD...");
         // Find LOVD installation, run it's inc-init.php to get DB connection, initiate $_SETT, etc.
-        define('ROOT_PATH', $this->Settings->get('lovd_path') . '/');;
+        define('ROOT_PATH', $this->Settings->get('lovd_path') . '/');
         define('FORMAT_ALLOW_TEXTPLAIN', true);
         $_GET['format'] = 'text/plain';
         // To prevent notices when running inc-init.php.
