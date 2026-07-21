@@ -109,7 +109,7 @@ class SSH
 
         $stream = ssh2_exec($this->connection, $sCommand);
         if (!$stream) {
-            throw new \Exception("Unable to execute command");
+            throw new \Exception("Unable to execute command: $sCommand");
         }
 
         // Now, separate the STDOUT from STDERR.
