@@ -30,6 +30,25 @@ use LOVD\VKGL\Validator;
 use LOVD\Log;
 use LOVD\Settings;
 use LOVD\SSH;
+$aArgs = $_SERVER['argv'];
+$nArgs = $_SERVER['argc'];
+$bTesting = false;
+$sReleaseFolder = '';
+while ($nArgs) {
+    // Check for flags.
+    $sArg = array_shift($aArgs);
+    $nArgs--;
+    if (preg_match('/run_pipeline.php/', $sArg)) {
+        continue;
+    } elseif (preg_match('/^--testing/', $sArg)) {
+        $bTesting = true;
+    } elseif (preg_match('/^--release=[0-9]{4}-[0-9]{2}/', $sArg)) {
+        $sReleaseFolder = explode('=',$sArg)[1];
+    } else {
+        echo "The argument $sArg is not a valid option.\n";
+        exit(1);
+    }
+}
 $Settings = new Settings();
 
 // All PHP scripts use these error codes; store them in the settings if they are missing.
@@ -104,8 +123,16 @@ if ($nReleaseMonth === null) {
     $nReleaseMonth = max($aMonths);
 }
 $sRelease = $nReleaseYear . '-' . str_pad($nReleaseMonth, 2, '0', STR_PAD_LEFT);
+//$sRelease = "2026-04";
 // If the release folder doesn't exist yet, create it.
-define('RELEASE_PATH', CWD . '/' . $sRelease);
+if ($sReleaseFolder) {
+    $sRelease = $sReleaseFolder;
+}
+if ($bTesting) {
+    define('RELEASE_PATH', CWD . '/tests/releases/' . $sRelease);
+} else {
+    define('RELEASE_PATH', CWD . '/' . $sRelease);
+}
 define('LOG_PATH', RELEASE_PATH . '/status.log');
 if (!file_exists(RELEASE_PATH) && !mkdir(RELEASE_PATH)) {
     print("Can't create " . RELEASE_PATH . ".\n\n");
