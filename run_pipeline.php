@@ -488,13 +488,62 @@ if ($Status->get('step') < $nStep) {
             die($Settings->get('error_codes|EXIT_WARNINGS_OCCURRED'));
         }
     }
-    $Log->add($sShowExpectations);
-    try {
-        if ($nMisMatch > 0) {
-            throw new Exception("The statistics don't match");
+    $Status->set('step', $nStep);
+}
+
+
+
+
+
+// Step 7: Connecting and processing data on remote server.
+$nStep ++;
+$aSSHConnections = [];
+
+if ($Status->get('step') < $nStep) {
+    $Log->add("Remote server");
+    foreach (($Settings->get("destinations") ?: []) as $nKey => $aLocation) {
+        $sHost = $aLocation["server"];
+            $SSH = new SSH(
+                $Settings->get("servers|{$sHost}|host"),
+                $Settings->get("servers|{$sHost}|fingerprint")
+            );
+        $sRemotePath = $aLocation['path'];
+        $Log->add("Creating release directory on remote server.");
+        $SSH->execute("mkdir -p $sRelease", $sRemotePath);
+
+        $sAggregatedFile = $Status->get("output_files|aggregated");
+        $aUpload = array(
+            RELEASE_PATH . "/status.json" => $sRemotePath . "/$sRelease/status.json",
+            RELEASE_PATH . "/$sAggregatedFile" => $sRemotePath . "/$sRelease/$sAggregatedFile",
+            CWD . "/libs/HGVS-syntax-checker/cache/mapping.txt" => $sRemotePath . "/libs/HGVS-syntax-checker/cache/mapping.txt",
+            CWD . "/libs/HGVS-syntax-checker/cache/NC-variants.txt" => $sRemotePath . "/libs/HGVS-syntax-checker/cache/NC-variants.txt"
+        );
+        foreach ($aUpload as $sLocalFile => $sRemoteFile) {
+            try {
+                $sFileName = explode("/", $sLocalFile);
+                $Log->add("Uploading " . end($sFileName) . " to remote server");
+                $SSH->upload($sLocalFile, $sRemoteFile);
+            } catch (Exception $e) {
+                $Log->add($e->getMessage());
+                die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
+            }
         }
-    } catch (Exception $e) {
-        $Log->add("Something went wrong.\n" . $e->getMessage() . '.', '!!');
-        die($Settings->get('error_codes|EXIT_WARNINGS_OCCURRED'));
+
+        $nLocalStep = $Status->get("step");
+        $nRemoteStep = $Status->get("step")-1;
+        $aExecute = array(
+            'sed -i "s/step\": '.$nLocalStep.'/step\": '.$nRemoteStep.'/" status.json' => "Preparing remote status.json.",
+            'git pull' => "Pulling the most recent pushed code.",
+            '../run_pipeline.php' => "Running pipeline on remote server."
+        );
+        foreach ($aExecute as $sCommand => $sLogEntry) {
+            try {
+                $Log->add($sLogEntry);
+                $SSH->execute($sCommand, $sRemotePath . "/$sRelease/");
+            } catch (Exception $e) {
+                $Log->add($e->getMessage());
+                die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
+            }
+        }
     }
 }
