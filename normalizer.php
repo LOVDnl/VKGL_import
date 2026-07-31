@@ -180,6 +180,11 @@ class Normalizer
 
                 // This still hasn't been validated on the sequence level.
                 $sVariant = $HGVS->getCorrectedValue();
+                if ($aVariant['type'] == 'CNV') {
+                    $aVariant['genomic_native_normalized'] = $sVariant;
+                    $this->data[$sCenter][$i] = $aVariant;
+                    continue;
+                }
 
                 // This checks if we have a VV corrected variant, and if we have some mapping/liftover info.
                 // If not, it calls VV and stores the VV corrected variant and mapping/liftover info.
