@@ -506,13 +506,9 @@ if ($Status->get('step') < $nStep) {
             }
         }
         $Log->add($sShowExpectations);
-        try {
-            if ($nMisMatch > 0) {
-                throw new Exception("The statistics don't match");
-            }
-        } catch (Exception $e) {
-            $Log->add("Something went wrong.\n" . $e->getMessage() . '.', '!!');
-            die($Settings->get('error_codes|EXIT_WARNINGS_OCCURRED'));
+        if ($nMisMatch > 0) {
+            $Log->add("The statistics don't match.", '!!');
+            die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_UNEXPECTED'));
         }
     }
     $Status->set('step', $nStep);
