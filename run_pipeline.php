@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-23
- * Modified    : 2026-07-21
+ * Modified    : 2026-07-30
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -49,8 +49,7 @@ while ($nArgs) {
         exit(1);
     }
 }
-$Settings = new Settings();
-
+$Settings = new Settings($bTesting? __DIR__ . '/tests/settings.json' : null);
 // All PHP scripts use these error codes; store them in the settings if they are missing.
 // See http://tldp.org/LDP/abs/html/exitcodes.html for recommendations, in particular:
 // "[I propose] restricting user-defined exit codes to the range 64 - 113 (...), to conform with the C/C++ standard."
@@ -107,8 +106,12 @@ if ($aMonths === null) {
 }
 
 rsort($aMonths);
-$nThisYear = date('Y');
-$nThisMonth = date('m');
+if ($sReleaseFolder) {
+   list($nThisYear, $nThisMonth) = explode('-', $sReleaseFolder);
+} else {
+    $nThisYear = date('Y');
+    $nThisMonth = date('m');
+}
 $nReleaseYear = null;
 $nReleaseMonth = null;
 foreach ($aMonths as $nMonth) {
@@ -125,9 +128,6 @@ if ($nReleaseMonth === null) {
 $sRelease = $nReleaseYear . '-' . str_pad($nReleaseMonth, 2, '0', STR_PAD_LEFT);
 //$sRelease = "2026-04";
 // If the release folder doesn't exist yet, create it.
-if ($sReleaseFolder) {
-    $sRelease = $sReleaseFolder;
-}
 if ($bTesting) {
     define('RELEASE_PATH', CWD . '/tests/releases/' . $sRelease);
 } else {
@@ -176,7 +176,7 @@ if ($Status->get('step') === null) {
 }
 
 // Check if the statistics file exists and is writable, then fetch the statistics file.
-$sStatisticsFile = CWD . '/statistics.json';
+$sStatisticsFile = $bTesting? CWD . '/teststatistics.json' : CWD . '/statistics.json';
 $Statistics = new Settings($sStatisticsFile);
 if (!file_exists($sStatisticsFile) || !is_writable($sStatisticsFile)) {
     // Handle this kindly instead of throwing a hard exception.
@@ -294,7 +294,7 @@ if ($Status->get('step') < $nStep) {
         die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
     }
 
-    $sOutputFile = 'vkgl_data.01-raw.' . date('Y-m-d.H.i.s') . '.tsv';
+    $sOutputFile = $bTesting? 'vkgl_data.01-raw.tsv' : 'vkgl_data.01-raw.' . date('Y-m-d.H.i.s') . '.tsv';
     if (!$o->save($sOutputFile)) {
         $Log->add("Failed to save the result to $sOutputFile.", '!!');
         die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
@@ -335,7 +335,7 @@ if ($Status->get('step') < $nStep) {
         die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
     }
 
-    $sOutputFile = 'vkgl_data.02-normalized.' . date('Y-m-d.H.i.s') . '.tsv';
+    $sOutputFile = $bTesting? 'vkgl_data.02-normalized.tsv' : 'vkgl_data.02-normalized.' . date('Y-m-d.H.i.s') . '.tsv';
     if (!$o->save($sOutputFile)) {
         $Log->add("Failed to save the result to $sOutputFile.", '!!');
         die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
@@ -375,7 +375,7 @@ if ($Status->get('step') < $nStep) {
         die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
     }
 
-    $sOutputFile = 'vkgl_data.03-aggregated.' . date('Y-m-d.H.i.s') . '.tsv';
+    $sOutputFile = $bTesting? 'vkgl_data.03-aggregated.tsv' : 'vkgl_data.03-aggregated.' . date('Y-m-d.H.i.s') . '.tsv';
     if (!$o->save($sOutputFile)) {
         $Log->add("Failed to save the result to $sOutputFile.", '!!');
         die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
@@ -480,8 +480,7 @@ if ($Status->get('step') < $nStep) {
         die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
     }
 
-
-    $sErrorOutputFile = 'vkgl_data.04-processed.' . date('Y-m-d.H.i.s') . '.errors.tsv';
+    $sErrorOutputFile = $bTesting? 'vkgl_data.04-processed.errors.tsv' : 'vkgl_data.04-processed.' . date('Y-m-d.H.i.s') . '.errors.tsv';
     if ($o->hasErrors()) {
         if (!$o->saveErrors($sErrorOutputFile)) {
             $Log->add("Failed to save the errors to $sErrorOutputFile.", '!!');
