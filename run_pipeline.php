@@ -453,8 +453,8 @@ if ($Status->get('step') < $nStep) {
             }
         },
         array_merge_recursive(
-            $Status->get('statistics|formatting|errors'),
-            $Status->get('statistics|normalizing|errors'),
+            (array)$Status->get('statistics|formatting|errors'),
+            (array)$Status->get('statistics|normalizing|errors'),
         )
     );
     $Statistics->set($sRelease, $aStatistics);
