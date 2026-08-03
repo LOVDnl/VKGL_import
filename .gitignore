@@ -1,10 +1,10 @@
 .idea
-20??-??
+/20??-??
 dump_*sql*
 mapping_cache.*
 NC_cache.txt
 output_*
-settings.json
+/settings.json
 stats.txt
 verification_*
 vkgl_consensus_*

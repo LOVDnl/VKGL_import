@@ -1,0 +1,72 @@
+{
+    "refseq_build": "hg19",
+    "public_singlelab_owners": "y",
+    "delete_redundant_variants": "y",
+    "timezone": "Europe/Amsterdam",
+    "error_codes": {
+        "EXIT_OK": 0,
+        "EXIT_WARNINGS_OCCURRED": 64,
+        "EXIT_ERROR_ARGS_INSUFFICIENT": 65,
+        "EXIT_ERROR_ARGS_NOT_UNDERSTOOD": 66,
+        "EXIT_ERROR_INPUT_NOT_A_FILE": 67,
+        "EXIT_ERROR_INPUT_UNREADABLE": 68,
+        "EXIT_ERROR_INPUT_CANT_OPEN": 69,
+        "EXIT_ERROR_HEADER_FIELDS_NOT_FOUND": 70,
+        "EXIT_ERROR_HEADER_FIELDS_INCORRECT": 71,
+        "EXIT_ERROR_DATA_FIELD_COUNT_INCORRECT": 72,
+        "EXIT_ERROR_DATA_CONTENT_ERROR": 73,
+        "EXIT_ERROR_CACHE_CANT_CREATE": 74,
+        "EXIT_ERROR_CACHE_UNREADABLE": 75,
+        "EXIT_ERROR_CACHE_CANT_WRITE": 76,
+        "EXIT_ERROR_OUTPUT_CANT_CREATE": 77,
+        "EXIT_ERROR_CONNECTION_PROBLEM": 78,
+        "EXIT_ERROR_SETTINGS_PROBLEM": 79,
+        "EXIT_ERROR_OUTPUT_UNEXPECTED": 80
+    },
+    "release_months": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+    ],
+    "servers": {
+        "localhost": {
+            "host": "marit_2000@localhost:22",
+            "fingerprint": ""
+        }
+    },
+    "centers": {
+        "lumc": {
+            "files": {
+                "localhost:/mnt/c/Users/marit/Documenten/2025-2026/stage/www/VKGL_import_new/tests/inputs/{YEAR}-{MONTH}/lumc_SNVs.txt": "lumc_SNV.txt",
+                "localhost:/mnt/c/Users/marit/Documenten/2025-2026/stage/www/VKGL_import_new/tests/inputs/{YEAR}-{MONTH}/lumc_NxClinical.tsv": "lumc_NxClinical.tsv",
+                "localhost:/mnt/c/Users/marit/Documenten/2025-2026/stage/www/VKGL_import_new/tests/inputs/{YEAR}-{MONTH}/nki.txt": "nki.txt",
+                "localhost:/mnt/c/Users/marit/Documenten/2025-2026/stage/www/VKGL_import_new/tests/inputs/{YEAR}-{MONTH}/erasmus.txt": "erasmus.txt"
+            }
+        },
+        "radboud_mumc": {
+            "files": {
+                "localhost:/mnt/c/Users/marit/Documenten/2025-2026/stage/www/VKGL_import_new/tests/inputs/{YEAR}-{MONTH}/radboud_mumc_CNVs.txt": "radboud_mumc_CNV.txt",
+                "localhost:/mnt/c/Users/marit/Documenten/2025-2026/stage/www/VKGL_import_new/tests/inputs/{YEAR}-{MONTH}/radboud_mumc_SNVs.txt": "radboud_mumc_SNV.txt",
+                "localhost:/mnt/c/Users/marit/Documenten/2025-2026/stage/www/VKGL_import_new/tests/inputs/{YEAR}-{MONTH}/umcg.csv": "umcg.csv",
+                "localhost:/mnt/c/Users/marit/Documenten/2025-2026/stage/www/VKGL_import_new/tests/inputs/{YEAR}-{MONTH}/umcu.txt": "umcu.txt",
+                "localhost:/mnt/c/Users/marit/Documenten/2025-2026/stage/www/VKGL_import_new/tests/inputs/{YEAR}-{MONTH}/aumc.csv": "aumc.csv"
+            }
+        }
+    },
+    "validation_cutoffs": {
+        "aggregated": {
+            "updated": 10,
+            "created": 1000,
+            "deleted": 10
+        }
+    }
+}
