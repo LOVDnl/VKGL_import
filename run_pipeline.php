@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-23
- * Modified    : 2026-07-30
+ * Modified    : 2026-08-03
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -14,15 +14,14 @@
  *************/
 
 // New pipeline, running everything fully automated and reducing the time spent on manual verification even more.
-// We're already using ROOT_PATH to point to LOVD, so define CWD to point to the directory where this script resides.
-define('CWD', __DIR__);
-require_once(CWD . '/aggregator.php');
-require_once(CWD . '/formatter.php');
-require_once(CWD . '/log.php');
-require_once(CWD . '/normalizer.php');
-require_once(CWD . '/settings.php');
-require_once(CWD . '/ssh.php');
-require_once(CWD . '/validator.php');
+// We can't use ROOT_PATH because we'll connect to LOVD, which requires pointing that constant to a different directory.
+require_once(__DIR__ . '/aggregator.php');
+require_once(__DIR__ . '/formatter.php');
+require_once(__DIR__ . '/log.php');
+require_once(__DIR__ . '/normalizer.php');
+require_once(__DIR__ . '/settings.php');
+require_once(__DIR__ . '/ssh.php');
+require_once(__DIR__ . '/validator.php');
 use LOVD\VKGL\Aggregator;
 use LOVD\VKGL\Formatter;
 use LOVD\VKGL\Normalizer;
@@ -130,9 +129,9 @@ $sRelease = $nReleaseYear . '-' . str_pad($nReleaseMonth, 2, '0', STR_PAD_LEFT);
 //$sRelease = "2026-04";
 // If the release folder doesn't exist yet, create it.
 if ($bTesting) {
-    define('RELEASE_PATH', CWD . '/tests/releases/' . $sRelease);
+    define('RELEASE_PATH', __DIR__ . '/tests/releases/' . $sRelease);
 } else {
-    define('RELEASE_PATH', CWD . '/' . $sRelease);
+    define('RELEASE_PATH', __DIR__ . '/' . $sRelease);
 }
 define('LOG_PATH', RELEASE_PATH . '/status.log');
 if (!file_exists(RELEASE_PATH) && !mkdir(RELEASE_PATH)) {
@@ -177,7 +176,7 @@ if ($Status->get('step') === null) {
 }
 
 // Check if the statistics file exists and is writable, then fetch the statistics file.
-$sStatisticsFile = $bTesting? CWD . '/teststatistics.json' : CWD . '/statistics.json';
+$sStatisticsFile = $bTesting? __DIR__ . '/teststatistics.json' : __DIR__ . '/statistics.json';
 $Statistics = new Settings($sStatisticsFile);
 if (!file_exists($sStatisticsFile) || !is_writable($sStatisticsFile)) {
     // Handle this kindly instead of throwing a hard exception.
@@ -470,7 +469,7 @@ if ($Status->get('step') < $nStep) {
 
 // Step 6: Processor
 $nStep ++;
-require_once(CWD . '/processor.php');
+require_once(__DIR__ . '/processor.php');
 use LOVD\VKGL\Processor;
 if ($Status->get('step') < $nStep) {
     $Log->add("Processing the aggregated data...");
@@ -538,8 +537,8 @@ if ($Status->get('step') < $nStep) {
         $aUpload = array(
             RELEASE_PATH . "/status.json" => $sRemotePath . "/$sRelease/status.json",
             RELEASE_PATH . "/$sAggregatedFile" => $sRemotePath . "/$sRelease/$sAggregatedFile",
-            CWD . "/libs/HGVS-syntax-checker/cache/mapping.txt" => $sRemotePath . "/libs/HGVS-syntax-checker/cache/mapping.txt",
-            CWD . "/libs/HGVS-syntax-checker/cache/NC-variants.txt" => $sRemotePath . "/libs/HGVS-syntax-checker/cache/NC-variants.txt"
+            __DIR__ . "/libs/HGVS-syntax-checker/cache/mapping.txt" => $sRemotePath . "/libs/HGVS-syntax-checker/cache/mapping.txt",
+            __DIR__ . "/libs/HGVS-syntax-checker/cache/NC-variants.txt" => $sRemotePath . "/libs/HGVS-syntax-checker/cache/NC-variants.txt"
         );
         foreach ($aUpload as $sLocalFile => $sRemoteFile) {
             try {
