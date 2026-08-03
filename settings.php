@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-20
- * Modified    : 2026-02-27
+ * Modified    : 2026-08-03
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -97,7 +97,11 @@ class Settings
 
     public function save (): bool
     {
-        return (bool) file_put_contents($this->file, json_encode($this->data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $b = file_put_contents($this->file, json_encode($this->data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        if (!$b) {
+            throw new \Exception("Unable to write to {$this->file}");
+        }
+        return (bool) $b;
     }
 
 

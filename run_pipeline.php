@@ -78,7 +78,16 @@ while ($aArgs) {
 }
 
 // Load the settings; the location of the settings file depends on whether we're testing or not.
-$Settings = new Settings($bTesting? __DIR__ . '/tests/settings.json' : null);
+try {
+    $Settings = new Settings(!$bTesting? null : __DIR__ . '/tests/settings.json');
+} catch (Exception $e) {
+    print($e->getMessage() . ".\n\n");
+    if (str_starts_with($e->getMessage(), 'Unable to create')) {
+        die($aErrorCodes['EXIT_ERROR_SETTINGS_CANT_CREATE']);
+    } else {
+        die($aErrorCodes['EXIT_ERROR_SETTINGS_UNREADABLE']);
+    }
+}
 
 // Store all the error codes in the settings so that all scripts can use them.
 foreach($aErrorCodes as $sErrorCode => $nErrorCode) {
@@ -92,12 +101,17 @@ foreach ($Settings->get() as $sKey => $Value) {
     if (preg_match('/^center_([a-z_]+)_id$/', $sKey, $aRegs)) {
         // Old-style center settings. Convert into something new.
         $sCenter = $aRegs[1];
-        if (!$Settings->get("centers|$sCenter|id")) {
-            // Hasn't migrated yet.
-            $Settings->set("centers|$sCenter|id", $Value);
+        try {
+            if (!$Settings->get("centers|$sCenter|id")) {
+                // Hasn't migrated yet.
+                $Settings->set("centers|$sCenter|id", $Value);
+            }
+            // Delete it, we don't need this anymore.
+            $Settings->delete($sKey);
+        } catch (Exception $e) {
+            print("Failed to update the settings.\n" . $e->getMessage() . ".\n\n");
+            die($Settings->get('error_codes|EXIT_ERROR_SETTINGS_CANT_UPDATE'));
         }
-        // Delete it, we don't need this anymore.
-        $Settings->delete($sKey);
     }
 }
 
@@ -163,8 +177,19 @@ if (!file_exists($sIncInit) || !is_readable($sIncInit)) {
     die($Settings->get('error_codes|EXIT_ERROR_SETTINGS_CONTENT_ERROR'));
 }
 
+
+
 // For the release's status, we'll re-use the Settings class.
-$Status = new Settings(RELEASE_PATH . '/status.json');
+try {
+    $Status = new Settings(RELEASE_PATH . '/status.json');
+} catch (Exception $e) {
+    $Log->add($e->getMessage() . '.', '!!');
+    if (str_starts_with($e->getMessage(), 'Unable to create')) {
+        die($aErrorCodes['EXIT_ERROR_SETTINGS_CANT_CREATE']);
+    } else {
+        die($aErrorCodes['EXIT_ERROR_SETTINGS_UNREADABLE']);
+    }
+}
 
 // Check the status; are we perhaps done already?
 if ($Status->get('step') == 9) {
@@ -177,16 +202,21 @@ $Log->addBreakIfNotEmpty();
 $Log->add('Checking current status...');
 chdir(RELEASE_PATH);
 if ($Status->get('step') === null) {
+    // If this fails, we have an unhandled exception.
+    // For simplicity's sake, we decided to not catch Status update exceptions.
     $Status->set('step', 0);
 }
 
-// Check if the statistics file exists and is writable, then fetch the statistics file.
-$sStatisticsFile = $bTesting? __DIR__ . '/teststatistics.json' : __DIR__ . '/statistics.json';
-$Statistics = new Settings($sStatisticsFile);
-if (!file_exists($sStatisticsFile) || !is_writable($sStatisticsFile)) {
-    // Handle this kindly instead of throwing a hard exception.
-    $Log->add("General statistics file not found or not writable: $sStatisticsFile.", '!!');
-    die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
+// For the statistics, again re-use the Settings class.
+try {
+    $Statistics = new Settings(__DIR__ . (!$bTesting? '' : '/tests') . '/statistics.json');
+} catch (Exception $e) {
+    $Log->add($e->getMessage() . '.', '!!');
+    if (str_starts_with($e->getMessage(), 'Unable to create')) {
+        die($aErrorCodes['EXIT_ERROR_SETTINGS_CANT_CREATE']);
+    } else {
+        die($aErrorCodes['EXIT_ERROR_SETTINGS_UNREADABLE']);
+    }
 }
 
 
