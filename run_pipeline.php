@@ -29,25 +29,29 @@ use LOVD\VKGL\Validator;
 use LOVD\Log;
 use LOVD\Settings;
 use LOVD\SSH;
-$aArgs = $_SERVER['argv'];
-$nArgs = $_SERVER['argc'];
+
+
+
+// Allow controlling the pipeline through command-line arguments.
+// Use --testing to enable tests; the pipeline will work in the tests/ directory, instead.
+// Use --release=DATE (e.g., --release=2026-01) to control what release the pipeline will work on.
 $bTesting = false;
-$sReleaseFolder = '';
-while ($nArgs) {
+$sRelease = date('Y-m');
+$aArgs = $_SERVER['argv'];
+$sScriptName = array_shift($aArgs);
+while ($aArgs) {
     // Check for flags.
     $sArg = array_shift($aArgs);
-    $nArgs--;
-    if (preg_match('/run_pipeline.php/', $sArg)) {
-        continue;
-    } elseif (preg_match('/^--testing/', $sArg)) {
+    if ($sArg == '--testing') {
         $bTesting = true;
-    } elseif (preg_match('/^--release=[0-9]{4}-[0-9]{2}/', $sArg)) {
-        $sReleaseFolder = explode('=',$sArg)[1];
+    } elseif (preg_match('/^--release=[0-9]{4}-[0-9]{2}$/', $sArg)) {
+        $sRelease = explode('=', $sArg)[1];
     } else {
-        echo "The argument $sArg is not a valid option.\n";
+        print("Argument '$sArg' is not understood.\n\n");
         exit(1);
     }
 }
+
 $Settings = new Settings($bTesting? __DIR__ . '/tests/settings.json' : null);
 // All PHP scripts use these error codes; store them in the settings if they are missing.
 // See http://tldp.org/LDP/abs/html/exitcodes.html for recommendations, in particular:
@@ -106,12 +110,7 @@ if ($aMonths === null) {
 }
 
 rsort($aMonths);
-if ($sReleaseFolder) {
-   list($nThisYear, $nThisMonth) = explode('-', $sReleaseFolder);
-} else {
-    $nThisYear = date('Y');
-    $nThisMonth = date('m');
-}
+list($nThisYear, $nThisMonth) = explode('-', $sRelease);
 $nReleaseYear = null;
 $nReleaseMonth = null;
 foreach ($aMonths as $nMonth) {
@@ -126,7 +125,7 @@ if ($nReleaseMonth === null) {
     $nReleaseMonth = max($aMonths);
 }
 $sRelease = $nReleaseYear . '-' . str_pad($nReleaseMonth, 2, '0', STR_PAD_LEFT);
-//$sRelease = "2026-04";
+
 // If the release folder doesn't exist yet, create it.
 if ($bTesting) {
     define('RELEASE_PATH', __DIR__ . '/tests/releases/' . $sRelease);
