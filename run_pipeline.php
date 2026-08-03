@@ -227,7 +227,7 @@ try {
 $nStep = 1;
 if ($Status->get('step') < $nStep) {
     // Check if we have all the files.
-    $Log->add("Checking if we have all the required files...");
+    $Log->add('Checking if we have all the required files...');
     $aFilesMissing = [];
     $aSSHConnections = [];
     foreach ($Settings->get('centers') as $sCenter => $aCenter) {
@@ -260,17 +260,23 @@ if ($Status->get('step') < $nStep) {
                 // We don't have the file and don't know how to retrieve it; no origin was provided.
                 $Log->add("File $sFile missing for center $sCenter and no origin has been provided; I can't resolve this problem.", '!!');
                 $aFilesMissing[] = $sFile;
+                continue; // Continue to the next file.
             }
 
             // Otherwise, connect to the host and download the file.
             // Because all kinds of things can go wrong here, add a log entry so that we know what it was trying to do.
-            $Log->add("Trying to download {$sFile} from {$sOrigin}...");
-            list($sHost, $sRemotePath) = explode(':', $sOrigin);
+            $Log->add("Trying to download $sFile from $sOrigin...");
+            list($sHost, $sRemotePath) = array_pad(explode(':', $sOrigin), 2, '');
             if (!isset($aSSHConnections[$sHost])) {
-                $aSSHConnections[$sHost] = new SSH(
-                    $Settings->get("servers|{$sHost}|host"),
-                    $Settings->get("servers|{$sHost}|fingerprint")
-                );
+                try {
+                    $aSSHConnections[$sHost] = new SSH(
+                        ($Settings->get("servers|$sHost|host") ?? ''),
+                        ($Settings->get("servers|$sHost|fingerprint") ?? '')
+                    );
+                } catch (Exception $e) {
+                    $Log->add("Failed to connect to $sOrigin to obtain $sFile.\n" . $e->getMessage() . '.', '!!');
+                    die($Settings->get('error_codes|EXIT_ERROR_CONNECTION_PROBLEM'));
+                }
             }
 
             // Resolve the path by replacing some variables.
@@ -280,8 +286,13 @@ if ($Status->get('step') < $nStep) {
                 $sLocalPath .= '.gz';
             }
 
-            $aSSHConnections[$sHost]->download($sRemotePath, $sLocalPath);
-            $Log->add("Successfully downloaded {$sLocalPath}.", 'OK');
+            try {
+                $aSSHConnections[$sHost]->download($sRemotePath, $sLocalPath);
+                $Log->add("Successfully downloaded $sLocalPath.", 'OK');
+            } catch (Exception $e) {
+                $Log->add("Failed to download $sLocalPath.\n" . $e->getMessage() . '.', '!!');
+                die($Settings->get('error_codes|EXIT_ERROR_CONNECTION_PROBLEM'));
+            }
 
             // If these are compressed files, decompress them.
             if (str_ends_with($sLocalPath, '.gz')) {
@@ -309,7 +320,7 @@ if ($Status->get('step') < $nStep) {
     }
 
     // Finally, log that we're done and continue.
-    $Log->add("All files are present, ready for the next step.", 'OK');
+    $Log->add('All files are present, ready for the next step.', 'OK');
     $Status->set('step', $nStep);
 }
 
