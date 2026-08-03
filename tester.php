@@ -73,7 +73,7 @@ class Tester
                     echo "Output file " . $sOutputFile . " aligns with expectations\n";
                 } else {
                     echo "Output file " . $sOutputFile . " doesn't align with expectations.\n";
-                    die(self::$settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
+                    die(self::$settings->get('error_codes|EXIT_ERROR_OUTPUT_CONTENT_ERROR'));
                 }
             }
         }

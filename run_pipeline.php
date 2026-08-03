@@ -32,6 +32,31 @@ use LOVD\SSH;
 
 
 
+// All PHP scripts use these error codes; these are the default values.
+// See http://tldp.org/LDP/abs/html/exitcodes.html for recommendations, in particular:
+// "[I propose] restricting user-defined exit codes to the range 64 - 113 (...), to conform with the C/C++ standard."
+$aErrorCodes = array_flip([
+    0 => 'EXIT_OK',
+    64 => 'EXIT_WARNINGS_OCCURRED',
+    'EXIT_ERROR_ARGS_INSUFFICIENT',
+    'EXIT_ERROR_ARGS_NOT_UNDERSTOOD',
+    'EXIT_ERROR_SETTINGS_CANT_CREATE',
+    'EXIT_ERROR_SETTINGS_UNREADABLE',
+    'EXIT_ERROR_SETTINGS_CONTENT_ERROR',
+    'EXIT_ERROR_SETTINGS_CANT_UPDATE',
+    'EXIT_ERROR_CACHE_CANT_CREATE',
+    'EXIT_ERROR_CACHE_UNREADABLE',
+    'EXIT_ERROR_CACHE_CONTENT_ERROR',
+    'EXIT_ERROR_CACHE_CANT_UPDATE',
+    'EXIT_ERROR_INPUT_NOT_A_FILE',
+    'EXIT_ERROR_INPUT_UNREADABLE',
+    'EXIT_ERROR_INPUT_CONTENT_ERROR',
+    'EXIT_ERROR_OUTPUT_CANT_CREATE',
+    'EXIT_ERROR_OUTPUT_CONTENT_ERROR',
+    'EXIT_ERROR_OUTPUT_CANT_WRITE',
+    'EXIT_ERROR_CONNECTION_PROBLEM',
+]);
+
 // Allow controlling the pipeline through command-line arguments.
 // Use --testing to enable tests; the pipeline will work in the tests/ directory, instead.
 // Use --release=DATE (e.g., --release=2026-01) to control what release the pipeline will work on.
@@ -48,40 +73,21 @@ while ($aArgs) {
         $sRelease = explode('=', $sArg)[1];
     } else {
         print("Argument '$sArg' is not understood.\n\n");
-        exit(1);
+        die($aErrorCodes['EXIT_ERROR_ARGS_NOT_UNDERSTOOD']);
     }
 }
 
+// Load the settings; the location of the settings file depends on whether we're testing or not.
 $Settings = new Settings($bTesting? __DIR__ . '/tests/settings.json' : null);
-// All PHP scripts use these error codes; store them in the settings if they are missing.
-// See http://tldp.org/LDP/abs/html/exitcodes.html for recommendations, in particular:
-// "[I propose] restricting user-defined exit codes to the range 64 - 113 (...), to conform with the C/C++ standard."
-foreach([
-    'EXIT_OK' => 0,
-    'EXIT_WARNINGS_OCCURRED' => 64,
-    'EXIT_ERROR_ARGS_INSUFFICIENT' => 65,
-    'EXIT_ERROR_ARGS_NOT_UNDERSTOOD' => 66,
-    'EXIT_ERROR_INPUT_NOT_A_FILE' => 67,
-    'EXIT_ERROR_INPUT_UNREADABLE' => 68,
-    'EXIT_ERROR_INPUT_CANT_OPEN' => 69,
-    'EXIT_ERROR_HEADER_FIELDS_NOT_FOUND' => 70,
-    'EXIT_ERROR_HEADER_FIELDS_INCORRECT' => 71,
-    'EXIT_ERROR_DATA_FIELD_COUNT_INCORRECT' => 72,
-    'EXIT_ERROR_DATA_CONTENT_ERROR' => 73,
-    'EXIT_ERROR_CACHE_CANT_CREATE' => 74,
-    'EXIT_ERROR_CACHE_UNREADABLE' => 75,
-    'EXIT_ERROR_CACHE_CANT_WRITE' => 76,
-    'EXIT_ERROR_OUTPUT_CANT_CREATE' => 77,
-    'EXIT_ERROR_OUTPUT_UNEXPECTED' => 80,
-    'EXIT_ERROR_CONNECTION_PROBLEM' => 78,
-    'EXIT_ERROR_SETTINGS_PROBLEM' => 79,
-] as $sErrorCode => $nErrorCode) {
-    if ($Settings->get("error_codes|$sErrorCode") === null) {
+
+// Store all the error codes in the settings so that all scripts can use them.
+foreach($aErrorCodes as $sErrorCode => $nErrorCode) {
+    if ($Settings->get("error_codes|$sErrorCode") !== $nErrorCode) {
         $Settings->set("error_codes|$sErrorCode", $nErrorCode);
     }
 }
 
-// Convert older settings to newer settings.
+// Convert some older settings to newer settings.
 foreach ($Settings->get() as $sKey => $Value) {
     if (preg_match('/^center_([a-z_]+)_id$/', $sKey, $aRegs)) {
         // Old-style center settings. Convert into something new.
@@ -106,7 +112,7 @@ if ($Settings->get('timezone')) {
 $aMonths = $Settings->get('release_months');
 if ($aMonths === null) {
     print("Can't find information in the settings about the release months. Please configure them first.\n\n");
-    die($Settings->get('error_codes|EXIT_ERROR_SETTINGS_PROBLEM'));
+    die($Settings->get('error_codes|EXIT_ERROR_SETTINGS_CONTENT_ERROR'));
 }
 
 rsort($aMonths);
@@ -148,13 +154,13 @@ try {
 // Check if lovd path is in settings.json.
 if (!$Settings->get("lovd_path")) {
     $Log->add("The settings are incorrect because lovd_path is missing.");
-    die($Settings->get('error_codes|EXIT_ERROR_SETTINGS_PROBLEM'));
+    die($Settings->get('error_codes|EXIT_ERROR_SETTINGS_CONTENT_ERROR'));
 }
 // Check if lovd_path contains the file inc-init.php.
 $sIncInit = $Settings->get("lovd_path") . "/inc-init.php";
 if (!file_exists($sIncInit) || !is_readable($sIncInit)) {
     $Log->add("Could not find lovd installation in lovd_path.");
-    die($Settings->get('error_codes|EXIT_ERROR_SETTINGS_PROBLEM'));
+    die($Settings->get('error_codes|EXIT_ERROR_SETTINGS_CONTENT_ERROR'));
 }
 
 // For the release's status, we'll re-use the Settings class.
@@ -197,7 +203,7 @@ if ($Status->get('step') < $nStep) {
     foreach ($Settings->get('centers') as $sCenter => $aCenter) {
         if (empty($aCenter['files'])) {
             $Log->add("Center $sCenter doesn't have files configured; please define what files to expect, or remove the center.", '!!');
-            die($Settings->get('error_codes|EXIT_ERROR_SETTINGS_PROBLEM'));
+            die($Settings->get('error_codes|EXIT_ERROR_SETTINGS_CONTENT_ERROR'));
         }
 
         // Loop the file settings, and check everything.
@@ -290,7 +296,7 @@ if ($Status->get('step') < $nStep) {
         $o = Formatter::format($Status->get('data_files'));
     } catch (Exception $e) {
         $Log->add("Failed to parse the data files.\n" . $e->getMessage() . '.', '!!');
-        die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
+        die($Settings->get('error_codes|EXIT_ERROR_INPUT_CONTENT_ERROR'));
     }
 
     $sOutputFile = $bTesting? 'vkgl_data.01-raw.tsv' : 'vkgl_data.01-raw.' . date('Y-m-d.H.i.s') . '.tsv';
@@ -331,7 +337,7 @@ if ($Status->get('step') < $nStep) {
     } catch (Exception $e) {
         echo "\n"; // Clear the line as the normalizer has output of its own.
         $Log->add("Failed to normalize the data.\n" . $e->getMessage() . '.', '!!');
-        die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
+        die($Settings->get('error_codes|EXIT_ERROR_INPUT_CONTENT_ERROR'));
     }
 
     $sOutputFile = $bTesting? 'vkgl_data.02-normalized.tsv' : 'vkgl_data.02-normalized.' . date('Y-m-d.H.i.s') . '.tsv';
@@ -371,7 +377,7 @@ if ($Status->get('step') < $nStep) {
         $o = Aggregator::aggregate($Status->get('output_files|normalized'));
     } catch (Exception $e) {
         $Log->add("Failed to aggregate the data.\n" . $e->getMessage() . '.', '!!');
-        die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
+        die($Settings->get('error_codes|EXIT_ERROR_INPUT_CONTENT_ERROR'));
     }
 
     $sOutputFile = $bTesting? 'vkgl_data.03-aggregated.tsv' : 'vkgl_data.03-aggregated.' . date('Y-m-d.H.i.s') . '.tsv';
@@ -423,7 +429,7 @@ if ($Status->get('step') < $nStep) {
     if (!file_exists($sPreviousStatus) || !is_readable($sPreviousStatus)) {
         // Handle this kindly instead of throwing a hard exception.
         $Log->add("Failed to find the previous release's status file: $sPreviousStatus.\nHas the directory been moved?", '!!');
-        die($Settings->get('error_codes|EXIT_ERROR_INPUT_CANT_OPEN'));
+        die($Settings->get('error_codes|EXIT_ERROR_INPUT_UNREADABLE'));
     }
     $PreviousStatus = new Settings(PREVIOUS_RELEASE_PATH . '/status.json');
 
@@ -432,7 +438,7 @@ if ($Status->get('step') < $nStep) {
         $o = Validator::validate(PREVIOUS_RELEASE_PATH . '/' . $PreviousStatus->get('output_files|aggregated'), $Status->get('output_files|aggregated'), ($Settings->get('validation_cutoffs|aggregated') ?? []), $Log);
     } catch (Exception $e) {
         $Log->add("Failed to validate the aggregated output.\n" . $e->getMessage() . '.', '!!');
-        die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
+        die($Settings->get('error_codes|EXIT_ERROR_INPUT_CONTENT_ERROR'));
     }
 
     // Fetch the statistics generated by the validator and store them.
@@ -476,7 +482,7 @@ if ($Status->get('step') < $nStep) {
         $o = Processor::process($Status->get('output_files|aggregated'), $Settings, $Log);
     } catch (Exception $e) {
         $Log->add("Failed to process the aggregated data file.\n" . $e->getMessage() . '.', '!!');
-        die($Settings->get('error_codes|EXIT_ERROR_DATA_CONTENT_ERROR'));
+        die($Settings->get('error_codes|EXIT_ERROR_INPUT_CONTENT_ERROR'));
     }
 
     $sErrorOutputFile = $bTesting? 'vkgl_data.04-processed.errors.tsv' : 'vkgl_data.04-processed.' . date('Y-m-d.H.i.s') . '.errors.tsv';
@@ -506,7 +512,7 @@ if ($Status->get('step') < $nStep) {
         $Log->add($sShowExpectations);
         if ($nMisMatch > 0) {
             $Log->add("The statistics don't match.", '!!');
-            die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_UNEXPECTED'));
+            die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CONTENT_ERROR'));
         }
     }
     $Status->set('step', $nStep);
