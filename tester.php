@@ -59,6 +59,7 @@ class Tester
     {
         // Run the pipeline for each folder, if an error occurs the script should stop.
         foreach (self::$releases as $sRelease) {
+            echo $sRelease . "\n";
             exec('./run_pipeline.php --testing --release=' . $sRelease, $sRunPipeline, $nResultCode);
             if ($nResultCode != 0) {
                 echo "Error " . $nResultCode . ": " . array_search($nResultCode, self::$settings->get('error_codes')) . "\n";
