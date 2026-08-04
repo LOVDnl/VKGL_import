@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-14
- * Modified    : 2026-07-07
+ * Modified    : 2026-08-04
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -34,34 +34,34 @@ class Processor
     private array $data_rejected = [];
 
     private array $data_rejected_output_header = [
-            'center',
-            'type',
-            'error',
-            'genomic_native_normalized',
-            'genomic_native_reported',
+        'center',
+        'type',
+        'error',
+        'genomic_native_normalized',
+        'genomic_native_reported',
     ];
 
     private array $effect_mapping_classification = array(
-            'B' => 'benign',
-            'LB' => 'likely benign',
-            'VUS' => 'VUS',
-            'LP' => 'likely pathogenic',
-            'P' => 'pathogenic',
+        'B' => 'benign',
+        'LB' => 'likely benign',
+        'VUS' => 'VUS',
+        'LP' => 'likely pathogenic',
+        'P' => 'pathogenic',
     );
 
     private array $effect_mapping_LOVD = array(
-            'B' => 1,
-            'LB' => 3,
-            'VUS' => 5,
-            'LP' => 7,
-            'P' => 9,
+        'B' => 1,
+        'LB' => 3,
+        'VUS' => 5,
+        'LP' => 7,
+        'P' => 9,
     );
 
     private array $statistics = array(
-            'created' => 0,
-            'updated' => 0,
-            'deleted' => 0,
-            'skipped' => 0,
+        'created' => 0,
+        'updated' => 0,
+        'deleted' => 0,
+        'skipped' => 0,
     );
 
     private array $_SERVER = [];
