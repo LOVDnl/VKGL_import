@@ -503,7 +503,7 @@ class Processor
                     // Created_date will be added later, right now we don't have it to prevent unneeded differences.
                     'owned_by' => ($aVariant['status'] == 'single-lab' && $this->Settings->get('public_singlelab_owners') != 'y' ? // Should single-lab entry get the generic VKGL account as owner?
                         $this->Settings->get('vkgl_generic_id') : $this->aCenterIDs[$sCenter]),
-                    'statusid' => (string)in_array($aVariant['status'], $aNonPublicStatus) ? STATUS_HIDDEN : STATUS_OK,
+                    'statusid' => (string)(in_array($aVariant['status'], $aNonPublicStatus) ? STATUS_HIDDEN : STATUS_OK),
                     // Don't let internal conflicts cause notices here.
                     'VariantOnGenome/ClinicalClassification' => (!isset($this->effect_mapping_classification[$aVariant['classification']])? '-' :
                         $this->effect_mapping_classification[$aVariant['classification']]),
@@ -511,7 +511,7 @@ class Processor
                     'VariantOnGenome/DBID' => '', // FIXME: Will be filled in later for records to be created!
                     'VariantOnGenome/Genetic_origin' => 'CLASSIFICATION record',
                     'VariantOnGenome/Published_as' => $aVariant['published_as'],
-                    'VariantOnGenome/Remarks' => 'VKGL data sharing initiative Nederland' . in_array($aVariant['status'], $aNonPublicStatus) ? '' : '; Variant classification is in conflict with a different center.',
+                    'VariantOnGenome/Remarks' => 'VKGL data sharing initiative Nederland' . (!in_array($aVariant['status'], $aNonPublicStatus) ? '' : '; Variant classification is in conflict with'. ($aVariant['status'] == 'internal_opposite' ? 'in this center.' : ' a different center.' )),
                     'VariantOnGenome/Remarks_Non_Public' => array(
                         'warning' => 'Do not remove or edit this field!',
                         'updates' => array(),

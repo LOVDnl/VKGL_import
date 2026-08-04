@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-23
- * Modified    : 2026-08-03
+ * Modified    : 2026-08-04
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -340,7 +340,7 @@ if ($Status->get('step') < $nStep) {
         die($Settings->get('error_codes|EXIT_ERROR_INPUT_CONTENT_ERROR'));
     }
 
-    $sOutputFile = $bTesting? 'vkgl_data.01-raw.tsv' : 'vkgl_data.01-raw.' . date('Y-m-d.H.i.s') . '.tsv';
+    $sOutputFile = ($bTesting? 'vkgl_data.01-raw.tsv' : 'vkgl_data.01-raw.' . date('Y-m-d.H.i.s')). '.tsv';
     if (!$o->save($sOutputFile)) {
         $Log->add("Failed to save the result to $sOutputFile.", '!!');
         die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
@@ -381,7 +381,7 @@ if ($Status->get('step') < $nStep) {
         die($Settings->get('error_codes|EXIT_ERROR_INPUT_CONTENT_ERROR'));
     }
 
-    $sOutputFile = $bTesting? 'vkgl_data.02-normalized.tsv' : 'vkgl_data.02-normalized.' . date('Y-m-d.H.i.s') . '.tsv';
+    $sOutputFile = ($bTesting? 'vkgl_data.02-normalized.tsv' : 'vkgl_data.02-normalized.' . date('Y-m-d.H.i.s')) . '.tsv';
     if (!$o->save($sOutputFile)) {
         $Log->add("Failed to save the result to $sOutputFile.", '!!');
         die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
@@ -421,7 +421,7 @@ if ($Status->get('step') < $nStep) {
         die($Settings->get('error_codes|EXIT_ERROR_INPUT_CONTENT_ERROR'));
     }
 
-    $sOutputFile = $bTesting? 'vkgl_data.03-aggregated.tsv' : 'vkgl_data.03-aggregated.' . date('Y-m-d.H.i.s') . '.tsv';
+    $sOutputFile = ($bTesting? 'vkgl_data.03-aggregated.tsv' : 'vkgl_data.03-aggregated.' . date('Y-m-d.H.i.s')) . '.tsv';
     if (!$o->save($sOutputFile)) {
         $Log->add("Failed to save the result to $sOutputFile.", '!!');
         die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
@@ -526,7 +526,7 @@ if ($Status->get('step') < $nStep) {
         die($Settings->get('error_codes|EXIT_ERROR_INPUT_CONTENT_ERROR'));
     }
 
-    $sErrorOutputFile = $bTesting? 'vkgl_data.04-processed.errors.tsv' : 'vkgl_data.04-processed.' . date('Y-m-d.H.i.s') . '.errors.tsv';
+    $sErrorOutputFile = ($bTesting? 'vkgl_data.04-processed.errors.tsv' : 'vkgl_data.04-processed.' . date('Y-m-d.H.i.s')) . '.errors.tsv';
     if ($o->hasErrors()) {
         if (!$o->saveErrors($sErrorOutputFile)) {
             $Log->add("Failed to save the errors to $sErrorOutputFile.", '!!');
