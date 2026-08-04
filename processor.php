@@ -723,7 +723,13 @@ class Processor
                         // If we get here, everything went well.
                         $_DB->commit();
 
-                        $aVariantsUpdated[$sChromosome]++;
+
+                        //str_contains
+                        if ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_HIDDEN && str_contains($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks'], 'no longer found')){
+                            $aVariantsCreated[$sChromosome]++;
+                        } else {
+                            $aVariantsUpdated[$sChromosome]++;
+                        }
                         continue;
                     }
                     // If we get here, there was nothing to update, data is still the same.
