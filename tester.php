@@ -23,6 +23,7 @@ class Tester
         '2025-04',
         '2025-05',
         '2025-06',
+        '2025-07',
     ];
 
     private static $settings;
