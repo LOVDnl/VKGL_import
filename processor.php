@@ -292,7 +292,7 @@ class Processor
         $nMaxPublishedAsLength = lovd_getColumnLength(TABLE_VARIANTS, 'VariantOnGenome/Published_as'); // Max is 100
         $nMaxProteinLength = lovd_getColumnLength(TABLE_VARIANTS_ON_TRANSCRIPTS, 'VariantOnTranscript/Protein'); // Max is 255
 
-        $aNonPublicStatus = ['internal_opposite', 'external_opposite', 'conflicting'];
+        $aNonPublicStatus = ['internal_opposite', 'external_opposite'];
 
         foreach ($this->data as $sChromosomeRefSeq => $aVariants) {
             list($sChromosome, $sRefSeq) = explode(':', $sChromosomeRefSeq, 2);
