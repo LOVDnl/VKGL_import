@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-23
- * Modified    : 2026-08-04
+ * Modified    : 2026-08-05
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -413,7 +413,7 @@ if ($Status->get('step') < $nStep) {
 $nStep++;
 if ($Status->get('step') < $nStep) {
     // Aggregate all variants per center, and compare the classifications between centers.
-    $Log->add("Aggregating the normalized variants...");
+    $Log->add('Aggregating the normalized variants...');
     try {
         $o = Aggregator::aggregate($Status->get('output_files|normalized'));
     } catch (Exception $e) {
@@ -421,7 +421,7 @@ if ($Status->get('step') < $nStep) {
         die($Settings->get('error_codes|EXIT_ERROR_INPUT_CONTENT_ERROR'));
     }
 
-    $sOutputFile = ($bTesting? 'vkgl_data.03-aggregated.tsv' : 'vkgl_data.03-aggregated.' . date('Y-m-d.H.i.s')) . '.tsv';
+    $sOutputFile = 'vkgl_data.03-aggregated.' . ($bTesting? '' : date('Y-m-d.H.i.s.')) . 'tsv';
     if (!$o->save($sOutputFile)) {
         $Log->add("Failed to save the result to $sOutputFile.", '!!');
         die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));

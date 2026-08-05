@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-04-28
- * Modified    : 2026-06-17
+ * Modified    : 2026-08-05
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -49,6 +49,8 @@ class Aggregator
         $o->parse($sFile);
         $o->groupByCenter();
         $o->determineOverallVariantStatus();
+        $o->sortData();
+        $o->sortDataRejected();
         return $o;
     }
 
@@ -150,6 +152,8 @@ class Aggregator
                                 }, array_keys($aClassifications), $aClassifications)
                             );
                             // Now log this opposite, once for each center so they can easily search the error file.
+                            // NOTE: Classifications shown here are pre-grouped.
+                            //       E.g., any P/LP combo has already been reduced to LP. That may cause confusion.
                             foreach ($aClassifications as $sCenter => $sClassification) {
                                 $this->data_rejected[$sCenter][] = array_merge(
                                     $aCenters[$sCenter],
@@ -236,6 +240,8 @@ class Aggregator
                         // For each of the remaining columns, the values are combined into a single string.
                         if ($sColumn == 'type' || $sColumn == 'genomic_liftover_normalized') {
                             // Disallow having more than one unique value.
+                            // NOTE: This prevents CNVs and SNVs from getting merged, which would be bad.
+                            //       If that ever happens, we may need to handle that and aggregate separately?
                             throw new \Exception("Variant merging conflict for $sVariant in $sCenter, field $sColumn contains non-unique values " . implode(', ', $aValues));
 
                         } elseif ($sColumn == 'classification') {
@@ -368,7 +374,7 @@ class Aggregator
         $nHeaders = count($aHeaders);
         $aHeaders = array_map('trim', $aHeaders, array_fill(0, $nHeaders, '"'));
 
-        foreach ($aLines as $nLine => $sLine) {
+        foreach ($aLines as $sLine) {
             $aDataLine = explode("\t", rtrim($sLine));
             // Trim quotes off of the data.
             $aDataLine = array_map(function($sData) {
@@ -397,18 +403,8 @@ class Aggregator
     public function save (string $sFile): bool
     {
         // Save the data to disk.
-        // The data was stored per variant and then per center, but we want this sorted per center.
-        $aDataSorted = [];
-        foreach ($this->data as $aCenters) {
-            foreach ($aCenters as $sCenter => $aVariant) {
-                $aDataSorted[$sCenter][] = $aVariant;
-            }
-        }
-        ksort($aDataSorted);
-
-        // Now save the sorted data to disk.
         $aData = [implode("\t", $this->data_output_header)];
-        foreach ($aDataSorted as $aVariants) {
+        foreach ($this->data as $aVariants) {
             foreach ($aVariants as $aVariant) {
                 $aLine = [];
                 foreach ($this->data_output_header as $sField) {
@@ -438,7 +434,6 @@ class Aggregator
     {
         // Save errors to disk.
         $aData = [implode("\t", $this->data_rejected_output_header)];
-        ksort($this->data_rejected);
         foreach ($this->data_rejected as $aVariants) {
             foreach ($aVariants as $aVariant) {
                 $aLine = [];
@@ -455,6 +450,71 @@ class Aggregator
             $sFile,
             implode("\r\n", $aData)
         );
+    }
+
+
+
+
+
+    public function sortData (): void
+    {
+        // Sort the data; this has no functional effect other than that it helps compare files between releases.
+
+        // The data was stored per variant and then per center, but we want this sorted per center.
+        $aData = [];
+        foreach ($this->data as $aCenters) {
+            foreach ($aCenters as $sCenter => $aVariant) {
+                $aData[$sCenter][] = $aVariant;
+            }
+        }
+        $this->data = $aData;
+
+        // Start by sorting by center.
+        ksort($this->data);
+
+        // Then loop per center and sort those variants on the variant type and genomic_native_normalized fields.
+        foreach ($this->data as $sCenter => $aVariants) {
+            usort($aVariants, function ($a, $b) {
+                // First, sort on variant type. If we had stored the data per type, this would have been much easier.
+                // Only then, sort by the DNA field.
+                $n = strcmp($a['type'], $b['type']);
+                if ($n) {
+                    // Types are not the same.
+                    return $n;
+                }
+                // Types are the same. Sort on DNA.
+                return strcmp($a['genomic_native_normalized'], $b['genomic_native_normalized']);
+            });
+            $this->data[$sCenter] = $aVariants;
+        }
+    }
+
+
+
+
+
+    public function sortDataRejected (): void
+    {
+        // Sort the rejected data; this has no functional effect other than that it helps compare files between releases.
+
+        // Start by sorting by center.
+        ksort($this->data_rejected);
+
+        // Then loop per center and sort those variants on the variant type and genomic_native_normalized fields.
+        foreach ($this->data_rejected as $sCenter => $aVariants) {
+            usort($aVariants, function ($a, $b) {
+                // First, sort on variant type. If we had stored the data per type, this would have been much easier.
+                // Only then, sort by the DNA field.
+                $n = strcmp($a['type'], $b['type']);
+                if ($n) {
+                    // Types are not the same.
+                    return $n;
+                }
+                // Types are the same. Sort on DNA.
+                return strcmp($a['genomic_native_normalized'], $b['genomic_native_normalized']);
+            });
+            $this->data_rejected[$sCenter] = $aVariants;
+        }
     }
 }
 ?>
