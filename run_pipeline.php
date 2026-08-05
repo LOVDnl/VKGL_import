@@ -19,12 +19,14 @@ require_once(__DIR__ . '/aggregator.php');
 require_once(__DIR__ . '/formatter.php');
 require_once(__DIR__ . '/log.php');
 require_once(__DIR__ . '/normalizer.php');
+require_once(__DIR__ . '/processor.php');
 require_once(__DIR__ . '/settings.php');
 require_once(__DIR__ . '/ssh.php');
 require_once(__DIR__ . '/validator.php');
 use LOVD\VKGL\Aggregator;
 use LOVD\VKGL\Formatter;
 use LOVD\VKGL\Normalizer;
+use LOVD\VKGL\Processor;
 use LOVD\VKGL\Validator;
 use LOVD\Log;
 use LOVD\Settings;
@@ -513,10 +515,8 @@ if ($Status->get('step') < $nStep) {
 
 
 
-// Step 6: Processor
+// Step 6: Process the data and import it into the local LOVD instance.
 $nStep ++;
-require_once(__DIR__ . '/processor.php');
-use LOVD\VKGL\Processor;
 if ($Status->get('step') < $nStep) {
     $Log->add("Processing the aggregated data...");
     try {
@@ -536,7 +536,7 @@ if ($Status->get('step') < $nStep) {
         $Status->set('error_files|processed', $sErrorOutputFile);
     }
 
-    $aStatistics = $Statistics->get($sRelease.'|diff');
+    $aStatistics = $Statistics->get("$sRelease|diff");
     $aProcessorStatistics = $o->getStatistics();
     // Checking to see if the statistics of the validator step are on the remote server.
     if ($aStatistics) {
@@ -547,7 +547,7 @@ if ($Status->get('step') < $nStep) {
         foreach ($aCommonKeys as $Key => $Value) {
             $sShowExpectations .= $Key . ": " . $aCommonKeys[$Key] . "\t " . $aProcessorStatistics[$Key] . "\n";
             if ($aCommonKeys[$Key] != $aProcessorStatistics[$Key]) {
-                $nMisMatch++;
+                $nMisMatch ++;
             }
         }
         $Log->add($sShowExpectations);

@@ -1,11 +1,10 @@
-#!/usr/bin/php
 <?php
 /*******************************************************************************
  *
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-14
- * Modified    : 2026-08-04
+ * Modified    : 2026-08-05
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -17,22 +16,19 @@ namespace LOVD\VKGL;
 
 require_once 'libs/HGVS-syntax-checker/HGVS.php';
 require_once 'libs/HGVS-syntax-checker/caches.php';
-use LOVD\HGVS\HGVS_Chromosome;
+use LOVD\HGVS\Caches;
 use LOVD\HGVS\HGVS;
+use LOVD\HGVS\HGVS_Chromosome;
 use LOVD\Log;
 use LOVD\Settings;
-use LOVD\HGVS\Caches;
 
 class Processor
 {
+    // Class abstracting the processing of the aggregated data in a local LOVD instance.
     private array $aCenterIDs = [];
-
     private array $aCentersFound = [];
-
     private array $data = [];
-
     private array $data_rejected = [];
-
     private array $data_rejected_output_header = [
         'center',
         'type',
@@ -40,7 +36,6 @@ class Processor
         'genomic_native_normalized',
         'genomic_native_reported',
     ];
-
     private array $effect_mapping_classification = array(
         'B' => 'benign',
         'LB' => 'likely benign',
@@ -48,7 +43,6 @@ class Processor
         'LP' => 'likely pathogenic',
         'P' => 'pathogenic',
     );
-
     private array $effect_mapping_LOVD = array(
         'B' => 1,
         'LB' => 3,
@@ -56,21 +50,34 @@ class Processor
         'LP' => 7,
         'P' => 9,
     );
-
     private array $statistics = array(
         'created' => 0,
         'updated' => 0,
         'deleted' => 0,
         'skipped' => 0,
     );
-
     private array $_SERVER = [];
-
+    private $Log;
     private $Settings;
 
-    private $Log;
+    public static function process (string $sFile, Settings $Settings, Log $Log = null): Processor
+    {
+        $o = new Processor();
+        $o->Settings = $Settings;
+        if ($Log) {
+            $o->Log = $Log;
+        }
+        $o->connectLOVD();
+        $o->parse($sFile);
+        $o->processingData($o);
+        return $o;
+    }
 
-    public function connectLOVD()
+
+
+
+
+    public function connectLOVD ()
     {
         // These variables are global scope, this way lovd function can access them.
         global $_CONF, $_DB, $_TABLES, $_SETT;
@@ -106,7 +113,7 @@ class Processor
 
 
 
-    public function getStatistics(): array
+    public function getStatistics (): array
     {
         return $this->statistics;
     }
@@ -124,17 +131,17 @@ class Processor
 
 
 
-    public function parse(string $sFile): bool
+    public function parse (string $sFile): bool
     {
         // These variables are global scope, this way lovd function can access them.
         global $_CONF, $_DB, $_TABLES, $_SETT;
         // Parse every file, and add the contents to $this->data.
         if (!file_exists($sFile) || !is_readable($sFile)) {
-            throw new \Exception("File $sFile does not exist or is not readable.");
+            throw new \Exception("File $sFile does not exist or is not readable");
         }
         $aLines = file($sFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         if (!$aLines) {
-            throw new \Exception("File $sFile could not be opened.");
+            throw new \Exception("File $sFile could not be opened");
         }
         // First line should be headers.
         $aHeaders = explode("\t", array_shift($aLines));
@@ -187,12 +194,12 @@ class Processor
             }
             $nCenterID = $this->Settings->get("centers|$sCenterName|id");
             if (!$nCenterID) {
-                throw new \Exception("Center $sCenterName does not exist, or ID does not exist.");
+                throw new \Exception("Center $sCenterName does not exist, or ID does not exist");
             }
             // Check if the id was already assigned to a different center.
             if (in_array($nCenterID, $this->aCenterIDs)) {
                 if (!array_key_exists($sCenterName, $this->aCenterIDs)) {
-                    throw new \Exception("This ID is already assigned to a different center.");
+                    throw new \Exception('This ID is already assigned to a different center');
                 } else {
                     $this->aCenterIDs[$sCenterName] = $nCenterID;
                 }
@@ -202,8 +209,8 @@ class Processor
             $this->aCenterIDs['VKGL'] = $this->Settings->get('vkgl_generic_id');
             list($sRefSeq,) = explode(':', $sGenomicNormalized, 2);
             // Use the variant description combined with the center id as key, this way it's easier to check if the variant is already in the database.
-            $nCenterID = str_pad($nCenterID,5, "0", STR_PAD_LEFT);
-            $this->data[$aNC["chr"]. ":" . $sRefSeq][$nCenterID . ":" .$sGenomicNormalized] = $aVariant;
+            $nCenterID = str_pad($nCenterID,5, '0', STR_PAD_LEFT);
+            $this->data[$aNC['chr'] . ':' . $sRefSeq][$nCenterID . ':' . $sGenomicNormalized] = $aVariant;
         }
         $this->Log->add("There is/are " . $nNoCorrectBuildFound . " variant(s) of which the build doesn't align with the database.");
         $this->aCentersFound = array_unique($this->aCentersFound);
@@ -215,24 +222,7 @@ class Processor
 
 
 
-    public static function process(string $sFile, Settings $Settings, Log $Log = null): Processor
-    {
-        $o = new Processor();
-        $o->Settings = $Settings;
-        if ($Log) {
-            $o->Log = $Log;
-        }
-        $o->connectLOVD();
-        $o->parse($sFile);
-        $o->processingData($o);
-        return $o;
-    }
-
-
-
-
-
-    public function processingData(): bool
+    public function processingData (): bool
     {
         // These variables are global scope, this way lovd function can access them.
         global $_CONF, $_DB, $_TABLES, $_SETT;
@@ -266,7 +256,7 @@ class Processor
         }
         if (!$bAccountsOK) {
             // If one or more of the users couldn't be found, the pipeline will stop.
-            throw new \Exception(($bAccountsOK ? "" : "Error: Failed to get all LOVD user accounts." . "\n"));
+            throw new \Exception('Failed to get all LOVD user accounts');
         }
         // We might be running for some time.
         set_time_limit(0);
@@ -439,7 +429,7 @@ class Processor
                 }
                 if (!$sRefSeq) {
                     // Eh, no chromosome?
-                    throw new \Exception("Error: Cannot get chromosome from variant " . $sRefSeq . ".");
+                    throw new \Exception("Cannot get chromosome from variant $sRefSeq");
                 }
                 // LOVD+ has a much shorter DNA field; only 150 characters.
                 // Trying to put in a variant that's bigger will crash this process.
@@ -453,13 +443,13 @@ class Processor
                 // Loop through centers who found this variant.
                 // Build variant entry.
                 $aPublishedAs = json_decode($aVariant['annotation'], true);
-                if (is_array($aPublishedAs['reported_as'])){
-                    $aPublishedAs['reported_as'] = implode(",", $aPublishedAs['reported_as']);
+                if (is_array($aPublishedAs['reported_as'])) {
+                    $aPublishedAs['reported_as'] = implode(',', $aPublishedAs['reported_as']);
                 }
                 $aVariant['published_as'] = lovd_shortenString($aPublishedAs['reported_as'], $nMaxPublishedAsLength);
                 $sCenter = strtolower($aVariant['center']);
-                $nCenterID = str_pad($this->aCenterIDs[$sCenter],5, "0", STR_PAD_LEFT);
-                $sLOVDKey = $nCenterID . ":" . $sGenomicNormalized;
+                $nCenterID = str_pad($this->aCenterIDs[$sCenter], 5, '0', STR_PAD_LEFT);
+                $sLOVDKey = $nCenterID . ':' . $sGenomicNormalized;
                 if (!$aVariant['published_as'] && $bPublishedAs) {
                     // If the reported_as in column annotation is empty or doesn't exist
                     //  we're looking in the database to see if the column is filled.
@@ -484,7 +474,8 @@ class Processor
                 // Add some needed fields; (type, position_start, position_end).
                 $HGVS = HGVS::check($sGenomicNormalized);
                 $HGVSData = $HGVS->getData();
-                if ($HGVSData['type'] == '>'){
+                if ($HGVSData['type'] == '>') {
+                    // Backward compatible with LOVD3.
                     $HGVSData['type'] = 'subst';
                 }
                 $aVOGEntry = array(
@@ -548,8 +539,8 @@ class Processor
                                 $aTranscriptNoVersion = explode(".", $sTranscript);
                                 $HGVSMapping = HGVS::check($aMapping['c']);
                                 $HGVSMappingPos = $HGVSMapping->getData();
-                                if (!$aMapping['p']){
-                                    $aMapping['p'] ="-";
+                                if (!$aMapping['p']) {
+                                    $aMapping['p'] = '-';
                                 }
                                 $aMapping['p'] = lovd_shortenString($aMapping['p'], $nMaxProteinLength);
                                 // Check if the transcript already exists in the database.
@@ -589,7 +580,7 @@ class Processor
                         if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] === false
                             || !is_array($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'])) {
                             // Somebody malformed this field...
-                            throw new \Exception("Error: Variant ID $sGenomicNormalized has an unparsable JSON object for center " . $sCenter . "(" . $this->aCenterIDs[$sCenter] . ").");
+                            throw new \Exception("Variant ID $sGenomicNormalized has an unparsable JSON object for center $sCenter ({$this->aCenterIDs[$sCenter]})");
                         }
                     } elseif ($bRemarksNonPublic) {
                         $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] = array();
@@ -673,6 +664,7 @@ class Processor
                     if ($aDiff) {
                         // Update atomically, we don't want half updates.
                         $_DB->beginTransaction();
+
                         // Start with the VOTs.
                         if (isset($aDiff['vots'])) {
                             foreach (array_unique(array_merge(array_keys($aDiff['vots'][0]), array_keys($aDiff['vots'][1]))) as $nTranscriptID) {
@@ -803,18 +795,18 @@ class Processor
             // We're going to make this easy for us; all entries created or edited at $sNow,
             //  we're going to assume are ours. Run on entire database.
             $aGenesUpdated = $_DB->q('
-                    SELECT DISTINCT t.geneid
-                    FROM ' . TABLE_TRANSCRIPTS . ' AS t
-                        INNER JOIN ' . TABLE_VARIANTS_ON_TRANSCRIPTS . ' AS vot ON (t.id = vot.transcriptid)
-                        INNER JOIN ' . TABLE_VARIANTS . ' AS vog ON (vot.id = vog.id)
-                    WHERE vog.created_date = ? OR vog.edited_date = ?', array($sNow, $sNow))->fetchAllColumn();
+                SELECT DISTINCT t.geneid
+                FROM ' . TABLE_TRANSCRIPTS . ' AS t
+                    INNER JOIN ' . TABLE_VARIANTS_ON_TRANSCRIPTS . ' AS vot ON (t.id = vot.transcriptid)
+                    INNER JOIN ' . TABLE_VARIANTS . ' AS vog ON (vot.id = vog.id)
+                WHERE vog.created_date = ? OR vog.edited_date = ?', array($sNow, $sNow))->fetchAllColumn();
 
             if ($aGenesUpdated) {
                 // We can't use lovd_setUpdatedDate(), since that contains $_AUTH checks that we won't be able to pass.
                 $q = $_DB->q('
-                        UPDATE ' . TABLE_GENES . '
-                        SET updated_by = ?, updated_date = ?
-                        WHERE updated_date < ? AND id IN (?' . str_repeat(', ?', count($aGenesUpdated) - 1) . ')',
+                    UPDATE ' . TABLE_GENES . '
+                    SET updated_by = ?, updated_date = ?
+                    WHERE update_date < ? AND id IN (?' . str_repeat(', ?', count($aGenesUpdated) - 1) . ')',
                         array_merge(array(0, $sNow, $sNow), $aGenesUpdated), false);
                 $nUpdated = $q->rowCount();
                 $this->Log->add('[Totals] Gene(s) updated: ' . $nUpdated . '/' . count($aGenesUpdated) . '.');
@@ -846,8 +838,8 @@ class Processor
 
         // Save the data.
         return (bool) file_put_contents(
-                $sFile,
-                implode("\r\n", $aData)
+            $sFile,
+            implode("\r\n", $aData)
         );
     }
 }
