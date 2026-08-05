@@ -141,11 +141,13 @@ class Processor
         if (!file_exists($sFile) || !is_readable($sFile)) {
             throw new \Exception("File $sFile does not exist or is not readable");
         }
+
         $aLines = file($sFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         if (!$aLines) {
             throw new \Exception("File $sFile could not be opened");
         }
-        // First line should be headers.
+
+        // First line should be headers. No need to use strtolower() here, this is our own format.
         $aHeaders = explode("\t", array_shift($aLines));
         $nHeaders = count($aHeaders);
         $aHeaders = array_map('trim', $aHeaders, array_fill(0, $nHeaders, '"'));
@@ -160,9 +162,10 @@ class Processor
             }, $aDataLine);
             $nDataColumns = count($aDataLine);
             if ($nHeaders > $nDataColumns) {
-                // We accidentally trimmed of empty fields.
+                // We accidentally trimmed off empty fields.
                 $aDataLine = array_pad($aDataLine, $nHeaders, '');
             }
+
             $aVariant = array_combine($aHeaders, $aDataLine);
             $sCenterName = strtolower($aVariant['center']);
             if (!in_array($sCenterName, $this->aCentersFound)) {
@@ -170,6 +173,7 @@ class Processor
             }
             $aNC = HGVS_Chromosome::getInfoByNC(strstr($aVariant['genomic_native_normalized'], ':', true));
             $aVariant['native_build'] = $aNC['build'];
+
             // Compare the build from the database to the build from genomic_native_normalized.
             // If the build isn't the same, compare the build from the database to the build from genomic_liftover_normalized
             //  to see if the builds match. If both builds from genomic_native_normalized and genomic_liftover_normalized
@@ -178,26 +182,28 @@ class Processor
             //  the dataset.
             if ($aVariant['native_build'] != $sRefSeqBuildLOVD) {
                 $aNC = HGVS_Chromosome::getInfoByNC(strstr($aVariant['genomic_liftover_normalized'], ':', true));
-                if ($aNC == false || $aNC['build'] != $sRefSeqBuildLOVD) {
-                    $this->data_rejected[$nLine][] = array_merge(
+                if (!$aNC || $aNC['build'] != $sRefSeqBuildLOVD) {
+                    $this->data_rejected[] = array_merge(
                         $aVariant,
                         [
                             'error' => "LOVD has been configured to use $sRefSeqBuildLOVD, this variant uses only {$aVariant['native_build']}.",
                         ]
                     );
-                    // A counter to see how many variants won't be added to the dataset.
-                    $nNoCorrectBuildFound++;
                     continue;
+
                 } else {
                     $sGenomicNormalized = $aVariant['genomic_liftover_normalized'];
                 }
+
             } else {
                 $sGenomicNormalized = $aVariant['genomic_native_normalized'];
             }
+
             $nCenterID = $this->Settings->get("centers|$sCenterName|id");
             if (!$nCenterID) {
                 throw new \Exception("Center $sCenterName does not exist, or ID does not exist");
             }
+
             // Check if the id was already assigned to a different center.
             if (in_array($nCenterID, $this->aCenterIDs)) {
                 if (!array_key_exists($sCenterName, $this->aCenterIDs)) {
@@ -208,13 +214,21 @@ class Processor
             } else {
                 $this->aCenterIDs[$sCenterName] = $nCenterID;
             }
+
             $this->aCenterIDs['VKGL'] = $this->Settings->get('vkgl_generic_id');
             list($sRefSeq,) = explode(':', $sGenomicNormalized, 2);
             // Use the variant description combined with the center id as key, this way it's easier to check if the variant is already in the database.
             $nCenterID = str_pad($nCenterID,5, '0', STR_PAD_LEFT);
-            $this->data[$aNC['chr'] . ':' . $sRefSeq][$nCenterID . ':' . $sGenomicNormalized] = $aVariant;
+            $this->data["$sRefSeq:{$aNC['chr']}"][$nCenterID . ':' . $sGenomicNormalized] = $aVariant;
         }
-        $this->Log->add("There is/are " . $nNoCorrectBuildFound . " variant(s) of which the build doesn't align with the database.");
+
+        // Make sure we run everything in the correct order, from chr1 to 22, then X, Y, and M.
+        ksort($this->data);
+
+        $nNoCorrectBuildFound = count($this->data_rejected);
+        if ($nNoCorrectBuildFound) {
+            $this->Log->add("Found $nNoCorrectBuildFound variant" . ($nNoCorrectBuildFound == 1? '' : 's') . " without a description on $sRefSeqBuildLOVD; cannot process this variant in this LOVD instance.");
+        }
         $this->aCentersFound = array_unique($this->aCentersFound);
         return true;
     }
@@ -284,7 +298,7 @@ class Processor
         $aNonPublicStatus = ['internal_opposite', 'external_opposite'];
 
         foreach ($this->data as $sChromosomeRefSeq => $aVariants) {
-            list($sChromosome, $sRefSeq) = explode(':', $sChromosomeRefSeq, 2);
+            list($sRefSeq, $sChromosome) = explode(':', $sChromosomeRefSeq, 2);
             // Reset counters.
             $aVariantsCreated[$sChromosome] = 0; // Counters per chromosome.
             $aVariantsUpdated[$sChromosome] = 0; // Counters per chromosome.
@@ -822,16 +836,14 @@ class Processor
     public function saveErrors (string $sFile): bool
     {
         // Save errors to disk.
+        // No need to sort anything; the input file was already fully sorted.
         $aData = [implode("\t", $this->data_rejected_output_header)];
-        ksort($this->data_rejected);
-        foreach ($this->data_rejected as $aVariants) {
-            foreach ($aVariants as $aVariant) {
-                $aLine = [];
-                foreach ($this->data_rejected_output_header as $sField) {
-                    $aLine[] = ($aVariant[$sField] ?? '');
-                }
-                $aData[] = implode("\t", $aLine);
+        foreach ($this->data_rejected as $aVariant) {
+            $aLine = [];
+            foreach ($this->data_rejected_output_header as $sField) {
+                $aLine[] = ($aVariant[$sField] ?? '');
             }
+            $aData[] = implode("\t", $aLine);
         }
         $aData[] = '';
 
