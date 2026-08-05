@@ -372,7 +372,7 @@ if ($Status->get('step') < $nStep) {
 $nStep++;
 if ($Status->get('step') < $nStep) {
     // Use the normalizer to convert all VCFs and other notations into HGVS and normalize, liftover, and map all data.
-    $Log->add("Normalizing the data... (this may take hours or days if there is a lot of new data)");
+    $Log->add('Normalizing the data... (this may take hours or days if there is a lot of new data)');
     try {
         $o = Normalizer::normalize($Status->get('output_files|formatted'), $Log, ($Settings->get() ?? []));
     } catch (Exception $e) {
@@ -381,7 +381,7 @@ if ($Status->get('step') < $nStep) {
         die($Settings->get('error_codes|EXIT_ERROR_INPUT_CONTENT_ERROR'));
     }
 
-    $sOutputFile = ($bTesting? 'vkgl_data.02-normalized.tsv' : 'vkgl_data.02-normalized.' . date('Y-m-d.H.i.s')) . '.tsv';
+    $sOutputFile = 'vkgl_data.02-normalized.' . ($bTesting? '' : date('Y-m-d.H.i.s.')) . 'tsv';
     if (!$o->save($sOutputFile)) {
         $Log->add("Failed to save the result to $sOutputFile.", '!!');
         die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
