@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-12
- * Modified    : 2026-06-18
+ * Modified    : 2026-08-05
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -140,7 +140,7 @@ class Validator
         $aHeaders = array_map('trim', $aHeaders, array_fill(0, $nHeaders, '"'));
 
         $aData = [];
-        foreach ($aLines as $nLine => $sLine) {
+        foreach ($aLines as $sLine) {
             $aDataLine = explode("\t", rtrim($sLine));
             // Trim quotes off of the data.
             $aDataLine = array_map(function($sData) {

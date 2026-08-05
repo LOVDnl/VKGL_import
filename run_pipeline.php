@@ -450,7 +450,7 @@ if ($Status->get('step') < $nStep) {
 $nStep ++;
 if ($Status->get('step') < $nStep) {
     // Compare the aggregated data file with the file from the previous release and validate the resulting diff.
-    $Log->add("Validating the diff with the previous release...");
+    $Log->add('Validating the diff with the previous release...');
 
     // First, we'll need to determine where to find that previous file.
     $nPreviousReleaseYear = $nReleaseYear;
@@ -498,14 +498,14 @@ if ($Status->get('step') < $nStep) {
             }
         },
         array_merge_recursive(
-            (array)$Status->get('statistics|formatting|errors'),
-            (array)$Status->get('statistics|normalizing|errors'),
+            (array) $Status->get('statistics|formatting|errors'),
+            (array) $Status->get('statistics|normalizing|errors'),
         )
     );
     $Statistics->set($sRelease, $aStatistics);
 
     // Finally, log that we're done and continue.
-    $Log->add("Successfully validated the aggregated output and stored the statistics.", 'OK');
+    $Log->add('Successfully validated the aggregated output and stored the statistics.', 'OK');
     $Status->set('step', $nStep);
 }
 
