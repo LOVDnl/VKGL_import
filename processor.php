@@ -56,12 +56,12 @@ class Processor
         'deleted' => 0,
         'skipped' => 0,
     );
-    private array $_SERVER = [];
-    private $Log;
     private $Settings;
+    private $Log;
 
     public static function process (string $sFile, Settings $Settings, Log $Log = null): Processor
     {
+        // Process the given data into the LOVD configured in the settings.
         $o = new Processor();
         $o->Settings = $Settings;
         if ($Log) {
@@ -69,7 +69,7 @@ class Processor
         }
         $o->connectLOVD();
         $o->parse($sFile);
-        $o->processingData($o);
+        $o->processData();
         return $o;
     }
 
@@ -79,8 +79,9 @@ class Processor
 
     public function connectLOVD ()
     {
-        // These variables are global scope, this way lovd function can access them.
-        global $_CONF, $_DB, $_TABLES, $_SETT;
+        // Connect to the LOVD instance.
+        global $_CONF, $_DB, $_TABLES, $_SETT, $_T;
+
         // Open connection, and check if user accounts exist.
         $this->Log->add("Connecting to LOVD...");
         // Find LOVD installation, run it's inc-init.php to get DB connection, initiate $_SETT, etc.
@@ -88,7 +89,7 @@ class Processor
         define('FORMAT_ALLOW_TEXTPLAIN', true);
         $_GET['format'] = 'text/plain';
         // To prevent notices when running inc-init.php.
-        $this->_SERVER = array_merge($this->_SERVER, array(
+        $_SERVER = array_merge($_SERVER, array(
             'HTTP_HOST' => 'localhost',
             'REQUEST_URI' => '/' . basename(__FILE__),
             'QUERY_STRING' => '',
@@ -133,8 +134,9 @@ class Processor
 
     public function parse (string $sFile): bool
     {
-        // These variables are global scope, this way lovd function can access them.
-        global $_CONF, $_DB, $_TABLES, $_SETT;
+        // Parse the data file and add the contents to $this->data.
+        global $_CONF, $_DB, $_TABLES, $_SETT, $_T;
+
         // Parse every file, and add the contents to $this->data.
         if (!file_exists($sFile) || !is_readable($sFile)) {
             throw new \Exception("File $sFile does not exist or is not readable");
@@ -214,7 +216,6 @@ class Processor
         }
         $this->Log->add("There is/are " . $nNoCorrectBuildFound . " variant(s) of which the build doesn't align with the database.");
         $this->aCentersFound = array_unique($this->aCentersFound);
-        $this->nCentersFound = count($this->aCentersFound);
         return true;
     }
 
@@ -222,12 +223,10 @@ class Processor
 
 
 
-    public function processingData (): bool
+    public function processData (): bool
     {
-        // These variables are global scope, this way lovd function can access them.
-        global $_CONF, $_DB, $_TABLES, $_SETT;
-
-        $_SETT = array();
+        // Process the data into the LOVD instance.
+        global $_CONF, $_DB, $_TABLES, $_SETT, $_T;
 
         // Check the given user accounts by using the user IDs ($this->aCenterIDs).
         // Check if the users with ID are found in LOVD.
