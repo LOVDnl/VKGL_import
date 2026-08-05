@@ -58,6 +58,7 @@ class Processor
         'deleted' => 0,
         'skipped' => 0,
     );
+    private string $lovd_genome_build = '';
     private $Settings;
     private $Log;
 
@@ -75,6 +76,8 @@ class Processor
         if (!$b) {
             throw new \Exception("Unable to connect to LOVD");
         }
+        // We need this a lot, so query it here.
+        $o->lovd_genome_build = LOVD::getGenomeBuild();
 
         $o->parse($sFile);
         $o->processData();
@@ -106,9 +109,6 @@ class Processor
     public function parse (string $sFile): bool
     {
         // Parse the data file and add the contents to $this->data.
-        global $_CONF, $_DB, $_TABLES, $_SETT, $_T;
-
-        // Parse every file, and add the contents to $this->data.
         if (!file_exists($sFile) || !is_readable($sFile)) {
             throw new \Exception("File $sFile does not exist or is not readable");
         }
@@ -122,10 +122,8 @@ class Processor
         $aHeaders = explode("\t", array_shift($aLines));
         $nHeaders = count($aHeaders);
         $aHeaders = array_map('trim', $aHeaders, array_fill(0, $nHeaders, '"'));
-        // Check given refseq build.
-        $nNoCorrectBuildFound = 0;
-        $sRefSeqBuildLOVD = $_DB->q('SELECT refseq_build FROM ' . TABLE_CONFIG)->fetchColumn();
-        foreach ($aLines as $nLine => $sLine) {
+
+        foreach ($aLines as $sLine) {
             $aDataLine = explode("\t", rtrim($sLine));
             // Trim quotes off of the data.
             $aDataLine = array_map(function ($sData) {
@@ -146,18 +144,16 @@ class Processor
             $aVariant['native_build'] = $aNC['build'];
 
             // Compare the build from the database to the build from genomic_native_normalized.
-            // If the build isn't the same, compare the build from the database to the build from genomic_liftover_normalized
-            //  to see if the builds match. If both builds from genomic_native_normalized and genomic_liftover_normalized
-            //  don't match the build from the database, the variant will not be added to the dataset.
-            // They will be saved in a separate file and a counter is user to track the amount of variants not added to
-            //  the dataset.
-            if ($aVariant['native_build'] != $sRefSeqBuildLOVD) {
+            // If they aren't the same, compare to the build from genomic_liftover_normalized.
+            // If both builds don't match the build from the database, the variant will not be added to the dataset,
+            //  but saved to the error file, instead.
+            if ($aVariant['native_build'] != $this->lovd_genome_build) {
                 $aNC = HGVS_Chromosome::getInfoByNC(strstr($aVariant['genomic_liftover_normalized'], ':', true));
-                if (!$aNC || $aNC['build'] != $sRefSeqBuildLOVD) {
+                if (!$aNC || $aNC['build'] != $this->lovd_genome_build) {
                     $this->data_rejected[] = array_merge(
                         $aVariant,
                         [
-                            'error' => "LOVD has been configured to use $sRefSeqBuildLOVD, this variant uses only {$aVariant['native_build']}.",
+                            'error' => "LOVD has been configured to use {$this->lovd_genome_build}, this variant uses only {$aVariant['native_build']}.",
                         ]
                     );
                     continue;
@@ -198,7 +194,7 @@ class Processor
 
         $nNoCorrectBuildFound = count($this->data_rejected);
         if ($nNoCorrectBuildFound) {
-            $this->Log->add("Found $nNoCorrectBuildFound variant" . ($nNoCorrectBuildFound == 1? '' : 's') . " without a description on $sRefSeqBuildLOVD; cannot process this variant in this LOVD instance.");
+            $this->Log->add("Found $nNoCorrectBuildFound variant" . ($nNoCorrectBuildFound == 1? '' : 's') . " without a description on {$this->lovd_genome_build}; cannot process this variant in this LOVD instance.");
         }
         $this->aCentersFound = array_unique($this->aCentersFound);
         return true;
@@ -396,15 +392,14 @@ class Processor
                 }
             }
 
-            $sRefSeqBuildLOVD = $_DB->q('SELECT refseq_build FROM ' . TABLE_CONFIG)->fetchColumn();
-            foreach ($aVariants as $sVariantDescription => $aVariant) {
+            foreach ($aVariants as $aVariant) {
                 // See if the correct build (build from the database) is present in genomic_native_normalized
                 //  or in genomic_liftover_normalized.
                 // We know it's in one of the two, otherwise the variant wouldn't have been added to the dataset,
                 //  this check was done while the data was parsed.
                 $aNC = HGVS_Chromosome::getInfoByNC(strstr($aVariant['genomic_native_normalized'], ':', true));
                 $aVariant['native_build'] = $aNC['build'];
-                if ($aVariant['native_build'] == $sRefSeqBuildLOVD) {
+                if ($aVariant['native_build'] == $this->lovd_genome_build) {
                     list($sRefSeq, $sDNA) = explode(':', $aVariant['genomic_native_normalized']);
                     $sGenomicNormalized = $aVariant['genomic_native_normalized'];
                 } else {
@@ -445,8 +440,8 @@ class Processor
                     if (!isset($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'])) {
                         // Check if the native build is the same as the build from the database.
                         // This decides which 'genomic_?_reported to take.
-                        // Do limit the input a bit, 150 should be enough.
-                        if ($aVariant['native_build'] == $sRefSeqBuildLOVD) {
+                        // Do limit the input a bit, depending on the field size.
+                        if ($aVariant['native_build'] == $this->lovd_genome_build) {
                             $aVariant['published_as'] = lovd_shortenString($aVariant['genomic_native_reported'], $nMaxPublishedAsLength);
                         } else {
                             $aVariant['published_as'] = lovd_shortenString($aVariant['genomic_liftover_reported'], $nMaxPublishedAsLength);

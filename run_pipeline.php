@@ -167,18 +167,6 @@ try {
     die($Settings->get('error_codes|EXIT_ERROR_OUTPUT_CANT_CREATE'));
 }
 
-// Check if lovd path is in settings.json.
-if (!$Settings->get("lovd_path")) {
-    $Log->add("The settings are incorrect because lovd_path is missing.");
-    die($Settings->get('error_codes|EXIT_ERROR_SETTINGS_CONTENT_ERROR'));
-}
-// Check if lovd_path contains the file inc-init.php.
-$sIncInit = $Settings->get("lovd_path") . "/inc-init.php";
-if (!file_exists($sIncInit) || !is_readable($sIncInit)) {
-    $Log->add("Could not find lovd installation in lovd_path.");
-    die($Settings->get('error_codes|EXIT_ERROR_SETTINGS_CONTENT_ERROR'));
-}
-
 
 
 // For the release's status, we'll re-use the Settings class.
@@ -518,7 +506,12 @@ if ($Status->get('step') < $nStep) {
 // Step 6: Process the data and import it into the local LOVD instance.
 $nStep ++;
 if ($Status->get('step') < $nStep) {
-    $Log->add("Processing the aggregated data...");
+    if (!$Settings->get('lovd_path')) {
+        $Log->add("Can't find lovd_path in the settings. Please configure it first.", '!!');
+        die($Settings->get('error_codes|EXIT_ERROR_SETTINGS_CONTENT_ERROR'));
+    }
+
+    $Log->add('Processing the aggregated data...');
     try {
         $o = Processor::process($Status->get('output_files|aggregated'), $Settings, $Log);
     } catch (Exception $e) {

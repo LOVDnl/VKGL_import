@@ -89,6 +89,32 @@ class LOVD
 
 
 
+    public static function getGenomeBuild (): string
+    {
+        // Get the LOVD's configured genome build.
+        global $_DB;
+
+        // We can't auto-connect because we don't have the path.
+        if (!LOVD::isConnected()) {
+            throw new \Exception('LOVD is not connected; cannot query the database.');
+        }
+
+        return $_DB->q('SELECT refseq_build FROM ' . TABLE_CONFIG)->fetchColumn();
+    }
+
+
+
+
+
+    public static function isConnected ()
+    {
+        return self::$bConnected;
+    }
+
+
+
+
+
     public static function shutdown (): void
     {
         // Make sure we log things if there is a problem with connecting to LOVD.
