@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-27 (based on format_raw_VKGL_files.php)
- * Modified    : 2026-06-16
+ * Modified    : 2026-08-05
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -56,6 +56,7 @@ class Formatter
             }
             $o->parse($sFile, $sCenter);
         }
+        $o->sortData();
 
         return $o;
     }
@@ -881,6 +882,33 @@ class Formatter
             $sFile,
             implode("\r\n", $aData)
         );
+    }
+
+
+
+
+
+    public function sortData (): void
+    {
+        // Sort the data; this has no functional effect other than that it helps compare files between releases.
+
+        // Start by sorting by center.
+        ksort($this->data);
+
+        // Then loop per center, resort that array, and overwrite the data.
+        foreach ($this->data as $sCenter => $aCenter) {
+            // Sort variant types (CNV, SNV).
+            ksort($aCenter);
+
+            // Loop variant types and sort those variants on the genomic_native field.
+            foreach ($aCenter as $sType => $aVariants) {
+                usort($aVariants, function ($a, $b) {
+                    return strcmp($a['genomic_native'], $b['genomic_native']);
+                });
+                $aCenter[$sType] = $aVariants;
+            }
+            $this->data[$sCenter] = $aCenter;
+        }
     }
 }
 ?>
