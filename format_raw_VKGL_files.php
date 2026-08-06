@@ -5,14 +5,17 @@
  * LEIDEN OPEN VARIATION DATABASE (LOVD)
  *
  * Created     : 2019-11-13
- * Modified    : 2026-01-15
- * Version     : 0.2.4
+ * Modified    : 2026-05-20
+ * Version     : 0.2.5
  *
  * Purpose     : Parses the VKGL center's raw data files (of different formats)
  *               and creates one consensus data file which can then be processed
  *               by the process_VKGL_data.php script.
  *
- * Changelog   : 0.2.4  2026-01-15
+ * Changelog   : 0.2.5  2026-05-20
+ *               Add support for the Illumina Emedgene format and fixed a bug
+ *               with inversions in the LUMC format.
+ *               0.2.4  2026-01-15
  *               Add support for two new file formats; the new NKI tsv format
  *               and the new UMCG JSON format.
  *               0.2.3  2025-09-25
@@ -21,10 +24,10 @@
  *               0.2.2  2025-08-11
  *               Allow for genomic variants starting with "m."; this is normal
  *               for mitochondrial genes.
- *             : 0.2.1  2025-05-01
+ *               0.2.1  2025-05-01
  *               Added more variant types to lovd_HGVStoVCF();
  *               deletion-insertions and inversions.
- * Changelog   : 0.2.0  2025-02-07
+ *               0.2.0  2025-02-07
  *               Re-implement the storage of variants and the filtering of
  *               duplicates completely. We were losing variants when only a
  *               single center reported multiple classifications. Fixed that and
@@ -90,7 +93,7 @@ if (isset($_SERVER['HTTP_HOST'])) {
 $bDebug = false; // Are we debugging? If so, none of the queries actually take place.
 $_CONFIG = array(
     'name' => 'VKGL raw data formatter',
-    'version' => '0.2.4',
+    'version' => '0.2.5',
     'settings_file' => 'settings.json',
     'flags' => array(
         'y' => false,
@@ -117,6 +120,10 @@ $_CONFIG = array(
         'alt;c;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa',
         // 2024-02 + 2024-04; Due to a personnel change at Alissa without a proper handover, manual exports are being generated with yet another signature.
         'alt;c_nomen;chromosome;classification;effect;exon;gene;last_updated_by;last_updated_on;location;p_nomen;ref;start;stop;transcript;variant_type' => 'alissa',
+
+        // Emedgene (Illumina):
+        'alt;chromosome;created reference build;diseases (omim id);end;error;overlap %;pathogenicity;position;ref;transcript;vartype' => 'emedgene_csv',
+        'alt;chromosome;created reference build;end;pathogenicity;position;ref;transcript;vartype' => 'emedgene-small_csv',
 
         // LUMC:
         'cdna;chromosome;gdna_normalized;geneid;protein;refseq_build;variant_effect' => 'lumc',
@@ -238,8 +245,9 @@ function lovd_HGVStoVCF ($sVariant) {
     } elseif (preg_match('/^[gm]\.([0-9]+)_([0-9]+)inv$/', $sVariant, $aRegs)) {
         // Inversions.
         $aVCF['pos'] = $aRegs[1];
-        $aVCF['ref'] = str_repeat('N', ($aRegs[2] - $aRegs[1]) + 1);
-        $aVCF['alt'] = $aVCF['ref'];
+        // Fake an inversion by introducing an A+ to T+ change (AA to TT, AAA to TTT, etc).
+        $aVCF['ref'] = str_repeat('A', ($aRegs[2] - $aRegs[1]) + 1);
+        $aVCF['alt'] = str_repeat('T', ($aRegs[2] - $aRegs[1]) + 1);
 
     } else {
         return false;
@@ -563,6 +571,13 @@ foreach ($aFiles as $sFile => $sCenter) {
         die(EXIT_ERROR_INPUT_CANT_OPEN);
     }
 
+    // Illumina Emedgene gives us .csv files. Just convert to TSV.
+    if (strrchr($sFile, '.') == '.csv') {
+        foreach ($aLines as $i => $sLine) {
+            $aLines[$i] = str_replace(',', "\t", $sLine);
+        }
+    }
+
     // The Radboud data doesn't have a header :(
     if ($sCenter == 'radboud_mumc') {
         // Invent the header.
@@ -803,6 +818,29 @@ foreach ($aFiles as $sFile => $sCenter) {
                     'protein' => str_replace('NULL', '', $aDataLine['p_nomen']),
                     $sCenter => str_replace(array('_', 'vous'), array(' ', 'VUS'), strtolower($aDataLine['classification'])),
                     $sCenter . $_CONFIG['columns_center_suffix'] => $aDataLine['last_updated_by'],
+                );
+                break;
+
+            case 'emedgene_csv':
+            case 'emedgene-small_csv':
+                // We'll have to ignore hg38 and CNVs for now.
+                if ($aDataLine['created reference build'] != 'GRCh37' || $aDataLine['vartype'] != 'SNV') {
+                    continue 2;
+                }
+
+                $sVariantKey = implode('|', array(
+                        $aDataLine['chromosome'],
+                        $aDataLine['position'],
+                        $aDataLine['ref'],
+                        $aDataLine['alt'],
+                        '',
+                        $aDataLine['transcript'],
+                        '',
+                ));
+                $aValues = array(
+                        'protein' => '',
+                        $sCenter => str_replace(array('vus'), array('VUS'), $aDataLine['pathogenicity']),
+                        $sCenter . $_CONFIG['columns_center_suffix'] => ($aDataLine['diseases (omim id)'] ?? ''),
                 );
                 break;
 

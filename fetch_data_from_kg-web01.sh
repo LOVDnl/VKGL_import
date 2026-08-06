@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Created  : 2023-07-12
-# Modified : 2025-09-19
+# Modified : 2026-05-20
 
 # This will check if we have the data ready on kg-web01.
 
@@ -84,7 +84,7 @@ done;
 
 
 # Check if we have everything.
-DIFF=$(diff <(echo -e "amc.txt\nerasmus.txt\nlumc.txt\nnki.json\nnki.txt\nradboud_mumc.txt\numcg.txt\numcg.json\numcu.txt\nvumc.txt") <(cd "${DIR}"; ls -1) | grep -v "^[0-9>-]");
+DIFF=$(diff <(echo -e "aumc.csv\nerasmus.txt\nlumc.txt\nnki.txt\nradboud_mumc.txt\numcg.csv\numcu.txt") <(cd "${DIR}"; ls -1) | grep -v "^[0-9>-]");
 if [ "${DIFF}" ];
 then
     echo "$(date '+%Y-%m-%d %H:%M:%S')    One or more data files are missing:" >> "${LOG}";
