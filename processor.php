@@ -27,8 +27,8 @@ use LOVD\Settings;
 class Processor
 {
     // Class abstracting the processing of the aggregated data in a local LOVD instance.
-    private array $aCenterIDs = [];
-    private array $aCentersFound = [];
+    private array $center_ids = [];
+    private array $centers_found = [];
     private array $data = [];
     private array $data_rejected = [];
     private array $data_rejected_output_header = [
@@ -137,8 +137,8 @@ class Processor
 
             $aVariant = array_combine($aHeaders, $aDataLine);
             $sCenterName = strtolower($aVariant['center']);
-            if (!in_array($sCenterName, $this->aCentersFound)) {
-                $this->aCentersFound[] = $sCenterName;
+            if (!in_array($sCenterName, $this->centers_found)) {
+                $this->centers_found[] = $sCenterName;
             }
             $aNC = HGVS_Chromosome::getInfoByNC(strstr($aVariant['genomic_native_normalized'], ':', true));
             $aVariant['native_build'] = $aNC['build'];
@@ -172,17 +172,17 @@ class Processor
             }
 
             // Check if the id was already assigned to a different center.
-            if (in_array($nCenterID, $this->aCenterIDs)) {
-                if (!array_key_exists($sCenterName, $this->aCenterIDs)) {
+            if (in_array($nCenterID, $this->center_ids)) {
+                if (!array_key_exists($sCenterName, $this->center_ids)) {
                     throw new \Exception('This ID is already assigned to a different center');
                 } else {
-                    $this->aCenterIDs[$sCenterName] = $nCenterID;
+                    $this->center_ids[$sCenterName] = $nCenterID;
                 }
             } else {
-                $this->aCenterIDs[$sCenterName] = $nCenterID;
+                $this->center_ids[$sCenterName] = $nCenterID;
             }
 
-            $this->aCenterIDs['VKGL'] = $this->Settings->get('vkgl_generic_id');
+            $this->center_ids['VKGL'] = $this->Settings->get('vkgl_generic_id');
             list($sRefSeq,) = explode(':', $sGenomicNormalized, 2);
             // Use the variant description combined with the center id as key, this way it's easier to check if the variant is already in the database.
             $nCenterID = str_pad($nCenterID,5, '0', STR_PAD_LEFT);
@@ -196,7 +196,7 @@ class Processor
         if ($nNoCorrectBuildFound) {
             $this->Log->add("Found $nNoCorrectBuildFound variant" . ($nNoCorrectBuildFound == 1? '' : 's') . " without a description on {$this->lovd_genome_build}; cannot process this variant in this LOVD instance.");
         }
-        $this->aCentersFound = array_unique($this->aCentersFound);
+        $this->centers_found = array_unique($this->centers_found);
         return true;
     }
 
@@ -209,11 +209,15 @@ class Processor
         // Process the data into the LOVD instance.
         global $_CONF, $_DB, $_TABLES, $_SETT, $_T;
 
-        // Check the given user accounts by using the user IDs ($this->aCenterIDs).
+        // Check the given user accounts by using the user IDs ($this->center_ids).
         // Check if the users with ID are found in LOVD.
         // Cast id to UNSIGNED to make sure our ints match.
-        $aUsers = $_DB->q('SELECT CAST(id AS UNSIGNED) AS id, name FROM ' . TABLE_USERS . ' WHERE id IN (?' . str_repeat(', ?', count($this->aCenterIDs) - 1) . ') ORDER BY id',
-                array_values($this->aCenterIDs))->fetchAllCombine();
+        $aUsers = $_DB->q('
+            SELECT CAST(id AS UNSIGNED) AS id, name
+            FROM ' . TABLE_USERS . '
+            WHERE id IN (?' . str_repeat(', ?', count($this->center_ids) - 1) . ')
+            ORDER BY id',
+                array_values($this->center_ids))->fetchAllCombine();
         $bAccountsOK = true;
         // Check if the generic VKGL account is found in LOVD.
         $bFound = (isset($aUsers[$this->Settings->get('vkgl_generic_id')]));
@@ -223,7 +227,7 @@ class Processor
         }
 
         // The other centers that we have collected from the input file.
-        foreach ($this->aCentersFound as $sCenterName) {
+        foreach ($this->centers_found as $sCenterName) {
             // Check to see if the user can be found in LOVD.
             // If the user can't be found, the script will log which user couldn't be found.
             // We're checking all users, and if one or more users couldn't be found, the pipeline will be stopped.
@@ -312,11 +316,11 @@ class Processor
                         IFNULL(NULLIF(vot.`VariantOnTranscript/RNA`, ""), "-"), ";",
                         IFNULL(NULLIF(vot.`VariantOnTranscript/Protein`, ""), "-") SEPARATOR ";;") AS vots
                 FROM ' . TABLE_VARIANTS . ' AS vog LEFT OUTER JOIN ' . TABLE_VARIANTS_ON_TRANSCRIPTS . ' AS vot USING (id)
-                WHERE vog.chromosome = ? AND vog.created_by IN (?' . str_repeat(', ?', count($this->aCenterIDs) - 1) . ')
+                WHERE vog.chromosome = ? AND vog.created_by IN (?' . str_repeat(', ?', count($this->center_ids) - 1) . ')
                 GROUP BY vog.id',
                     array_merge(
                         array($sRefSeq, $sChromosome),
-                        array_values($this->aCenterIDs)))->fetchAllGroupAssoc();
+                        array_values($this->center_ids)))->fetchAllGroupAssoc();
             // Check all LOVD data and mark removed data.
             // Older data may not have been fully normalized, and we will find new records even though we already had them.
             foreach ($aDataLOVD as $sLOVDKey => $aLOVDVariant) {
@@ -469,10 +473,10 @@ class Processor
                     'position_g_start' => $HGVSData['position_start'],
                     'position_g_end' => $HGVSData['position_end'],
                     'type' => $HGVSData['type'],
-                    'created_by' => $this->aCenterIDs[$sCenter],
+                    'created_by' => $this->center_ids[$sCenter],
                     // Created_date will be added later, right now we don't have it to prevent unneeded differences.
                     'owned_by' => ($aVariant['status'] == 'single-lab' && $this->Settings->get('public_singlelab_owners') != 'y' ? // Should single-lab entry get the generic VKGL account as owner?
-                        $this->Settings->get('vkgl_generic_id') : $this->aCenterIDs[$sCenter]),
+                        $this->Settings->get('vkgl_generic_id') : $this->center_ids[$sCenter]),
                     'statusid' => (string)(in_array($aVariant['status'], $aNonPublicStatus) ? STATUS_HIDDEN : STATUS_OK),
                     // Don't let internal conflicts cause notices here.
                     'VariantOnGenome/ClinicalClassification' => (!isset($this->effect_mapping_classification[$aVariant['classification']])? '-' :
@@ -556,7 +560,7 @@ class Processor
                         if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] === false
                             || !is_array($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'])) {
                             // Somebody malformed this field...
-                            throw new \Exception("Variant ID $sGenomicNormalized has an unparsable JSON object for center $sCenter ({$this->aCenterIDs[$sCenter]})");
+                            throw new \Exception("Variant ID $sGenomicNormalized has an unparsable JSON object for center $sCenter ({$this->center_ids[$sCenter]})");
                         }
                     } elseif ($bRemarksNonPublic) {
                         $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] = array();
