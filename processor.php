@@ -781,8 +781,8 @@ class Processor
                 $q = $_DB->q('
                     UPDATE ' . TABLE_GENES . '
                     SET updated_by = ?, updated_date = ?
-                    WHERE update_date < ? AND id IN (?' . str_repeat(', ?', count($aGenesUpdated) - 1) . ')',
-                        array_merge(array(0, $sNow, $sNow), $aGenesUpdated), false);
+                    WHERE (updated_date IS NULL OR updated_date < ?) AND id IN (?' . str_repeat(', ?', count($aGenesUpdated) - 1) . ')',
+                        array_merge(array(0, $sNow, $sNow), $aGenesUpdated));
                 $nUpdated = $q->rowCount();
                 $this->Log->add('[Totals] Gene(s) updated: ' . $nUpdated . '/' . count($aGenesUpdated) . '.');
             }
