@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-14
- * Modified    : 2026-08-05
+ * Modified    : 2026-08-06
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -518,9 +518,6 @@ class Processor
                                 $aTranscriptNoVersion = explode(".", $sTranscript);
                                 $HGVSMapping = HGVS::check($aMapping['c']);
                                 $HGVSMappingPos = $HGVSMapping->getData();
-                                if (!$aMapping['p']) {
-                                    $aMapping['p'] = '-';
-                                }
                                 $aMapping['p'] = lovd_shortenString($aMapping['p'], $nMaxProteinLength);
                                 // Check if the transcript already exists in the database.
                                 // Starting with the newest version (from $aMappings),
@@ -532,13 +529,13 @@ class Processor
                                         $aVOGEntry['vots'][$sTranscriptId] = [
                                             'transcriptid' => $sTranscriptId,
                                             'effectid' => $aVOGEntry['effectid'],
-                                            'position_c_start' => $HGVSMappingPos['position_start'],
-                                            'position_c_start_intron' => $HGVSMappingPos['position_start_intron'],
-                                            'position_c_end' => $HGVSMappingPos['position_end'],
-                                            'position_c_end_intron' => $HGVSMappingPos['position_end_intron'],
-                                            'VariantOnTranscript/DNA' => $aMapping['c'],
-                                            'VariantOnTranscript/RNA' => $aMapping['r'],
-                                            'VariantOnTranscript/Protein' => $aMapping['p'],
+                                            'position_c_start' => ($HGVSMappingPos['position_start'] ?? null),
+                                            'position_c_start_intron' => ($HGVSMappingPos['position_start_intron'] ?? null),
+                                            'position_c_end' => ($HGVSMappingPos['position_end'] ?? null),
+                                            'position_c_end_intron' => ($HGVSMappingPos['position_end_intron'] ?? null),
+                                            'VariantOnTranscript/DNA' => ($aMapping['c'] ?: '-'),
+                                            'VariantOnTranscript/RNA' => ($aMapping['r'] ?: '-'),
+                                            'VariantOnTranscript/Protein' => ($aMapping['p'] ?: '-'),
                                         ];
                                     }
                                 }
@@ -575,10 +572,10 @@ class Processor
                             $aDataLOVD[$sLOVDKey]['vots'][$aVOT[0]] = array(
                                 'transcriptid' => $aVOT[0],
                                 'effectid' => $aVOT[1],
-                                'position_c_start' => $aVOT[2],
-                                'position_c_start_intron' => $aVOT[3],
-                                'position_c_end' => $aVOT[4],
-                                'position_c_end_intron' => $aVOT[5],
+                                'position_c_start' => ($aVOT[2] ?: null),
+                                'position_c_start_intron' => ($aVOT[3] ?: null),
+                                'position_c_end' => ($aVOT[4] ?: null),
+                                'position_c_end_intron' => ($aVOT[5] ?: null),
                                 'VariantOnTranscript/DNA' => $aVOT[6],
                                 'VariantOnTranscript/RNA' => $aVOT[7],
                                 'VariantOnTranscript/Protein' => $aVOT[8],
