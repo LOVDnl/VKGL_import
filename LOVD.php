@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-07-01
- * Modified    : 2026-08-05
+ * Modified    : 2026-08-06
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -100,6 +100,33 @@ class LOVD
         }
 
         return $_DB->q('SELECT refseq_build FROM ' . TABLE_CONFIG)->fetchColumn();
+    }
+
+
+
+
+
+    public static function getUsers (array $aIDs): array
+    {
+        // Get the LOVD users with the given IDs.
+        global $_DB;
+
+        if (!$aIDs) {
+            return [];
+        }
+
+        // We can't auto-connect because we don't have the path.
+        if (!LOVD::isConnected()) {
+            throw new \Exception('LOVD is not connected; cannot query the database.');
+        }
+
+        // Cast ids to an UNSIGNED to make sure ints match.
+        return $_DB->q('
+            SELECT CAST(id AS UNSIGNED) AS id, name
+            FROM ' . TABLE_USERS . '
+            WHERE id IN (?' . str_repeat(', ?', count($aIDs) - 1) . ')
+            ORDER BY id',
+            array_values($aIDs))->fetchAllCombine();
     }
 
 

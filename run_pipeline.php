@@ -122,6 +122,9 @@ if ($Settings->get('timezone')) {
     date_default_timezone_set($Settings->get('timezone'));
 }
 
+// We might be running for some time.
+set_time_limit(0);
+
 
 
 // First, determine which release we're supposed to be working on.
