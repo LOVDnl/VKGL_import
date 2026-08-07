@@ -325,62 +325,12 @@ class Processor
 
 
 
-            // Check all LOVD data and mark removed data.
-            // Older data may not have been fully normalized, and we will find new records even though we already had them.
+            // Check all LOVD data and mark data as removed when it's not present in the data file anymore.
+            $sRemoveMessage = 'VKGL data sharing initiative Nederland; Variant no longer found in the VKGL dataset for this center.';
             foreach ($aDataLOVD as $sLOVDKey => $aLOVDVariant) {
-                list($nCenterID, $sLOVDVariant) = explode(':', $sLOVDKey, 2);
-                // Perhaps we find that we want to remove this variant.
-                $bRemoveVariant = false;
-                $sRemoveMessage = '';
-                // Check if it exists in the NC cache as a different name. This assumes the variant has been cached before.
-                if (!Caches::hasCorrectedNC($sLOVDVariant)) {
-                    $sVariantCorrected = $sLOVDVariant;
-                } else {
-                    $sVariantCorrected = Caches::getCorrectedNC($sLOVDVariant);
-                    // Check if this is a cached error message.
-                    if (Caches::hasErrors($sLOVDVariant)) {
-                        // Variant is actually in error. These are OK to be removed, since we don't want them.
-                        // If the variant is still in the source, that's OK, because he will be skipped there, too.
-                        $bRemoveVariant = true;
-                        $aErrorMessages = json_decode($sVariantCorrected, true);
-                        array_walk($aErrorMessages, function (&$sValue, $sError) {
-                            $sValue = $sError . ': ' . $sValue;
-                        });
-                        $sRemoveMessage = 'Variant is in error: ' . implode('; ', $aErrorMessages);
-                    } elseif ($sLOVDVariant != $sVariantCorrected) {
-                        // LOVD variant is in the cache, and has a different name.
-
-                        // Whoops. From a previous release, we have uncorrected data in LOVD. It won't match this way.
-                        // Correct the key; this will make a match possible. The update will then fix the entry's DNA field.
-                        $sLOVDNewKey = $nCenterID . ':' . $sVariantCorrected;
-                        if (!isset($aDataLOVD[$sLOVDNewKey])) {
-                            // Copy data, correct variant doesn't exist in LOVD yet.
-                            $aDataLOVD[$sLOVDNewKey] = $aLOVDVariant;
-                            unset($aDataLOVD[$sLOVDKey]);
-                            continue;
-                        } else {
-                            // We have an old notation for this center, but also the corrected.
-                            // Let the corrected match with the variant in case we still have it, remove this old one.
-                            $bRemoveVariant = true;
-                            $sRemoveMessage = 'Variant notation is not normalized, and the correct notation (' . $sVariantCorrected . ') is already in the database for this center.';
-                        }
-                    }
-                }
-
-                if (!$bRemoveVariant && !isset($this->data[$sChrKey][$nCenterID . ':' . $sVariantCorrected])) {
-                    // We aren't already removing this variant, but we don't actually see this variant anymore.
-                    // The variant is lost, there's nothing to do about it. If the user has indicated so, remove it,
-                    //  but mark it only as removed. Later we can always decide to actually remove these entries.
-                    $bRemoveVariant = true;
-                    $sRemoveMessage = 'Variant no longer found in the VKGL dataset for this center.';
-                }
-
                 // Remove variant if needed. Don't touch the Remarks_Non_Public, we don't want to complicate things.
                 // Also, don't run this if we don't have to. Check status and current remarks.
-                // FIXME: Record variants being removed in the history
-                if ($bRemoveVariant) {
-                    $sRemoveMessage = 'VKGL data sharing initiative Nederland' .
-                        (!$sRemoveMessage ? '' : '; ' . $sRemoveMessage);
+                if (!isset($this->data[$sChrKey][$sLOVDKey])) {
                     $q = $_DB->q('UPDATE ' . TABLE_VARIANTS . '
                         SET `VariantOnGenome/Remarks` = ?, statusid = ?, edited_by = 0, edited_date = ?
                         WHERE id = ? AND !(`VariantOnGenome/Remarks` LIKE ? AND statusid <= ?)',
