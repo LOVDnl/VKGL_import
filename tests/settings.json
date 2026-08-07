@@ -1,7 +1,6 @@
 {
     "refseq_build": "hg19",
     "public_singlelab_owners": "y",
-    "delete_redundant_variants": "y",
     "timezone": "Europe/Amsterdam",
     "error_codes": {
         "EXIT_OK": 0,

@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-14
- * Modified    : 2026-08-06
+ * Modified    : 2026-08-07
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -358,8 +358,7 @@ class Processor
                     }
                 }
 
-                if (!$bRemoveVariant && $this->Settings->get('delete_redundant_variants') == 'y'
-                        && (!isset($this->data[$sChromosomeRefSeq][$nCenterID . ":" . $sVariantCorrected]))) {
+                if (!$bRemoveVariant && !isset($this->data[$sChromosomeRefSeq][$nCenterID . ':' . $sVariantCorrected])) {
                     // We aren't already removing this variant, but we don't actually see this variant anymore.
                     // The variant is lost, there's nothing to do about it. If the user has indicated so, remove it,
                     //  but mark it only as removed. Later we can always decide to actually remove these entries.
