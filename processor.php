@@ -269,6 +269,24 @@ class Processor
         $nMaxPublishedAsLength = lovd_getColumnLength(TABLE_VARIANTS, 'VariantOnGenome/Published_as'); // Max is 100
         $nMaxProteinLength = lovd_getColumnLength(TABLE_VARIANTS_ON_TRANSCRIPTS, 'VariantOnTranscript/Protein'); // Max is 255
 
+        // Check if we actually have some columns that we use, activated.
+        // These are optional, so we don't want to die if we don't have them.
+        $aActiveCols = $_DB->q('
+            SELECT colid FROM ' . TABLE_ACTIVE_COLS . '
+            WHERE colid IN (?, ?, ?, ?, ?)',
+            array(
+                'VariantOnGenome/Genetic_origin',
+                'VariantOnGenome/Published_as',
+                'VariantOnGenome/Remarks',
+                'VariantOnGenome/Remarks_Non_Public',
+                'VariantOnGenome/ClinicalClassification',
+            ))->fetchAllColumn();
+        $bGeneticOrigin = in_array('VariantOnGenome/Genetic_origin', $aActiveCols);
+        $bPublishedAs = in_array('VariantOnGenome/Published_as', $aActiveCols);
+        $bRemarks = in_array('VariantOnGenome/Remarks', $aActiveCols);
+        $bRemarksNonPublic = in_array('VariantOnGenome/Remarks_Non_Public', $aActiveCols);
+        $bClassification = in_array('VariantOnGenome/ClinicalClassification', $aActiveCols);
+
         foreach ($this->data as $sChrKey => $aVariants) {
             list($sRefSeq, $sChromosome) = explode(':', $sChrKey, 2);
             // Reset counters.
@@ -276,24 +294,6 @@ class Processor
             $aVariantsUpdated[$sChromosome] = 0; // Counters per chromosome.
             $aVariantsDeleted[$sChromosome] = 0; // Counters per chromosome.
             $aVariantsSkipped[$sChromosome] = 0; // Counters per chromosome.
-
-            // Check if we actually have some columns that we use, activated.
-            // These are optional, so we don't want to die if we don't have them.
-            $aActiveCols = $_DB->q('
-                SELECT colid FROM ' . TABLE_ACTIVE_COLS . '
-                WHERE colid IN (?, ?, ?, ?, ?)',
-                    array(
-                        'VariantOnGenome/Genetic_origin',
-                        'VariantOnGenome/Published_as',
-                        'VariantOnGenome/Remarks',
-                        'VariantOnGenome/Remarks_Non_Public',
-                        'VariantOnGenome/ClinicalClassification',
-                    ))->fetchAllColumn();
-            $bGeneticOrigin = in_array('VariantOnGenome/Genetic_origin', $aActiveCols);
-            $bPublishedAs = in_array('VariantOnGenome/Published_as', $aActiveCols);
-            $bRemarks = in_array('VariantOnGenome/Remarks', $aActiveCols);
-            $bRemarksNonPublic = in_array('VariantOnGenome/Remarks_Non_Public', $aActiveCols);
-            $bClassification = in_array('VariantOnGenome/ClinicalClassification', $aActiveCols);
 
             // Load the data currently in the database.
             // Note, that if there are two entries of the same variant by the same center, we see only *one*.
