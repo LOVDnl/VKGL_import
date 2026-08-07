@@ -322,7 +322,7 @@ if ($Status->get('step') < $nStep) {
 
 
 // Step 2: Merge all files into one, regardless of the given format.
-$nStep++;
+$nStep ++;
 if ($Status->get('step') < $nStep) {
     // Use the formatter which recognizes all formats and merges everything into one tab-delimited file.
     $Log->add('Parsing the VKGL data files...');
@@ -362,7 +362,7 @@ if ($Status->get('step') < $nStep) {
 
 
 // Step 3: Normalize all input to fully valid HGVS descriptions, also pulling in other data.
-$nStep++;
+$nStep ++;
 if ($Status->get('step') < $nStep) {
     // Use the normalizer to convert all VCFs and other notations into HGVS and normalize, liftover, and map all data.
     $Log->add('Normalizing the data... (this may take hours or days if there is a lot of new data)');
@@ -403,7 +403,7 @@ if ($Status->get('step') < $nStep) {
 
 
 // Step 4: Aggregate all variants.
-$nStep++;
+$nStep ++;
 if ($Status->get('step') < $nStep) {
     // Aggregate all variants per center, and compare the classifications between centers.
     $Log->add('Aggregating the normalized variants...');

@@ -269,8 +269,6 @@ class Processor
         $nMaxPublishedAsLength = lovd_getColumnLength(TABLE_VARIANTS, 'VariantOnGenome/Published_as'); // Max is 100
         $nMaxProteinLength = lovd_getColumnLength(TABLE_VARIANTS_ON_TRANSCRIPTS, 'VariantOnTranscript/Protein'); // Max is 255
 
-        $aNonPublicStatus = ['internal_opposite', 'external_opposite'];
-
         foreach ($this->data as $sChrKey => $aVariants) {
             list($sRefSeq, $sChromosome) = explode(':', $sChrKey, 2);
             // Reset counters.
@@ -395,7 +393,7 @@ class Processor
                                 STATUS_HIDDEN,
                             ));
                     if ($q->rowCount()) {
-                        $aVariantsDeleted[$sChromosome]++;
+                        $aVariantsDeleted[$sChromosome] ++;
                     }
                     unset($aDataLOVD[$sLOVDKey]);
                 }
@@ -413,7 +411,7 @@ class Processor
                 // However, we may also simply find variants longer than 255 characters.
                 // We will simply skip whatever is too long.
                 if (strlen($sDNA) > $nMaxDNALength) {
-                    $aVariantsSkipped[$sChromosome]++;
+                    $aVariantsSkipped[$sChromosome] ++;
                     continue;
                 }
 
@@ -468,7 +466,7 @@ class Processor
                     // Created_date will be added later, right now we don't have it to prevent unneeded differences.
                     'owned_by' => ($aVariant['status'] == 'single-lab' && $this->Settings->get('public_singlelab_owners') != 'y' ? // Should single-lab entry get the generic VKGL account as owner?
                         $this->center_ids['generic_vkgl_account'] : $nCenterID),
-                    'statusid' => (string)(in_array($aVariant['status'], $aNonPublicStatus) ? STATUS_HIDDEN : STATUS_OK),
+                    'statusid' => (str_ends_with($aVariant['status'], 'opposite')? STATUS_HIDDEN : STATUS_OK),
                     // Don't let internal conflicts cause notices here.
                     'VariantOnGenome/ClinicalClassification' => (!isset($this->effect_mapping_classification[$aVariant['classification']])? '-' :
                         $this->effect_mapping_classification[$aVariant['classification']]),
@@ -476,7 +474,8 @@ class Processor
                     'VariantOnGenome/DBID' => '', // FIXME: Will be filled in later for records to be created!
                     'VariantOnGenome/Genetic_origin' => 'CLASSIFICATION record',
                     'VariantOnGenome/Published_as' => $aVariant['published_as'],
-                    'VariantOnGenome/Remarks' => 'VKGL data sharing initiative Nederland' . (!in_array($aVariant['status'], $aNonPublicStatus) ? '' : '; Variant classification is in conflict with'. ($aVariant['status'] == 'internal_opposite' ? 'in this center.' : ' a different center.' )),
+                    'VariantOnGenome/Remarks' => 'VKGL data sharing initiative Nederland' .
+                        (!str_ends_with($aVariant['status'], 'opposite')? '' : '; Variant classification is in conflict with' . ($aVariant['status'] == 'internal_opposite' ? 'in this center.' : ' a different center.')),
                     'VariantOnGenome/Remarks_Non_Public' => array(
                         'warning' => 'Do not remove or edit this field!',
                         'updates' => array(),
@@ -689,14 +688,14 @@ class Processor
 
                         //str_contains
                         if ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_HIDDEN && str_contains($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks'], 'no longer found')){
-                            $aVariantsCreated[$sChromosome]++;
+                            $aVariantsCreated[$sChromosome] ++;
                         } else {
-                            $aVariantsUpdated[$sChromosome]++;
+                            $aVariantsUpdated[$sChromosome] ++;
                         }
                         continue;
                     }
                     // If we get here, there was nothing to update, data is still the same.
-                    $aVariantsSkipped[$sChromosome]++;
+                    $aVariantsSkipped[$sChromosome] ++;
                     continue;
                 }
 
@@ -726,7 +725,7 @@ class Processor
                 $aVOGEntry['id'] = $_DB->lastInsertId();
 
                 // Then the VOTs.
-                foreach ($aVOTs as $nTranscriptID => $aVOT) {
+                foreach ($aVOTs as $aVOT) {
                     // Add the transcript.
                     $_DB->q('INSERT INTO ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
                         (id, ' . implode(', ', array_map(function ($sField) {
@@ -737,7 +736,7 @@ class Processor
                 // If we get here, everything went well.
                 $_DB->commit();
 
-                $aVariantsCreated[$sChromosome]++;
+                $aVariantsCreated[$sChromosome] ++;
             }
 
             // Showing count per chromosome.
