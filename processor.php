@@ -132,32 +132,38 @@ class Processor
                 // We accidentally trimmed off empty fields.
                 $aDataLine = array_pad($aDataLine, $nHeaders, '');
             }
-
             $aVariant = array_combine($aHeaders, $aDataLine);
-            $aNC = HGVS_Chromosome::getInfoByNC(strstr($aVariant['genomic_native_normalized'], ':', true));
-            $aVariant['native_build'] = $aNC['build'];
 
-            // Compare the build from the database to the build from genomic_native_normalized.
-            // If they aren't the same, compare to the build from genomic_liftover_normalized.
-            // If both builds don't match the build from the database, the variant will not be added to the dataset,
-            //  but saved to the error file, instead.
-            if ($aVariant['native_build'] != $this->lovd_genome_build) {
-                $aNC = HGVS_Chromosome::getInfoByNC(strstr($aVariant['genomic_liftover_normalized'], ':', true));
-                if (!$aNC || $aNC['build'] != $this->lovd_genome_build) {
+            // Collect all necessary data about the variant's builds.
+            $aVariant['native_info'] = HGVS_Chromosome::getInfoByNC(strstr($aVariant['genomic_native_normalized'], ':', true));
+            $aVariant['DNA'][$aVariant['native_info']['build']] = $aVariant['genomic_native_normalized'];
+            // Note: this may store false, when we have no liftover value.
+            $aVariant['liftover_info'] = HGVS_Chromosome::getInfoByNC(strstr($aVariant['genomic_liftover_normalized'], ':', true));
+            if ($aVariant['liftover_info']) {
+                $aVariant['DNA'][$aVariant['liftover_info']['build']] = $aVariant['genomic_liftover_normalized'];
+
+                // Also check if both descriptions are using the same chromosome. They should, but you never know.
+                if ($aVariant['native_info']['chr'] != $aVariant['liftover_info']['chr']) {
                     $this->data_rejected[] = array_merge(
                         $aVariant,
                         [
-                            'error' => "LOVD has been configured to use {$this->lovd_genome_build}, this variant uses only {$aVariant['native_build']}.",
+                            'error' => "Variant's native and liftover descriptions are on different chromosomes: {$aVariant['native_info']['chr']} and {$aVariant['liftover_info']['chr']}.",
                         ]
                     );
                     continue;
-
-                } else {
-                    $sGenomicNormalized = $aVariant['genomic_liftover_normalized'];
                 }
+            }
 
-            } else {
-                $sGenomicNormalized = $aVariant['genomic_native_normalized'];
+            // Check if this variant's build(s) match the LOVD's build. If this variant does not have a description on
+            //  LOVD's build, the variant will not be added to the dataset, but saved to the error file, instead.
+            if (!isset($aVariant['DNA'][$this->lovd_genome_build])) {
+                $this->data_rejected[] = array_merge(
+                    $aVariant,
+                    [
+                        'error' => "LOVD has been configured to use {$this->lovd_genome_build}, this variant has descriptions only on " . implode(' and ', array_keys($aVariant['DNA'])) . '.',
+                    ]
+                );
+                continue;
             }
 
             $nCenterID = (int) ($this->center_ids[$aVariant['center']] ?? 0);
@@ -165,9 +171,11 @@ class Processor
                 throw new \Exception("Center {$aVariant['center']} is not configured in the settings, or no LOVD ID has been set");
             }
 
-            list($sRefSeq,) = explode(':', $sGenomicNormalized, 2);
-            // Use the variant description combined with the center id as key, this way it's easier to check if the variant is already in the database.
-            $this->data["$sRefSeq:{$aNC['chr']}"][str_pad($nCenterID, 5, '0', STR_PAD_LEFT) . ':' . $sGenomicNormalized] = $aVariant;
+            // Store the data by NC+chr value, then by center ID + variant description.
+            // That way, we can easily check if a variant is in the data file.
+            $sChrKey = strstr($aVariant['DNA'][$this->lovd_genome_build], ':', true) . ':' . $aVariant['native_info']['chr'];
+            $sVariantKey = str_pad($nCenterID, 5, '0', STR_PAD_LEFT) . ':' . $aVariant['DNA'][$this->lovd_genome_build];
+            $this->data[$sChrKey][$sVariantKey] = $aVariant;
         }
 
         // Make sure we run everything in the correct order, from chr1 to 22, then X, Y, and M.
@@ -263,8 +271,8 @@ class Processor
 
         $aNonPublicStatus = ['internal_opposite', 'external_opposite'];
 
-        foreach ($this->data as $sChromosomeRefSeq => $aVariants) {
-            list($sRefSeq, $sChromosome) = explode(':', $sChromosomeRefSeq, 2);
+        foreach ($this->data as $sChrKey => $aVariants) {
+            list($sRefSeq, $sChromosome) = explode(':', $sChrKey, 2);
             // Reset counters.
             $aVariantsCreated[$sChromosome] = 0; // Counters per chromosome.
             $aVariantsUpdated[$sChromosome] = 0; // Counters per chromosome.
@@ -316,6 +324,9 @@ class Processor
                     array_merge(
                         array($sRefSeq, $sChromosome),
                         array_values($this->center_ids)))->fetchAllGroupAssoc();
+
+
+
             // Check all LOVD data and mark removed data.
             // Older data may not have been fully normalized, and we will find new records even though we already had them.
             foreach ($aDataLOVD as $sLOVDKey => $aLOVDVariant) {
@@ -358,7 +369,7 @@ class Processor
                     }
                 }
 
-                if (!$bRemoveVariant && !isset($this->data[$sChromosomeRefSeq][$nCenterID . ':' . $sVariantCorrected])) {
+                if (!$bRemoveVariant && !isset($this->data[$sChrKey][$nCenterID . ':' . $sVariantCorrected])) {
                     // We aren't already removing this variant, but we don't actually see this variant anymore.
                     // The variant is lost, there's nothing to do about it. If the user has indicated so, remove it,
                     //  but mark it only as removed. Later we can always decide to actually remove these entries.
@@ -390,24 +401,13 @@ class Processor
                 }
             }
 
-            foreach ($aVariants as $aVariant) {
-                // See if the correct build (build from the database) is present in genomic_native_normalized
-                //  or in genomic_liftover_normalized.
-                // We know it's in one of the two, otherwise the variant wouldn't have been added to the dataset,
-                //  this check was done while the data was parsed.
-                $aNC = HGVS_Chromosome::getInfoByNC(strstr($aVariant['genomic_native_normalized'], ':', true));
-                $aVariant['native_build'] = $aNC['build'];
-                if ($aVariant['native_build'] == $this->lovd_genome_build) {
-                    list($sRefSeq, $sDNA) = explode(':', $aVariant['genomic_native_normalized']);
-                    $sGenomicNormalized = $aVariant['genomic_native_normalized'];
-                } else {
-                    list($sRefSeq, $sDNA) = explode(':', $aVariant['genomic_liftover_normalized']);
-                    $sGenomicNormalized = $aVariant['genomic_liftover_normalized'];
-                }
-                if (!$sRefSeq) {
-                    // Eh, no chromosome?
-                    throw new \Exception("Cannot get chromosome from variant $sRefSeq");
-                }
+
+
+            // Now, loop the data in the data file and process each variant.
+            foreach ($aVariants as $sLOVDKey => $aVariant) {
+                list($nCenterID, $sVariant) = explode(':', $sLOVDKey, 2);
+                $sDNA = substr(strstr($sVariant, ':'), 1);
+
                 // LOVD+ has a much shorter DNA field; only 150 characters.
                 // Trying to put in a variant that's bigger will crash this process.
                 // However, we may also simply find variants longer than 255 characters.
@@ -417,16 +417,12 @@ class Processor
                     continue;
                 }
 
-                // Loop through centers who found this variant.
                 // Build variant entry.
                 $aPublishedAs = json_decode($aVariant['annotation'], true);
                 if (is_array($aPublishedAs['reported_as'])) {
                     $aPublishedAs['reported_as'] = implode(',', $aPublishedAs['reported_as']);
                 }
                 $aVariant['published_as'] = lovd_shortenString($aPublishedAs['reported_as'], $nMaxPublishedAsLength);
-                $sCenter = strtolower($aVariant['center']);
-                $nCenterID = str_pad($this->center_ids[$sCenter], 5, '0', STR_PAD_LEFT);
-                $sLOVDKey = $nCenterID . ':' . $sGenomicNormalized;
                 if (!$aVariant['published_as'] && $bPublishedAs) {
                     // If the reported_as in column annotation is empty or doesn't exist
                     //  we're looking in the database to see if the column is filled.
@@ -448,8 +444,9 @@ class Processor
                         $aVariant['published_as'] = $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'];
                     }
                 }
+
                 // Add some needed fields; (type, position_start, position_end).
-                $HGVS = HGVS::check($sGenomicNormalized);
+                $HGVS = HGVS::check($sVariant);
                 $HGVSData = $HGVS->getData();
                 if ($HGVSData['type'] == '>') {
                     // Backward compatible with LOVD3.
@@ -467,10 +464,10 @@ class Processor
                     'position_g_start' => $HGVSData['position_start'],
                     'position_g_end' => $HGVSData['position_end'],
                     'type' => $HGVSData['type'],
-                    'created_by' => $this->center_ids[$sCenter],
+                    'created_by' => $nCenterID,
                     // Created_date will be added later, right now we don't have it to prevent unneeded differences.
                     'owned_by' => ($aVariant['status'] == 'single-lab' && $this->Settings->get('public_singlelab_owners') != 'y' ? // Should single-lab entry get the generic VKGL account as owner?
-                        $this->center_ids['generic_vkgl_account'] : $this->center_ids[$sCenter]),
+                        $this->center_ids['generic_vkgl_account'] : $nCenterID),
                     'statusid' => (string)(in_array($aVariant['status'], $aNonPublicStatus) ? STATUS_HIDDEN : STATUS_OK),
                     // Don't let internal conflicts cause notices here.
                     'VariantOnGenome/ClinicalClassification' => (!isset($this->effect_mapping_classification[$aVariant['classification']])? '-' :
@@ -554,7 +551,7 @@ class Processor
                         if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] === false
                             || !is_array($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'])) {
                             // Somebody malformed this field...
-                            throw new \Exception("Variant ID $sGenomicNormalized has an unparsable JSON object for center $sCenter ({$this->center_ids[$sCenter]})");
+                            throw new \Exception("Variant ID $sVariant has an unparsable JSON object for center {$aVariant['center']} ($nCenterID)");
                         }
                     } elseif ($bRemarksNonPublic) {
                         $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] = array();
