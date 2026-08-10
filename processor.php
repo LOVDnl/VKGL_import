@@ -445,8 +445,8 @@ class Processor
                 // Check if the variant is CNV, this one doesn't need a vot (variant on transcript).
                 if ($aVariant['type'] == "CNV") {
                     $aVOGEntry['vots'] = array();
-                } elseif ($aVariant['type'] == "SNV") {
-                    $aCache = Caches::getMapping($sGenomicNormalized);
+                } elseif ($aVariant['type'] == 'SNV') {
+                    $aCache = Caches::getMapping($sVariant);
                     if ($aCache != false) {
                         foreach ($aCache as $sSource => $aMappings) {
                             foreach ($aMappings as $sTranscript => $aMapping) {
