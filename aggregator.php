@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-04-28
- * Modified    : 2026-08-05
+ * Modified    : 2026-08-10
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -103,9 +103,9 @@ class Aggregator
                 // If there is one center for a variant, we are looking at the classification to decide the status.
                 $sCenter = array_key_first($aCenters);
                 if ($aCenters[$sCenter]['classification'] == 'conflicting') {
-                    $this->data[$sVariant][$sCenter]['status'] = 'internal_opposite';
+                    $this->data[$sVariant][$sCenter]['status'] = 'internal-opposite';
                 } else {
-                    $this->data[$sVariant][$sCenter]['status'] = 'single_lab';
+                    $this->data[$sVariant][$sCenter]['status'] = 'single-lab';
                 }
 
             } else {
@@ -114,7 +114,7 @@ class Aggregator
                 //  as the classification. If so, exclude them from this comparison.
                 foreach ($aCenters as $sCenter => $aVariantObservation) {
                     if ($aVariantObservation['classification'] == 'conflicting') {
-                        $this->data[$sVariant][$sCenter]['status'] = 'internal_opposite';
+                        $this->data[$sVariant][$sCenter]['status'] = 'internal-opposite';
                     } else {
                         // Gather all remaining classifications, so we can compare them.
                         $aClassifications[$sCenter] = $aVariantObservation['classification'];
@@ -123,7 +123,7 @@ class Aggregator
 
                 // Do we still have multiple centers for this variant?
                 if (count($aClassifications) == 1) {
-                    $this->data[$sVariant][array_key_first($aClassifications)]['status'] = 'single_lab';
+                    $this->data[$sVariant][array_key_first($aClassifications)]['status'] = 'single-lab';
 
                 } elseif (count($aClassifications) > 1) {
                     // We still have more than one center left. Determine the status of the variant; consensus,
@@ -137,12 +137,12 @@ class Aggregator
                         //  for merging the classifications within one center, we can re-use its logic, so we don't have
                         //  to repeat that here.
                         $sStatus = match ($this->mergeClassifications($aClassifications)) {
-                            'conflicting' => 'external_opposite',
+                            'conflicting' => 'external-opposite',
                             'VUS' => 'non-consensus',
                             default => 'consensus',
                         };
 
-                        if ($sStatus == 'external_opposite') {
+                        if ($sStatus == 'external-opposite') {
                             // Log this opposite for the labs, so they can fix it. Build a string with the
                             //  classifications for each center, so the labs can see what's going on.
                             $sClassifications = implode(', ',

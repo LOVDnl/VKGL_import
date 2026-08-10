@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-12
- * Modified    : 2026-08-05
+ * Modified    : 2026-08-10
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -98,9 +98,9 @@ class Validator
 
             // Store the number of variants per status, but store internal conflicts separately.
             // Also, external opposites are stored simply as "opposite" as the distinction is no longer relevant.
-            if ($aVariant['status'] == 'internal_opposite') {
+            if ($aVariant['status'] == 'internal-opposite') {
                 $aStatistics['internal_conflicts'][$aVariant['center']] = ($aStatistics['internal_conflicts'][$aVariant['center']] ?? 0) + 1;
-            } elseif ($aVariant['status'] == 'external_opposite') {
+            } elseif ($aVariant['status'] == 'external-opposite') {
                 $aStatistics['status']['opposite'] = ($aStatistics['status']['opposite'] ?? 0) + 1;
             } else {
                 $aStatistics['status'][$aVariant['status']] = ($aStatistics['status'][$aVariant['status']] ?? 0) + 1;

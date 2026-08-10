@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-14
- * Modified    : 2026-08-07
+ * Modified    : 2026-08-10
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -425,7 +425,7 @@ class Processor
                     'VariantOnGenome/Genetic_origin' => 'CLASSIFICATION record',
                     'VariantOnGenome/Published_as' => $aVariant['published_as'],
                     'VariantOnGenome/Remarks' => 'VKGL data sharing initiative Nederland' .
-                        (!str_ends_with($aVariant['status'], 'opposite')? '' : '; Variant classification is in conflict with' . ($aVariant['status'] == 'internal_opposite' ? 'in this center.' : ' a different center.')),
+                        (!str_ends_with($aVariant['status'], 'opposite')? '' : '; Variant classification is in conflict with' . ($aVariant['status'] == 'internal-opposite' ? 'in this center.' : ' a different center.')),
                     'VariantOnGenome/Remarks_Non_Public' => array(
                         'warning' => 'Do not remove or edit this field!',
                         'updates' => array(),
