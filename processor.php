@@ -375,19 +375,10 @@ class Processor
                     // If the reported_as in column annotation is empty or doesn't exist
                     //  we're looking in the database to see if the column is filled.
                     // If the column is filled, this information will be kept.
-                    // If the column is empty, genomic_native_reported or genomic_liftover_reported will be used.
-                    // Which one is used is based on which one contains the same build as the database.
-
                     // Check if key exist and if value is not empty.
                     if (!isset($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'])) {
-                        // Check if the native build is the same as the build from the database.
-                        // This decides which 'genomic_?_reported to take.
                         // Do limit the input a bit, depending on the field size.
-                        if ($aVariant['native_build'] == $this->lovd_genome_build) {
-                            $aVariant['published_as'] = lovd_shortenString($aVariant['genomic_native_reported'], $nMaxPublishedAsLength);
-                        } else {
-                            $aVariant['published_as'] = lovd_shortenString($aVariant['genomic_liftover_reported'], $nMaxPublishedAsLength);
-                        }
+                        $aVariant['published_as'] = lovd_shortenString($aVariant['DNA'][$this->lovd_genome_build], $nMaxPublishedAsLength);
                     } else {
                         $aVariant['published_as'] = $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'];
                     }

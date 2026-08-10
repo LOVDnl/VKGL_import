@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-07-01
- * Modified    : 2026-08-06
+ * Modified    : 2026-08-10
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -76,6 +76,7 @@ class LOVD
         // We have error messages suppressed anyway, as the LOVD in question will complain when it tries to define "SSL" as well.
         define('SSL', true);
         require ROOT_PATH . 'inc-init.php';
+        require ROOT_PATH . 'inc-lib-form.php'; // For lovd_fetchDBID().
         ini_set('display_errors', '1'); // We do want to see errors from here on.
 
         self::$bConnected = true;
