@@ -6,6 +6,7 @@
 /tests/releases/2025-05
 /tests/releases/2025-06
 /tests/releases/2025-07
+/tests/releases/2025-08
 dump_*sql*
 mapping_cache.*
 NC_cache.txt
