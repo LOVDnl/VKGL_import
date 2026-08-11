@@ -23,6 +23,7 @@ lumc	CNV	chr19(GRCh37):g.41360130_41392641dup		B					{"source":"NxClinical","pla
 lumc	CNV	chr19(GRCh37):g.41360130_41392641dup		B					{"source":"NxClinical","platform":"CytoScanHD","zygosity":"heterozygous"}
 lumc	CNV	chr2(GRCh37):g.10668078_10911409dup		VUS					{"source":"NxClinical","platform":"CytoScanHD","zygosity":"homozygous"}
 lumc	CNV	chr2(GRCh37):g.10701383_10914848dup		LB					{"source":"NxClinical","platform":"NGS-CNV analysis","zygosity":"heterozygous"}
+lumc	CNV	chr2(GRCh37):g.169951931_169963586del		VUS					{"source":"NxClinical","platform":"CytoScanHD","zygosity":"heterozygous"}
 lumc	CNV	chr20(GRCh37):g.1559235_1600610del		B					{"source":"NxClinical","platform":"NGS-CNV analysis","zygosity":"homozygous"}
 lumc	CNV	chr20(GRCh37):g.1559235_1600610del		B					{"source":"NxClinical","platform":"NGS-CNV analysis","zygosity":"homozygous"}
 lumc	CNV	chr21(GRCh37):g.9730863_10862615dup		B					{"source":"NxClinical","platform":"NGS-CNV analysis","zygosity":"homozygous"}
@@ -53,6 +54,7 @@ lumc	SNV	NC_000001.10:g.898757G>C		VUS	KLHL17	NM_198317.2	c.1228G>C	NP_938073.1:
 lumc	SNV	NC_000001.10:g.899789G>A		P	KLHL17	NM_198317.2	c.1579G>A	NP_938073.1:p.(Val527Met)	
 lumc	SNV	NC_000001.10:g.899896del		VUS	KLHL17	NM_198317.2	c.1686delC	p.(Met563fs)	
 lumc	SNV	NC_000002.11:g.1437283G>A		VUS	TPO	NM_001206744.1	c.253G>A	p.(Gly85Arg)	
+lumc	SNV	NC_000002.11:g.220285382_220285383del		LB	DES	NM_001927.3	c.897+3_897+4del	NP_001918.3:p.?	
 lumc	SNV	NC_000002.11:g.249775G>T		VUS	SH3YL1	NM_001159597.1	c.182C>A	NM_001159597.1:p.(Ala61Asp)	
 lumc	SNV	NC_000002.11:g.73613053_73613054del		LB	ALMS1	NM_015120.4	c.57_58del	NP_055935.4:p.(Glu20Glyfs*107)	
 lumc	SNV	NC_000002.11:g.73613053_73613070del		VUS	ALMS1	NM_001378454.1	c.57_74del	p.(Glu23_Glu28del)	
@@ -88,11 +90,14 @@ lumc	SNV	NC_000016.9:g.1497386_1497393dup		LB	CLCN7	NM_001287.5	c.2250_2250+7dup
 lumc	SNV	NC_000016.9:g.597214_597219del		VUS	CAPN15	NM_005632.2	c.376_381delAAGGAC	p.(Lys126_Asp127del)	
 lumc	SNV	NC_000016.9:g.624058_624062del		VUS	PIGQ	NM_004204.5	c.-9-8_-9-4del		
 lumc	SNV	NC_000023.10:g.2999011del		LB	ARSF	NM_001201538.1	c.363del	NP_001188467.1:p.(Ala122Glnfs*4)	
+lumc	SNV	NC_000023.10:g.54014378C>T		LP	PHF8	NM_015107.3	c.1731-1G>A		
 lumc	SNV	NC_000023.10:g.585263G>C		B	SHOX	NM_000451.3	c.-507G>C		
 lumc	SNV	NC_000023.10:g.591578C>T		LB	SHOX	NM_000451.3	c.-55C>T		
 lumc	SNV	NC_000023.10:g.591695C>T		LB	SHOX	NM_000451.3	c.63C>T	NP_000442.1:p.(Gly21=)	
 lumc	SNV	NC_000023.10:g.605177_605188del		P	SHOX	NM_000451.3	c.685_696del	NP_000442.1:p.(His229_Leu232del)	
 lumc	SNV	NC_000023.10:g.605177_605188dup		VUS	SHOX	NM_000451.3	c.685_696dup	p.(His229_Leu232dup)	
+lumc	SNV	hg19:10:88478597:C:T		VUS	LDB3	NM_007078.2	c.1971C>T	p.C657=	{"source":"Alissa","last_updated_by":"ehage","last_updated_on":"2019-07-24 10:18:12"}
+lumc	SNV	hg19:10:88478597:C:T		LB	LDB3	NM_001171610.1	c.1986C>T	p.C662=	{"source":"Alissa","last_updated_by":"marjon","last_updated_on":"2020-05-02 06:50:40"}
 lumc	SNV	hg19:10:93394:G:A		LB	TUBB8	NM_177987.2	c.938C>T	p.A313V	{"source":"Alissa","last_updated_by":"martina","last_updated_on":"2018-08-23 09:06:39"}
 lumc	SNV	hg19:10:93416:G:A		LB	TUBB8	NM_177987.2	c.916C>T	p.R306C	{"source":"Alissa","last_updated_by":"martina","last_updated_on":"2018-08-23 09:07:55"}
 lumc	SNV	hg19:11:108098243:A:G		B	ATM	NM_000051.3	c.-30-79A>G		
@@ -136,7 +141,7 @@ lumc	SNV	hg19:19:50909779:C:T		LB	POLD1	NM_001256849.1	c.1494+5C>T
 lumc	SNV	hg19:1:193111228:TGA:T		B	CDC73	NM_024529.4	c.729+50_729+51delAG		
 lumc	SNV	hg19:1:193181693:G:A		B	CDC73	NM_024529.4	c.1154+86G>A		
 lumc	SNV	hg19:1:241669538:T:G		LB	FH	NM_000143.3	c.739-70A>C		
-lumc	SNV	hg19:1:69334:C:G		LB	OR4F5	NM_001005484.1	c.244C>G	p.R82C	{"source":"Alissa","last_updated_by":"frank2","last_updated_on":"2019-03-01 08:09:15"}
+lumc	SNV	hg19:1:69334:C:A		LB	OR4F5	NM_001005484.1	c.244C>T	p.R82C	{"source":"Alissa","last_updated_by":"frank2","last_updated_on":"2019-03-01 08:09:15"}
 lumc	SNV	hg19:1:865633:C:A		VUS	SAMD11	NM_152486.3	c.171C>A	p.D57E	{"source":"Alissa","last_updated_by":"lies","last_updated_on":"2021-07-26 14:46:12"}
 lumc	SNV	hg19:20:442983:C:A		LB	TBC1D20	NM_144628.3	c.67G>T	p.A23S	{"source":"Alissa","last_updated_by":"rick","last_updated_on":"2021-09-28 16:48:37"}
 lumc	SNV	hg19:20:472926:T:C		P	CSNK2A1	NM_177559.2	c.593A>G	p.K198R	{"source":"Alissa","last_updated_by":"marjon","last_updated_on":"2019-05-16 12:38:44"}
@@ -149,9 +154,12 @@ lumc	SNV	hg19:22:50671927:G:A		LB	TUBGCP6	NM_020461.3	c.934C>T	p.L312=	{"source"
 lumc	SNV	hg19:22:50678653:C:A		VUS	TUBGCP6	NM_020461.3	c.885G>T	p.R295S	{"source":"Alissa","last_updated_by":"dkumar","last_updated_on":"2021-10-04 09:50:08"}
 lumc	SNV	hg19:2:141625262:C:T		LB	LRP1B	NM_018557.2	c.4476G>A	p.L1492=	{"source":"Alissa","last_updated_by":"martina","last_updated_on":"2020-12-10 13:11:58"}
 lumc	SNV	hg19:2:141680691:G:A		LB	LRP1B	NM_018557.2	c.3162C>T	p.N1054=	{"source":"Alissa","last_updated_by":"marjon","last_updated_on":"2019-01-11 08:06:49"}
+lumc	SNV	hg19:2:179613632:G:A		P	TTN	NM_133379.4	c.13495C>T	p.Q4499*	{"source":"Alissa","last_updated_by":"dkumar","last_updated_on":"2021-10-04 09:44:05"}
+lumc	SNV	hg19:2:179613632:G:A		LB	TTN	NM_001267550.1	c.11311+4219C>T		{"source":"Alissa","last_updated_by":"martina","last_updated_on":"2021-04-06 14:02:36"}
 lumc	SNV	hg19:2:215593571:T:C		LB	BARD1	NM_000465.4	c.2163A>G	p.Ala721=	
 lumc	SNV	hg19:2:215595069:T:G		B	BARD1	NM_000465.4	c.2001+66A>C		
 lumc	SNV	hg19:2:215595159:T:C		B	BARD1	NM_000465.4	c.1977A>G	p.Arg659=	
+lumc	SNV	hg19:2:220285382:GG:.		LP	DES	NM_001927.3	c.897+4_897+5delGG		{"source":"Alissa","last_updated_by":"support","last_updated_on":"2015-09-21 12:09:43"}
 lumc	SNV	hg19:3:37034946:G:A		B	MLH1	NM_000249.3	c.-93G>A		
 lumc	SNV	hg19:3:49759468:T:C		LB	GMPPB	NM_013334.3	c.881A>G	p.D294G	{"source":"Alissa","last_updated_by":"iris","last_updated_on":"2019-05-03 11:51:00"}
 lumc	SNV	hg19:3:49760483:G:A		LB	GMPPB	NM_013334.3	c.324C>T	p.N108=	{"source":"Alissa","last_updated_by":"martina","last_updated_on":"2019-01-18 12:43:31"}
@@ -190,6 +198,7 @@ radboud_mumc	CNV	GRCh37:1:39479241_39813661DUP		LP
 radboud_mumc	CNV	GRCh37:1:39659161_39705472DEL		LP					
 radboud_mumc	CNV	GRCh37:1:39659914_39743199DUP		VUS					
 radboud_mumc	CNV	GRCh37:1:564424_10338065DEL		P					
+radboud_mumc	CNV	GRCh37:2:169951931_169963586DEL		VUS					
 radboud_mumc	CNV	NC_000002.11:g.(?_41607)_(1983549_3193104)del		P					{"zygosity":"heterozygous","platform":"sequencing"}
 radboud_mumc	CNV	NC_000003.11:g.(?_154083)_(4461830_4490949)del		P					{"zygosity":"heterozygous","platform":"sequencing"}
 radboud_mumc	CNV	NC_000003.11:g.(?_154083)_(51400105_51411899)dup		P					{"zygosity":"heterozygous","platform":"sequencing"}
@@ -331,6 +340,7 @@ radboud_mumc	SNV	GRCh37:2:21251356:G:A		P		NM_000384.3
 radboud_mumc	SNV	GRCh37:2:21255280:G:A		VUS		NM_000384.3			
 radboud_mumc	SNV	GRCh37:2:21255355:A:G		LB		NM_000384.3			
 radboud_mumc	SNV	GRCh37:2:21256370:C:T		VUS		NM_000384.3			
+radboud_mumc	SNV	GRCh37:2:220285380:TGG:T		B		NM_001927.4			
 radboud_mumc	SNV	GRCh37:2:47705498:A:G		VUS		NM_000251.3			
 radboud_mumc	SNV	GRCh37:2:47705546:CC:C		P		NM_000251.3			
 radboud_mumc	SNV	GRCh37:2:47705659:G:T		P		NM_000251.3			
@@ -341,18 +351,19 @@ radboud_mumc	SNV	GRCh37:2:84990029:G:A		VUS		NM_001370.2
 radboud_mumc	SNV	GRCh37:2:85040178:T:A		LB		NM_001370.2			
 radboud_mumc	SNV	GRCh37:2:85040203:C:T		VUS		NM_001370.2			
 radboud_mumc	SNV	GRCh37:2:85046473:C:T		VUS		NM_001370.2			
+radboud_mumc	SNV	GRCh37:X:54014378:C:T		LB		NM_015107.3			
 radboud_mumc	SNV	GRCh38:1:102979414:A:T		B		NM_080629.3			
 radboud_mumc	SNV	GRCh38:1:1043382:G:A		LB		NM_198576.4			
 radboud_mumc	SNV	GRCh38:1:156879276:C:T		P		NM_002529.3			
 radboud_mumc	SNV	GRCh38:1:216097127:G:A		VUS		NM_206933.4			
 radboud_mumc	SNV	GRCh38:1:216247094:TC:T		P		NM_206933.3			
-radboud_mumc	SNV	hg19:10:69905283:G:C		VUS	MYPN	NM_032578.3	c.1130G>C	p.R377Q	{"source":"Alissa","last_updated_by":"DDooijes","last_updated_on":"2019-03-15 09:48:34"}
-radboud_mumc	SNV	hg19:10:69905283:G:C		LB	MYPN	NM_001256268.1	c.248G>C	p.R83Q	{"source":"Alissa","last_updated_by":"DDooijes","last_updated_on":"2020-06-03 13:53:26"}
+radboud_mumc	SNV	hg19:10:69905283:G:A		VUS	MYPN	NM_032578.3	c.1130G>A	p.R377Q	{"source":"Alissa","last_updated_by":"DDooijes","last_updated_on":"2019-03-15 09:48:34"}
+radboud_mumc	SNV	hg19:10:69905283:G:A		LB	MYPN	NM_001256268.1	c.248G>A	p.R83Q	{"source":"Alissa","last_updated_by":"DDooijes","last_updated_on":"2020-06-03 13:53:26"}
 radboud_mumc	SNV	hg19:11:64575139:A:G		VUS	MEN1	NM_130803.2	c.683T>C	p.L228P	{"source":"Alissa","last_updated_by":"marielle","last_updated_on":"2014-10-08 05:54:21"}
 radboud_mumc	SNV	hg19:11:64575139:A:G		P	MEN1	NM_130804.2	c.683T>C	p.L228P	{"source":"Alissa","last_updated_by":"gthijs","last_updated_on":"2017-07-28 09:06:08"}
 radboud_mumc	SNV	hg19:12:21997750:T:A		LP	ABCC9	NM_020297.2	c.3196A>T	p.K1066*	{"source":"Alissa","last_updated_by":"support","last_updated_on":"2018-03-16 23:07:23"}
 radboud_mumc	SNV	hg19:12:21997750:T:A		VUS	ABCC9	NM_005691.2	c.3196A>T	p.K1066*	{"source":"Alissa","last_updated_by":"DDooijes","last_updated_on":"2020-10-22 13:47:58"}
-radboud_mumc	SNV	hg19:13:20567666:G:C		LB	ZMYM2	NM_003453.5	c.454G>C	p.D152H	{"source":"Alissa","last_updated_by":"Azwaag","last_updated_on":"2023-11-17 13:20:32"}
+radboud_mumc	SNV	hg19:13:20567666:G:C		B	ZMYM2	NM_003453.5	c.454G>C	p.D152H	{"source":"Alissa","last_updated_by":"Azwaag","last_updated_on":"2023-11-17 13:20:32"}
 radboud_mumc	SNV	hg19:13:20567685:C:.		P	ZMYM2	NM_003453.5	c.474delC	p.S159Vfs*7	{"source":"Alissa","last_updated_by":"kgassen2","last_updated_on":"2022-10-13 08:48:27"}
 radboud_mumc	SNV	hg19:14:20915565:G:C		LB	OSGEP	NM_017807.4	c.968+16C>G		{"source":"Alissa","last_updated_by":"Azwaag","last_updated_on":"2021-05-31 08:22:57"}
 radboud_mumc	SNV	hg19:14:20915690:AG:.		LB	OSGEP	NM_017807.4	c.870-12_870-11delCT		{"source":"Alissa","last_updated_by":"Azwaag","last_updated_on":"2021-10-26 12:04:53"}
@@ -389,7 +400,6 @@ radboud_mumc	SNV	hg19:7:69064650:C:T		VUS	AUTS2	NM_015570.4	c.11C>T	p.P4L	{"sour
 radboud_mumc	SNV	hg19:8:145743032:C:A		LB	RECQL4	NM_004260.3	c.85-13G>T		{"source":"Alissa","last_updated_by":"LVeken","last_updated_on":"2019-11-21 15:13:30"}
 radboud_mumc	SNV	hg19:8:145743149:A:C		LB	RECQL4	NM_004260.3	c.20T>G	p.V7G	{"source":"Alissa","last_updated_by":"LVeken","last_updated_on":"2021-07-13 15:04:16"}
 radboud_mumc	SNV	hg19:9:163985:A:G		LB	CBWD1	NM_018491.4	c.483T>C	p.Y161=	{"source":"Alissa","last_updated_by":"Azwaag","last_updated_on":"2021-06-08 08:38:04"}
-radboud_mumc	SNV	hg19:9:271626:G:T		P	DOCK8	NM_203447.3	c.54-1G>T		{"source":"Alissa","last_updated_by":"marielle","last_updated_on":"2014-10-08 05:53:34"}
 radboud_mumc	SNV	hg19:X:32429867:G:A		VUS	DMD	NM_004010.3	c.3864+2C>T		{"source":"Alissa","last_updated_by":"support","last_updated_on":"2018-03-16 23:07:04"}
 radboud_mumc	SNV	hg19:X:32429867:G:A		LB	DMD	NM_004006.2	c.4233+2C>T		{"source":"Alissa","last_updated_by":"DDooijes","last_updated_on":"2021-04-19 13:19:04"}
 radboud_mumc	SNV	hg19:chr10:101591889:G:A		P	ABCC2	NM_000392.4			
@@ -431,6 +441,7 @@ radboud_mumc	SNV	hg19:chr22:41923388:C:T		VUS	ACO2	NM_001098.2
 radboud_mumc	SNV	hg19:chr2:215813331:C:T		LB	ABCA12	NM_173076.2			
 radboud_mumc	SNV	hg19:chr2:215848528:T:C		B	ABCA12	NM_173076.2			
 radboud_mumc	SNV	hg19:chr2:215854156:C:T		B	ABCA12	NM_173076.2			
+radboud_mumc	SNV	hg19:chr2:220285381:GGG:G		LB	DES	NM_001927.3			
 radboud_mumc	SNV	hg19:chr3:128614248:A:G		LP	ACAD9	NM_014049.4			
 radboud_mumc	SNV	hg19:chr3:128618324:G:A		LB	ACAD9	NM_014049.4			
 radboud_mumc	SNV	hg19:chr3:128622922:G:C		P	ACAD9				
