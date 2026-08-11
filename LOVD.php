@@ -90,6 +90,25 @@ class LOVD
 
 
 
+    public static function deleteFromDatabase($nCenterId)
+    {
+        // Get the LOVD users with the given IDs.
+        global $_DB;
+
+        // We can't auto-connect because we don't have the path.
+        if (!LOVD::isConnected()) {
+            throw new \Exception('LOVD is not connected; cannot query the database.');
+        }
+
+        // Cast ids to an UNSIGNED to make sure ints match.
+        return $_DB->q('
+            DELETE FROM lovd_variants WHERE created_by = '. $nCenterId);
+    }
+
+
+
+
+
     public static function getGenomeBuild (): string
     {
         // Get the LOVD's configured genome build.
