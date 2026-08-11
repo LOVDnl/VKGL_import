@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-07-29
- * Modified    : 2026-07-30
+ * Modified    : 2026-08-10
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -14,6 +14,8 @@
 
 namespace LOVD;
 require_once(__DIR__ . '/settings.php');
+require_once(__DIR__ . '/log.php');
+require_once(__DIR__ . '/LOVD.php');
 
 class Tester
 {
@@ -24,15 +26,17 @@ class Tester
         '2025-05',
         '2025-06',
         '2025-07',
+        '2025-08',
     ];
 
-    private static $settings;
+    private static $Settings;
 
     private static array $outputfiles = [
         'vkgl_data.01-raw.tsv',
         'vkgl_data.02-normalized.tsv',
         'vkgl_data.03-aggregated.tsv',
     ];
+    private static $Log;
 
     public static function deleteReleases()
     {
@@ -42,7 +46,7 @@ class Tester
             if (is_dir(__DIR__ . '/tests/releases/' . $sRelease)) {
                 exec('rm -r ' . __DIR__ . '/tests/releases/' . $sRelease, $sRemove, $nCodeResult);
                 if ($nCodeResult != 0) {
-                    echo "Error " . $nCodeResult. ": " . array_search($nCodeResult, self::$settings->get('error_codes')) . "\n";
+                    echo "Error " . $nCodeResult. ": " . array_search($nCodeResult, self::$Settings->get('error_codes')) . "\n";
                     echo "Directory $sRelease could not be removed.\n";
                     exit;
                 }
@@ -59,10 +63,11 @@ class Tester
     {
         // Run the pipeline for each folder, if an error occurs the script should stop.
         foreach (self::$releases as $sRelease) {
-            echo $sRelease . "\n";
+            self::$Log->add("Running $sRelease");
+            echo "Running $sRelease\n";
             exec('./run_pipeline.php --testing --release=' . $sRelease, $sRunPipeline, $nResultCode);
             if ($nResultCode != 0) {
-                echo "Error " . $nResultCode . ": " . array_search($nResultCode, self::$settings->get('error_codes')) . "\n";
+                echo "Error " . $nResultCode . ": " . array_search($nResultCode, self::$Settings->get('error_codes')) . "\n";
                 echo "An error occured in the pipeline.\n";
                 echo implode("\n", array_slice($sRunPipeline, -5));
                 echo "\n";
@@ -75,7 +80,7 @@ class Tester
                     echo "Output file " . $sOutputFile . " aligns with expectations\n";
                 } else {
                     echo "Output file " . $sOutputFile . " doesn't align with expectations.\n";
-                    die(self::$settings->get('error_codes|EXIT_ERROR_OUTPUT_CONTENT_ERROR'));
+                    die(self::$Settings->get('error_codes|EXIT_ERROR_OUTPUT_CONTENT_ERROR'));
                 }
             }
         }
@@ -88,7 +93,9 @@ class Tester
 
     public static function test()
     {
-        self::$settings = new Settings( __DIR__ . '/tests/settings.json');
+        self::$Settings = new Settings( __DIR__ . '/tests/settings.json');
+        self::$Log = new Log(__DIR__ . '/tests/status.log');
+        self::$Log->add("Removing existing release folders.");
         self::deleteReleases();
         self::runTestReleases();
     }
