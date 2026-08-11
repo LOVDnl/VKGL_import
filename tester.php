@@ -97,6 +97,17 @@ class Tester
         self::$Log = new Log(__DIR__ . '/tests/status.log');
         self::$Log->add("Removing existing release folders.");
         self::deleteReleases();
+        self::$Log->add("Connecting to LOVD.");
+        $b = LOVD::connect(self::$Settings->get('lovd_path') ?? '', self::$Log);
+        if (!$b) {
+            echo "Unable to connect to LOVD.\n";
+            die(self::$Settings->get('error_codes|EXIT_ERROR_SETTINGS_CONTENT_ERROR'));
+        }
+        self::$Log->add("Removing data of test centers from LOVD.");
+        foreach (self::$Settings->get('centers') as $aCenterInformation) {
+            LOVD::deleteFromDatabase($aCenterInformation['id']);
+        }
+        self::$Log->add("Starting the test releases.");
         self::runTestReleases();
     }
 }
