@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-04-28
- * Modified    : 2026-08-10
+ * Modified    : 2026-08-12
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -28,10 +28,6 @@ class Aggregator
         'genomic_liftover_reported',
         'classification',
         'status',
-        'gene',
-        'transcript',
-        'cDNA',
-        'protein',
         'annotation'
     ];
     private array $data_rejected_output_header = [
