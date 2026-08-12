@@ -259,12 +259,16 @@ class Processor
         $aVariantsSkipped = array(); // Collects counters per chromosome.
         $sNow = date('Y-m-d H:i:s');
 
-        // Process updates per chromosome. So an update is given per chromosome,
-        //  but at the end we show the total amount per category (created, updated, deleted, and skipped).
-        // We won't process variants that we can't hold.
-        $nMaxDNALength = lovd_getColumnLength(TABLE_VARIANTS, 'VariantOnGenome/DNA'); // Max is 255
-        $nMaxPublishedAsLength = lovd_getColumnLength(TABLE_VARIANTS, 'VariantOnGenome/Published_as'); // Max is 100
-        $nMaxProteinLength = lovd_getColumnLength(TABLE_VARIANTS_ON_TRANSCRIPTS, 'VariantOnTranscript/Protein'); // Max is 255
+        // Process updates per chromosome but show progress over the total number of variants.
+        // We won't process variants that we can't hold. We could shorten the variant, but:
+        // 1) If that shortening is not done exactly as before, linking database entries to file contents fails, and
+        // 2) Contracting the VOG/DNA description may actually create non-unique values for unique variants, and
+        // 3) Anyway, labs won't be able to match the DNA variant.
+        // We're only losing a handful of variants by skipping them if the VOG/DNA field is too long.
+        $nMaxVOGDNALength = lovd_getColumnLength(TABLE_VARIANTS, 'VariantOnGenome/DNA');
+        $nMaxVOGPublishedAsLength = lovd_getColumnLength(TABLE_VARIANTS, 'VariantOnGenome/Published_as');
+        $nMaxVOTDNALength = lovd_getColumnLength(TABLE_VARIANTS_ON_TRANSCRIPTS, 'VariantOnTranscript/DNA');
+        $nMaxVOTProteinLength = lovd_getColumnLength(TABLE_VARIANTS_ON_TRANSCRIPTS, 'VariantOnTranscript/Protein');
 
         // Check if we actually have some columns that we use, activated.
         // These are optional, so we don't want to die if we don't have them.
@@ -356,28 +360,34 @@ class Processor
                 // LOVD+ has a much shorter DNA field; only 150 characters.
                 // Trying to put in a variant that's bigger will crash this process.
                 // However, we may also simply find variants longer than 255 characters.
-                // We will simply skip whatever is too long.
-                if (strlen($sDNA) > $nMaxDNALength) {
+                // We will simply skip whatever is too long. See comments above explaining the reasoning.
+                if (strlen($sDNA) > $nMaxVOGDNALength) {
                     $aVariantsSkipped[$sChromosome] ++;
                     continue;
                 }
 
                 // Build variant entry.
-                $aPublishedAs = json_decode($aVariant['annotation'], true);
-                if (is_array($aPublishedAs['reported_as'])) {
-                    $aPublishedAs['reported_as'] = implode(',', $aPublishedAs['reported_as']);
-                }
-                $aVariant['published_as'] = lovd_shortenString($aPublishedAs['reported_as'], $nMaxPublishedAsLength);
-                if (!$aVariant['published_as'] && $bPublishedAs) {
-                    // If the reported_as in column annotation is empty or doesn't exist
-                    //  we're looking in the database to see if the column is filled.
-                    // If the column is filled, this information will be kept.
-                    // Check if key exist and if value is not empty.
-                    if (!isset($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'])) {
-                        // Do limit the input a bit, depending on the field size.
-                        $aVariant['published_as'] = lovd_shortenString($aVariant['DNA'][$this->lovd_genome_build], $nMaxPublishedAsLength);
-                    } else {
+                $aVariant['annotation'] = json_decode($aVariant['annotation'], true);
+                if (empty($aVariant['annotation']['reported_as'])) {
+                    // If we didn't have a "reported_as" value in the variant's annotation, check the database if we
+                    //  already have a value there. If so, just use that. If we have nothing, default to our
+                    //  genomic_native_reported field.
+                    if (!empty($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'])) {
                         $aVariant['published_as'] = $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'];
+                    } else {
+                        $aVariant['published_as'] = $aVariant['genomic_native_reported'];
+                    }
+                } elseif (is_array($aVariant['annotation']['reported_as'])) {
+                    $aVariant['published_as'] = implode(', ', $aVariant['annotation']['reported_as']);
+                } else {
+                    $aVariant['published_as'] = $aVariant['annotation']['reported_as'];
+                }
+                // Do limit the input, depending on the field size.
+                if (strlen($aVariant['published_as']) > $nMaxVOGPublishedAsLength) {
+                    $aVariant['published_as'] = $this->shortenProteinInsertions($aVariant['published_as']);
+                    // Is more needed?
+                    if (strlen($aVariant['published_as']) > $nMaxVOGPublishedAsLength) {
+                        $aVariant['published_as'] = $this->shortenDNAInsertions($aVariant['published_as']);
                     }
                 }
 
@@ -450,14 +460,19 @@ class Processor
                                 $aTranscriptNoVersion = explode(".", $sTranscript);
                                 $HGVSMapping = HGVS::check($aMapping['c']);
                                 $HGVSMappingPos = $HGVSMapping->getData();
-                                $aMapping['p'] = lovd_shortenString($aMapping['p'], $nMaxProteinLength);
                                 // Check if the transcript already exists in the database.
                                 // Starting with the newest version (from $aMappings),
                                 //  counting down the version number to see which version is present in the database ($aTranscripts).
                                 for ($i = $aTranscriptNoVersion[1]; $i > 0; $i--) {
                                     if (array_key_exists($aTranscriptNoVersion[0] . "." . $i, $aTranscripts)) {
+                                        // Shorten the DNA and protein fields, if needed.
+                                        if (strlen($aMapping['c']) > $nMaxVOTDNALength) {
+                                            $aMapping['c'] = $this->shortenDNAInsertions($aMapping['c']);
+                                        }
+                                        if (strlen($aMapping['p']) > $nMaxVOTProteinLength) {
+                                            $aMapping['p'] = $this->shortenProteinInsertions($aMapping['p']);
+                                        }
                                         $sTranscriptId = $aTranscripts[$aTranscriptNoVersion[0] . "." . $i];
-                                        // Positions: will be filled using the hgvs library.
                                         $aVOGEntry['vots'][$sTranscriptId] = [
                                             'transcriptid' => $sTranscriptId,
                                             'effectid' => $aVOGEntry['effectid'],
@@ -747,6 +762,36 @@ class Processor
             $sFile,
             implode("\r\n", $aData)
         );
+    }
+
+
+
+
+
+    private function shortenDNAInsertions ($sDNA)
+    {
+        // Radically shortens DNA insertions. We could do this more intelligently and shorten only what's necessary,
+        //  but we don't use this for VOG/DNA entries anyway and doing this right would make this a lot more complex.
+        if (preg_match('/ins([ACGTN]+)\b/', $sDNA, $aRegs)) {
+            $sDNA = str_replace($aRegs[0], 'insN[' . strlen($aRegs[1]) . ']', $sDNA);
+        }
+
+        return $sDNA;
+    }
+
+
+
+
+
+    private function shortenProteinInsertions ($sProtein)
+    {
+        // Radically shortens protein insertions. We could do this more intelligently and shorten only what's necessary,
+        //  but this is for annotation only and doing this right would make this a lot more complex.
+        if (preg_match('/ins(([A-Z][a-z]{2})+)\b/', $sProtein, $aRegs)) {
+            $sProtein = str_replace($aRegs[0], 'insXaa[' . (strlen($aRegs[1]) / 3) . ']', $sProtein);
+        }
+
+        return $sProtein;
     }
 }
 ?>
