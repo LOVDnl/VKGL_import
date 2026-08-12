@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-14
- * Modified    : 2026-08-10
+ * Modified    : 2026-08-12
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -251,10 +251,7 @@ class Processor
         global $_CONF, $_DB, $_TABLES, $_SETT, $_T;
 
         // Store all of LOVD's transcripts, we need them; array(id_ncbi => id).
-        $aTranscripts = $_DB->q('
-            SELECT id_ncbi, id
-            FROM ' . TABLE_TRANSCRIPTS . '
-            ORDER BY id_ncbi')->fetchAllCombine();
+        $aTranscripts = LOVD::getAllTranscripts();
 
         $aVariantsCreated = array(); // Collects counters per chromosome.
         $aVariantsUpdated = array(); // Collects counters per chromosome.

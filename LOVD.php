@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-07-01
- * Modified    : 2026-08-10
+ * Modified    : 2026-08-12
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -103,6 +103,26 @@ class LOVD
         // Cast ids to an UNSIGNED to make sure ints match.
         return $_DB->q('
             DELETE FROM lovd_variants WHERE created_by = '. $nCenterId);
+    }
+
+
+
+
+
+    public static function getAllTranscripts (): array
+    {
+        // Get the LOVD's configured genome build.
+        global $_DB;
+
+        // We can't auto-connect because we don't have the path.
+        if (!LOVD::isConnected()) {
+            throw new \Exception('LOVD is not connected; cannot query the database.');
+        }
+
+        return $_DB->q('
+            SELECT id_ncbi, id
+            FROM ' . TABLE_TRANSCRIPTS . '
+            ORDER BY id_ncbi')->fetchAllCombine();
     }
 
 
