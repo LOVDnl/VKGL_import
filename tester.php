@@ -105,7 +105,12 @@ class Tester
         }
         self::$Log->add("Removing data of test centers from LOVD.");
         foreach (self::$Settings->get('centers') as $aCenterInformation) {
-            LOVD::deleteFromDatabase($aCenterInformation['id']);
+            try {
+                LOVD::deleteFromDatabase($aCenterInformation['id']);
+            } catch (\Exception $e) {
+                self::$Log->add($e->getMessage());
+                die(self::$Settings->get('error_codes|EXIT_ERROR_CONNECTION_PROBLEM'));
+            }
         }
         self::$Log->add("Starting the test releases.");
         self::runTestReleases();
