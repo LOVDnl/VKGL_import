@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-12
- * Modified    : 2026-08-10
+ * Modified    : 2026-08-14
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -78,7 +78,7 @@ class Validator
             throw new \Exception("There is nothing to do; this release does not introduce any changes");
         }
 
-        // Now, collect the statistics, so the pipeline can collect it from us.
+        // Now, collect the statistics for the current data, so the pipeline can collect it from us.
         $aStatistics = [
             'centers' => [],
             'status' => [],
@@ -92,18 +92,32 @@ class Validator
             ],
         ];
 
+        // We are counting unique variants here, not variant entries.
+        $aUniqueVariants = []; // Variants as keys, status as value.
         foreach ($aCurrentData as $aVariant) {
             // Store the number of variants per center.
             $aStatistics['centers'][$aVariant['center']] = ($aStatistics['centers'][$aVariant['center']] ?? 0) + 1;
 
-            // Store the number of variants per status, but store internal conflicts separately.
-            // Also, external opposites are stored simply as "opposite" as the distinction is no longer relevant.
+            // Store the status per unique variant, but store internal conflicts separately.
+            // They are not considered as part of a release.
             if ($aVariant['status'] == 'internal-opposite') {
                 $aStatistics['internal_conflicts'][$aVariant['center']] = ($aStatistics['internal_conflicts'][$aVariant['center']] ?? 0) + 1;
-            } elseif ($aVariant['status'] == 'external-opposite') {
+            } elseif (!isset($aUniqueVariants[$aVariant['genomic_native_normalized']])) {
+                // First observation of this variant. Store the given status.
+                $aUniqueVariants[$aVariant['genomic_native_normalized']] = $aVariant['status'];
+            } elseif ($aUniqueVariants[$aVariant['genomic_native_normalized']] != $aVariant['status']) {
+                // This is a problem and should not happen. We shouldn't have multiple statuses for the same unique variant.
+                throw new \Exception("The aggregated file contains multiple statuses for {$aVariant['genomic_native_normalized']}");
+            }
+        }
+
+        // We now have the status stored per unique variant. Store the counts.
+        foreach ($aUniqueVariants as $sStatus) {
+            // External opposites are stored simply as "opposite" as the distinction is no longer relevant.
+            if ($sStatus == 'external-opposite') {
                 $aStatistics['status']['opposite'] = ($aStatistics['status']['opposite'] ?? 0) + 1;
             } else {
-                $aStatistics['status'][$aVariant['status']] = ($aStatistics['status'][$aVariant['status']] ?? 0) + 1;
+                $aStatistics['status'][$sStatus] = ($aStatistics['status'][$sStatus] ?? 0) + 1;
             }
         }
 
