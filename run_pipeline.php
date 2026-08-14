@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-23
- * Modified    : 2026-08-05
+ * Modified    : 2026-08-14
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -460,16 +460,28 @@ if ($Status->get('step') < $nStep) {
     //  exist; it won't complain unless the directory also doesn't exist.
     define('PREVIOUS_RELEASE_PATH', dirname(RELEASE_PATH) . '/' . $nPreviousReleaseYear . '-' . str_pad($nPreviousReleaseMonth, 2, '0', STR_PAD_LEFT));
     $sPreviousStatus = PREVIOUS_RELEASE_PATH . '/status.json';
+    $aValidationCutOffs = ($Settings->get('validation_cutoffs|aggregated') ?? []);
     if (!file_exists($sPreviousStatus) || !is_readable($sPreviousStatus)) {
         // Handle this kindly instead of throwing a hard exception.
         $Log->add("Failed to find the previous release's status file: $sPreviousStatus.\nHas the directory been moved?", '!!');
+        $Log->add("If this is the first release, temporarily disable the die() below this check, and run the pipeline again.");
         die($Settings->get('error_codes|EXIT_ERROR_INPUT_UNREADABLE'));
+
+        // If the die() above is disabled, ignore that we don't have data from the previous release.
+        // Simply refer to the empty aggregated data from the tests.
+        $bFirstRelease = true; // Controls the validation of the processing output.
+        $sPreviousFile = __DIR__ . '/tests/releases/2025-01/vkgl_data.03-aggregated.tsv';
+        // Set the cutoffs for the number of created variants insanely high so that we'll accept any number.
+        $aValidationCutOffs['created'] = 1000000;
+
+    } else {
+        $PreviousStatus = new Settings(PREVIOUS_RELEASE_PATH . '/status.json');
+        $sPreviousFile = PREVIOUS_RELEASE_PATH . '/' . $PreviousStatus->get('output_files|aggregated');
     }
-    $PreviousStatus = new Settings(PREVIOUS_RELEASE_PATH . '/status.json');
 
     // Now call the validator and pass on the files that need validation (i.e., their contents are compared).
     try {
-        $o = Validator::validate(PREVIOUS_RELEASE_PATH . '/' . $PreviousStatus->get('output_files|aggregated'), $Status->get('output_files|aggregated'), ($Settings->get('validation_cutoffs|aggregated') ?? []));
+        $o = Validator::validate($sPreviousFile, $Status->get('output_files|aggregated'), $aValidationCutOffs);
     } catch (Exception $e) {
         $Log->add("Failed to validate the aggregated output.\n" . $e->getMessage() . '.', '!!');
         die($Settings->get('error_codes|EXIT_ERROR_INPUT_CONTENT_ERROR'));
@@ -535,7 +547,12 @@ if ($Status->get('step') < $nStep) {
     $aStatistics = $Statistics->get("$sRelease|diff");
     $aProcessorStatistics = $o->getStatistics();
     // Checking to see if the statistics of the validator step are on the remote server.
-    if ($aStatistics) {
+    if (!$aStatistics || !empty($bFirstRelease)) {
+        // At least let the user know that we can't validate anything; don't silently skip this.
+        // Do note that this will happen on the remote servers as well.
+        $Log->add("There are no diff counts found to compare to; is this a first release, or are we working on a remote server?", '!!');
+        $Log->add("We could not validate the counts.", '!!');
+    } else {
         $aCommonKeys = array_intersect_key($aStatistics, $aProcessorStatistics);
         // $aCommonKeys has the values of $aStatistics.
         $nMisMatch = 0;
