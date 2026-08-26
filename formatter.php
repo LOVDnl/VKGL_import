@@ -294,10 +294,12 @@ class Formatter
                     }
 
                     $this->data[$sCenter][$aVariant['vartype']][] = [
-                        'source' => 'Emedgene',
                         'genomic_native' => $sVariant,
                         'classification' => $this->convertClassification($aVariant['pathogenicity']),
                         'transcript' => $aVariant['transcript'],
+                        'annotation' => [
+                            'source' => 'Emedgene',
+                        ]
                     ];
                     break;
 
@@ -358,12 +360,15 @@ class Formatter
                 case 'nki_snv_tsv':
                     // NKI tsv data is always hg19.
                     $this->data[$sCenter][$sDataType][] = [
-                            'genomic_native' => "hg19:{$aVariant['chromosome']}:{$aVariant['position']}:{$aVariant['ref']}:{$aVariant['alt']}",
-                            'classification' => $this->convertClassification($aVariant['classification']),
-                            'gene' => $aVariant['gene'],
-                            'transcript' => $aVariant['transcript'],
-                            'cDNA' => $aVariant['cnomen'],
-                            'protein' => $aVariant['pnomen'],
+                        'genomic_native' => "hg19:{$aVariant['chromosome']}:{$aVariant['position']}:{$aVariant['ref']}:{$aVariant['alt']}",
+                        'classification' => $this->convertClassification($aVariant['classification']),
+                        'gene' => $aVariant['gene'],
+                        'transcript' => $aVariant['transcript'],
+                        'cDNA' => $aVariant['cnomen'],
+                        'protein' => $aVariant['pnomen'],
+                        'annotation' => [
+                            'source' => 'Scarlet',
+                        ],
                     ];
                     break;
 
@@ -747,6 +752,7 @@ class Formatter
                         'annotation' => [
                             'date' => $aVariant['date']['$date'],
                             'maintainers' => $aVariant['maintainer'], // Usually contains one person, but occasionally, multiple.
+                            'source' => 'Scarlet'
                         ],
                     ];
                     break;
@@ -802,6 +808,7 @@ class Formatter
                         }
                     }
                     $aLine['annotation']['created'] = strstr($aVariant['created'], '.', true);
+                    $aLine['annotation']['source'] = 'Emedgene';
                     ksort($aLine['annotation']); // For comparison reasons.
 
                     $this->data[$sCenter][$sDataType][] = array_merge(
