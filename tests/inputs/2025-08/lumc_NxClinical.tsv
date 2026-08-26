@@ -1,0 +1,50 @@
+International System for Human Cytogenomic Nomenclature	Genomic Nomenclature	Chromosome	Start position	End postition	Flanking normals - Pter	Flanking normals - Qter	Number of copies / UPD	Genome build	Type of CNV	Start and end chromosome band	List of overlapping genes (HGNC)	CNV classification	Type of test	Type of platform	Inheritance	Parental origin	Phenotype (HPO)	Clinical Phenotypes	Constitutional/Acquired Variant	Internal Identifier	Lab upload date	Timestamp last processed
+	CN Gain	chr1	1	69109			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_03117		
+	CN Loss	chr1	1	69110			1	GRCh37	loss			Benign		NGS-CNV analysis						LUMC_02613		
+	CN Gain	chr10	46568080	46965272			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_02318		
+	CN Gain	chr10	46568180	46898908			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_04212		
+	CN Loss	chr11	55374019	55452996			1	GRCh37	loss			Benign		CytoScanHD						LUMC_06128		
+	CN Loss	chr11	55374019	55452996			1	GRCh37	loss			Benign		CytoScanHD						LUMC_06167		
+	CN Loss	chr12	10575006	10588705			1	GRCh37	loss			Benign		NGS-CNV analysis						LUMC_04152		
+	CN Loss	chr12	10575006	10588705			1	GRCh37	loss			Benign		NGS-CNV analysis						LUMC_04135		
+	CN Gain	chr13	21721372	21742671			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_03675		
+	CN Gain	chr13	21721372	21742671			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_04062		
+	CN Loss	chr14	19353691	19378189			1	GRCh37	loss			Benign		NGS-CNV analysis						LUMC_01468		
+	CN Loss	chr14	19353691	19378190			1	GRCh37	loss			Benign		NGS-CNV analysis						LUMC_03802		
+	High Copy Gain	chr15	21059445	21076444			4	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_01563		
+	CN Gain	chr15	21059446	22082501			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_01582		
+	CN Gain	chr16	18539300	18553399			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_04530		
+	CN Gain	chr16	18539300	18553399			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_02331		
+	CN Loss	chr17	36350006	36393628			1	GRCh37	loss			Benign		CytoScanHD						LUMC_09422		
+	CN Loss	chr17	36350006	36393628			1	GRCh37	loss			Benign		CytoScanHD						LUMC_09163		
+	CN Loss	chr18	44526798	44549051			1	GRCh37	loss			Benign		NGS-CNV analysis						LUMC_04852		
+	CN Loss	chr18	44526798	44549051			1	GRCh37	loss			Benign		NGS-CNV analysis						LUMC_04981		
+	High Copy Gain	chr19	41360130	41392641			4	GRCh37	gain			Benign		CytoScanHD						LUMC_08020		
+	CN Gain	chr19	41360130	41392641			3	GRCh37	gain			Benign		CytoScanHD						LUMC_07212		
+	High Copy Gain	chr2	10668078	10911409			4	GRCh37	gain			VUS		CytoScanHD						LUMC_07353		
+	CN Gain	chr2	10701383	10914848			3	GRCh37	gain			Likely Benign		NGS-CNV analysis						LUMC_02147		
+	Homozygous Copy Loss	chr20	1559235	1600610			0	GRCh37	loss			Benign		NGS-CNV analysis						LUMC_02598		
+	Homozygous Copy Loss	chr20	1559235	1600610			0	GRCh37	loss			Benign		NGS-CNV analysis						LUMC_02617		
+	High Copy Gain	chr21	9730863	10862615			4	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_04497		
+	CN Gain	chr21	9730863	10862615			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_04522		
+	CN Gain	chr22	18884233	19023132			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_00132		
+	CN Gain	chr22	18884233	19023132			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_00302		
+	CN Gain	chr3	128380595	128412365			3	GRCh37	gain			Benign		CytoScanHD						LUMC_07266		
+	CN Gain	chr3	128380595	128412365			3	GRCh37	gain			Benign		CytoScanHD						LUMC_06200		
+	CN Gain	chr4	9330188	9370588			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_04948		
+	CN Gain	chr4	9330207	9351707			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_04875		
+	CN Loss	chr5	138893825	138910222			1	GRCh37	loss			Benign		CytoScanHD						LUMC_06925		
+	CN Loss	chr5	138893825	138910222			1	GRCh37	loss			Benign		CytoScanHD						LUMC_06924		
+	Homozygous Copy Loss	chr6	30993958	30995067			0	GRCh37	loss			Benign		NGS-CNV analysis						LUMC_04537		
+	CN Loss	chr6	30993958	30995067			1	GRCh37	loss			Benign		NGS-CNV analysis						LUMC_04533		
+	CN Gain	chr7	101984837	101996536			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_03657		
+	CN Gain	chr7	101984837	101996536			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_03534		
+	CN Loss	chr8	7366703	7574997			1	GRCh37	loss			Benign		NGS-CNV analysis						LUMC_03075		
+	CN Gain	chr8	7366703	7796495			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_04416		
+	CN Gain	chr9	29825925	31254718			3	GRCh37	gain			Benign		NGS-CNV analysis						LUMC_01812		
+	CN Loss	chr9	29825925	31254718			1	GRCh37	loss			Benign		NGS-CNV analysis						LUMC_02186		
+	CN Loss	chrX	74078395	74088642				GRCh37	loss			Benign		CytoScanHD						LUMC_09033		
+	CN Loss	chrX	74078395	74088642				GRCh37	loss			Benign		CytoScanHD						LUMC_08968		
+	CN Gain	chrY	27703285	27941198				GRCh37	gain			Likely Benign		NGS-CNV analysis						LUMC_03770		
+	Homozygous Copy Loss	chrY	27707034	59373566			0	GRCh37	loss			Pathogenic		NGS-CNV analysis						LUMC_00544		
+	CN Loss	chr2	169951931	169963586			1	GRCh37	loss			VUS		CytoScanHD						LUMC_09182		
