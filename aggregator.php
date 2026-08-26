@@ -80,8 +80,10 @@ class Aggregator
                 $sReportedAs .= (!$sReportedAs? '' : ' ') . $aVariant['protein'];
             }
         }
-        $aVariant['annotation']['reported_as'] = $sReportedAs;
-        ksort($aVariant['annotation']); // For comparison reasons.
+        if ($sReportedAs) {
+            $aVariant['annotation']['reported_as'] = $sReportedAs;
+            ksort($aVariant['annotation']); // For comparison reasons.
+        }
         // Remove the fields from the data to save memory.
         unset($aVariant['gene'], $aVariant['transcript'], $aVariant['cDNA'], $aVariant['protein']);
     }

@@ -792,11 +792,18 @@ class Formatter
                                 // This is a CNV. Use the HGVS field.
                                 $aLine[$sField] = $aData['hgvs'];
                                 $sDataType = 'CNV';
+                                if ($sField == 'genomic_native') {
+                                    // CNVs have a special notation here that describes the variant.
+                                    $aLine['annotation']['reported_as'] = $aData['emg'];
+                                }
                             } else {
                                 $aLine[$sField] = "{$aData['human_reference']}:{$aData['chromosome']}:{$aData['start']}:{$aData['ref']}:{$aData['alt']}";
                             }
                         }
                     }
+                    $aLine['annotation']['created'] = strstr($aVariant['created'], '.', true);
+                    ksort($aLine['annotation']); // For comparison reasons.
+
                     $this->data[$sCenter][$sDataType][] = array_merge(
                         $aLine,
                         [
@@ -807,7 +814,6 @@ class Formatter
                             // 'transcript' => $aVariant['gene_symbol']['primary_transcripts'][0],
                             // 'cDNA' => $aVariant['cNomen'],
                             // 'protein' => $aVariant['pNomen'],
-                            'annotation' => ['created' => strstr($aVariant['created'], '.', true), 'reported-as' => $aVariant['posedits'][0]['emg']],
                         ]
                     );
                     break;
