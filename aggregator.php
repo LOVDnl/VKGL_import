@@ -235,7 +235,7 @@ class Aggregator
 
                         // Different strategies will be applied in the process of comparing values.
                         // For some columns the values MUST be unique, otherwise the script will be stopped.
-                        // The values of the column 'classifications' will be handled separately.
+                        // The values of the column 'classification' will be handled separately.
                         // The column 'annotation' will be merged recursively.
                         // For each of the remaining columns, the values are combined into a single string.
                         if ($sColumn == 'type' || $sColumn == 'genomic_liftover_normalized') {
@@ -251,6 +251,11 @@ class Aggregator
                         } elseif ($sColumn == 'annotation') {
                             // Merge the annotation arrays recursively.
                             $aMergedVariant[$sColumn] = $this->mergeAnnotations($aValues);
+                            // Don't pollute the annotations field with unneeded info, though.
+                            if (!empty($aMergedVariant['annotation']['classifications'])
+                                && is_string($aMergedVariant['annotation']['classifications'])) {
+                                unset($aMergedVariant['annotation']['classifications']);
+                            }
 
                         } else {
                             // For all other columns, simply combine the values into a single string.
@@ -308,6 +313,7 @@ class Aggregator
                 if (count($aValues) == 1) {
                     return current($aValues);
                 } else {
+                    sort($aValues); // For comparison reasons.
                     return $aValues;
                 }
             } else {
