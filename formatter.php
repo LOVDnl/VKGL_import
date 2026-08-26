@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-27 (based on format_raw_VKGL_files.php)
- * Modified    : 2026-08-05
+ * Modified    : 2026-08-26
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -265,9 +265,9 @@ class Formatter
                         'cDNA' => $aVariant['c_nomen'],
                         'protein' => str_replace('NULL', '', $aVariant['p_nomen']),
                         'annotation' => [
-                            'source' => 'Alissa',
                             'last_updated_by' => $aVariant['last_updated_by'],
                             'last_updated_on' => strstr($aVariant['last_updated_on'], '.', true),
+                            'source' => 'Alissa',
                         ],
                     ];
                     break;
@@ -325,9 +325,9 @@ class Formatter
                         'classification' => $this->convertClassification($aVariant['classification']),
                         // 'gene' => $aVariant['genes'], // We can have many genes here, but this isn't useful to store for CNVs.
                         'annotation' => [
+                            'classification_date' => $aVariant['classification date'],
                             'source' => 'Franklin',
                             'submitter' => $aVariant['submitter'],
-                            'classification_date' => $aVariant['classification date'],
                         ],
                     ];
                     break;
@@ -412,8 +412,8 @@ class Formatter
                         'genomic_native' => "{$aVariant['chromosome']}({$aVariant['genome build']}):g.{$aVariant['start position']}_{$aVariant['end postition']}" . $sVariantType,
                         'classification' => $this->convertClassification($aVariant['cnv classification']),
                         'annotation' => [
-                            'source' => 'NxClinical',
                             'platform' => $aVariant['type of platform'],
+                            'source' => 'NxClinical',
                             'zygosity' => $sZygosity,
                         ],
                     ];
@@ -625,6 +625,7 @@ class Formatter
                     if ($sPlatform) {
                         $aAnnotation['platform'] = $sPlatform;
                     }
+                    ksort($aAnnotation); // For comparison reasons.
                     $this->data[$sCenter][$sDataType][] = [
                         'genomic_native' => $sVariant,
                         'classification' => $this->convertClassification($aVariant['classification']),

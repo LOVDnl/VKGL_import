@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-04-28
- * Modified    : 2026-08-12
+ * Modified    : 2026-08-26
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -81,6 +81,7 @@ class Aggregator
             }
         }
         $aVariant['annotation']['reported_as'] = $sReportedAs;
+        ksort($aVariant['annotation']); // For comparison reasons.
         // Remove the fields from the data to save memory.
         unset($aVariant['gene'], $aVariant['transcript'], $aVariant['cDNA'], $aVariant['protein']);
     }
@@ -205,6 +206,7 @@ class Aggregator
                         // Also add the classification to the annotation, so we can always find back the original
                         //  classifications of all observations (we may update the classification after this).
                         $aObservation['annotation']['classifications'] = $aObservation['classification'];
+                        ksort($aObservation['annotation']); // For comparison reasons.
                         // Note that this leaves the annotation field unpacked.
                         $aObservations[$i] = $aObservation;
                     }
@@ -294,6 +296,7 @@ class Aggregator
 
         // Merge $aAnnotations recursively and then go and check the results for each field.
         $aMerged = array_merge_recursive(...$aAnnotations);
+        ksort($aMerged); // For comparison reasons.
         // Check each field in the annotations; if it is an array, only the unique values are used.
         // Avoid using arrays when possible.
         return array_map(function ($Value)
