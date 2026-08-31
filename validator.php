@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-12
- * Modified    : 2026-08-14
+ * Modified    : 2026-08-31
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -58,7 +58,10 @@ class Validator
         $aUpdatedVariantKeys = array_intersect($aCurrentVariants, $aPreviousVariants);
         $nUpdated = 0;
         foreach ($aUpdatedVariantKeys as $sVariantKey) {
-            if ($aCurrentData[$sVariantKey] !== $aPreviousData[$sVariantKey]) {
+            // However, don't consider every difference an actual change.
+            // Ignore the variant status, as it can get updated without any actual changes to the variant.
+            if (array_diff_key($aCurrentData[$sVariantKey], ['status' => 1])
+                !== array_diff_key($aPreviousData[$sVariantKey], ['status' => 1])) {
                 $nUpdated ++;
             }
         }
