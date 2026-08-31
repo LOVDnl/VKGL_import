@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-04-28
- * Modified    : 2026-08-26
+ * Modified    : 2026-08-31
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -251,16 +251,17 @@ class Aggregator
                         } elseif ($sColumn == 'annotation') {
                             // Merge the annotation arrays recursively.
                             $aMergedVariant[$sColumn] = $this->mergeAnnotations($aValues);
-                            // Don't pollute the annotations field with unneeded info, though.
-                            if (!empty($aMergedVariant['annotation']['classifications'])
-                                && is_string($aMergedVariant['annotation']['classifications'])) {
-                                unset($aMergedVariant['annotation']['classifications']);
-                            }
 
                         } else {
                             // For all other columns, simply combine the values into a single string.
                             $aMergedVariant[$sColumn] = implode(', ', $aValues);
                         }
+                    }
+
+                    // Don't pollute the annotations field with unneeded info, though.
+                    if (!empty($aMergedVariant['annotation']['classifications'])
+                        && is_string($aMergedVariant['annotation']['classifications'])) {
+                        unset($aMergedVariant['annotation']['classifications']);
                     }
 
                     // Save the merged entry, regardless of whether a conflict occurred.
