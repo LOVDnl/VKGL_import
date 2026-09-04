@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-23
- * Modified    : 2026-08-14
+ * Modified    : 2026-09-04
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -62,14 +62,16 @@ $aErrorCodes = array_flip([
 // Allow controlling the pipeline through command-line arguments.
 // Use --testing to enable tests; the pipeline will work in the tests/ directory, instead.
 // Use --release=DATE (e.g., --release=2026-01) to control what release the pipeline will work on.
-$bTesting = false;
+$bDryRun = $bTesting = false;
 $sRelease = date('Y-m');
 $aArgs = $_SERVER['argv'];
 $sScriptName = array_shift($aArgs);
 while ($aArgs) {
     // Check for flags.
     $sArg = array_shift($aArgs);
-    if ($sArg == '--testing') {
+    if ($sArg == '--dry-run') {
+        $bDryRun = true;
+    } elseif ($sArg == '--testing') {
         $bTesting = true;
     } elseif (preg_match('/^--release=[0-9]{4}-[0-9]{2}$/', $sArg)) {
         $sRelease = explode('=', $sArg)[1];
@@ -528,7 +530,7 @@ if ($Status->get('step') < $nStep) {
 
     $Log->add('Processing the aggregated data...');
     try {
-        $o = Processor::process($Status->get('output_files|aggregated'), $Settings, $Log);
+        $o = Processor::process($Status->get('output_files|aggregated'), $Settings, $Log, ['dry-run' => $bDryRun]);
     } catch (Exception $e) {
         $Log->add("Failed to process the aggregated data file.\n" . $e->getMessage() . '.', '!!');
         die($Settings->get('error_codes|EXIT_ERROR_INPUT_CONTENT_ERROR'));

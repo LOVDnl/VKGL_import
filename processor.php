@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-14
- * Modified    : 2026-08-12
+ * Modified    : 2026-09-04
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -51,6 +51,7 @@ class Processor
         'LP' => 7,
         'P' => 9,
     );
+    private array $flags = [];
     private array $statistics = array(
         'created' => 0,
         'updated' => 0,
@@ -61,13 +62,14 @@ class Processor
     private $Settings;
     private $Log;
 
-    public static function process (string $sFile, Settings $Settings, Log $Log = null): Processor
+    public static function process (string $sFile, Settings $Settings, Log $Log, array $aFlags = []): Processor
     {
         // Process the given data into the LOVD configured in the settings.
         $o = new Processor();
         $o->Settings = $Settings;
-        if ($Log) {
-            $o->Log = $Log;
+        $o->Log = $Log;
+        foreach ($aFlags as $sFlag => $bValue) {
+            $o->flags[$sFlag] = $bValue;
         }
 
         // Connect to LOVD and check if that worked.
@@ -250,6 +252,12 @@ class Processor
         // Process the data into the LOVD instance.
         global $_CONF, $_DB, $_TABLES, $_SETT, $_T;
 
+        // Are we doing a dry run?
+        $bDryRun = !empty($this->flags['dry-run']);
+        if ($bDryRun) {
+            $this->Log->add('Dry run enabled, not running any database updates.');
+        }
+
         // Store all of LOVD's transcripts, we need them; array(id_ncbi => id).
         $aTranscripts = LOVD::getAllTranscripts();
 
@@ -332,19 +340,28 @@ class Processor
                 // Remove variant if needed. Don't touch the Remarks_Non_Public, we don't want to complicate things.
                 // Also, don't run this if we don't have to. Check status and current remarks.
                 if (!isset($this->data[$sChrKey][$sLOVDKey])) {
-                    $q = $_DB->q('UPDATE ' . TABLE_VARIANTS . '
-                        SET `VariantOnGenome/Remarks` = ?, statusid = ?, edited_by = 0, edited_date = ?
-                        WHERE id = ? AND !(`VariantOnGenome/Remarks` LIKE ? AND statusid <= ?)',
+                    if (str_starts_with($aLOVDVariant['VariantOnGenome/Remarks'], $sRemoveMessage)
+                        && $aLOVDVariant['statusid'] <= STATUS_HIDDEN) {
+                        // No update needed; already deleted.
+                        continue;
+                    }
+
+                    if ($bDryRun) {
+                        $aVariantsDeleted[$sChromosome] ++;
+                    } else {
+                        $q = $_DB->q('UPDATE ' . TABLE_VARIANTS . '
+                                      SET `VariantOnGenome/Remarks` = ?, statusid = ?, edited_by = 0, edited_date = ?
+                                      WHERE id = ?',
                             array(
                                 $sRemoveMessage,
                                 STATUS_HIDDEN,
                                 $sNow,
                                 $aLOVDVariant['id'],
-                                $sRemoveMessage . '%',
-                                STATUS_HIDDEN,
-                            ));
-                    if ($q->rowCount()) {
-                        $aVariantsDeleted[$sChromosome] ++;
+                            )
+                        );
+                        if ($q->rowCount()) {
+                            $aVariantsDeleted[$sChromosome] ++;
+                        }
                     }
                     unset($aDataLOVD[$sLOVDKey]);
                 }
@@ -583,8 +600,19 @@ class Processor
                         $aDiff['VariantOnGenome/Remarks_Non_Public'][1] = $aVOGEntry['VariantOnGenome/Remarks_Non_Public'];
                     }
 
-                    // Run update, if needed.
-                    if ($aDiff) {
+                    if ($aDiff && $bDryRun) {
+                        // We don't need to print updates or so when we're doing a dry run. So just continue.
+                        continue;
+                    }
+
+
+
+                    // If there is no diff, there is nothing to do.
+                    if (!$aDiff) {
+                        $aVariantsSkipped[$sChromosome] ++;
+
+                    } else {
+                        // Run update. A dry-run with a diff doesn't get here, because it already continued.
                         // Update atomically, we don't want half updates.
                         $_DB->beginTransaction();
 
@@ -645,51 +673,56 @@ class Processor
                         } else {
                             $aVariantsUpdated[$sChromosome] ++;
                         }
+                    }
+
+
+
+                } else {
+                    // Variant hasn't been seen yet by this center. Create it in the database.
+                    // Do this only, if we don't have LOVD variants that need to be cached.
+                    if ($bDryRun) {
+                        $aVariantsCreated[$sChromosome] ++;
+                        // We don't need to print updates or so when we're doing a dry run. So just continue.
                         continue;
                     }
-                    // If we get here, there was nothing to update, data is still the same.
-                    $aVariantsSkipped[$sChromosome] ++;
-                    continue;
-                }
 
-                // Variant hasn't been seen yet by this center. Create it in the database.
-                // Do this only, if we don't have LOVD variants that need to be cached.
+                    // Prepare additional data.
+                    $aVOGEntry['created_date'] = $sNow;
+                    if ($bRemarksNonPublic) {
+                        $aVOGEntry['VariantOnGenome/Remarks_Non_Public'] = json_encode($aVOGEntry['VariantOnGenome/Remarks_Non_Public']);
+                    }
+                    // We can be more correct here by adding VOT data, but this function expects that in quite a complex manner.
+                    $aVOGEntry['VariantOnGenome/DBID'] = lovd_fetchDBID($aVOGEntry);
 
-                // Prepare additional data.
-                $aVOGEntry['created_date'] = $sNow;
-                if ($bRemarksNonPublic) {
-                    $aVOGEntry['VariantOnGenome/Remarks_Non_Public'] = json_encode($aVOGEntry['VariantOnGenome/Remarks_Non_Public']);
-                }
-                // We can be more correct here by adding VOT data, but this function expects that in quite a complex manner.
-                $aVOGEntry['VariantOnGenome/DBID'] = lovd_fetchDBID($aVOGEntry);
+                    // Run atomically, we don't want half inserts.
+                    $_DB->beginTransaction();
 
-                // Run atomically, we don't want half inserts.
-                $_DB->beginTransaction();
-
-                // Insert the VOG first.
-                $aVOTs = $aVOGEntry['vots'];
-                unset($aVOGEntry['vots']);
-                $aFields = array_keys($aVOGEntry);
-                $_DB->q('INSERT INTO ' . TABLE_VARIANTS . '
-                    (' . implode(', ', array_map(function ($sField) {
-                        return '`' . $sField . '`';
-                    }, $aFields)) . ')
-                    VALUES (?' . str_repeat(', ?', count($aFields) - 1) . ')', array_values($aVOGEntry));
-                $aVOGEntry['id'] = $_DB->lastInsertId();
-
-                // Then the VOTs.
-                foreach ($aVOTs as $aVOT) {
-                    // Add the transcript.
-                    $_DB->q('INSERT INTO ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
-                        (id, ' . implode(', ', array_map(function ($sField) {
+                    // Insert the VOG first.
+                    $aVOTs = $aVOGEntry['vots'];
+                    unset($aVOGEntry['vots']);
+                    $aFields = array_keys($aVOGEntry);
+                    $_DB->q('INSERT INTO ' . TABLE_VARIANTS . '
+                        (' . implode(', ', array_map(function ($sField) {
                             return '`' . $sField . '`';
-                        }, array_keys($aVOT))) . ')
-                        VALUES (?' . str_repeat(', ?', count($aVOT)) . ')', array_merge(array($aVOGEntry['id']), array_values($aVOT)));
-                }
-                // If we get here, everything went well.
-                $_DB->commit();
+                        }, $aFields)) . ')
+                        VALUES (?' . str_repeat(', ?', count($aFields) - 1) . ')', array_values($aVOGEntry));
+                    $aVOGEntry['id'] = $_DB->lastInsertId();
 
-                $aVariantsCreated[$sChromosome] ++;
+                    // Then the VOTs.
+                    foreach ($aVOTs as $aVOT) {
+                        // Add the transcript.
+                        $_DB->q('INSERT INTO ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
+                            (id, ' . implode(', ', array_map(function ($sField) {
+                                return '`' . $sField . '`';
+                            }, array_keys($aVOT))) . ')
+                            VALUES (?' . str_repeat(', ?', count($aVOT)) . ')', array_merge(array($aVOGEntry['id']), array_values($aVOT)));
+                    }
+
+                    // If we get here, everything went well.
+                    $_DB->commit();
+
+                    $aVariantsCreated[$sChromosome] ++;
+                }
             }
 
             // Showing count per chromosome.
@@ -712,6 +745,11 @@ class Processor
         "\nTotal variants updated: " . array_sum($aVariantsUpdated) .
         "\nTotal variants deleted: " . array_sum($aVariantsDeleted) .
         "\nTotal variants skipped: " . array_sum($aVariantsSkipped));
+
+        if ($bDryRun) {
+            // If we're doing a dry run, we're done now.
+            return true;
+        }
 
         if (!LOVD_plus) {
             // Update all gene's updated dates.
