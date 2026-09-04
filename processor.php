@@ -262,7 +262,7 @@ class Processor
         }
 
         // Store all of LOVD's transcripts, we need them; array(id_ncbi => id).
-        $aTranscripts = LOVD::getAllTranscripts();
+        $aTranscriptsInLOVD = LOVD::getAllTranscripts();
 
         // Process updates in the database.
         $nVariantsDone = 0;
@@ -480,50 +480,66 @@ class Processor
                     unset($aVOGEntry['VariantOnGenome/Remarks_Non_Public']);
                 }
 
-                // Fill VOTs.
-                // Check if the variant is CNV, this one doesn't need a vot (variant on transcript).
-                if ($aVariant['type'] == "CNV") {
-                    $aVOGEntry['vots'] = array();
-                } elseif ($aVariant['type'] == 'SNV') {
-                    $aCache = Caches::getMapping($sVariant);
-                    if ($aCache != false) {
-                        foreach ($aCache as $sSource => $aMappings) {
-                            foreach ($aMappings as $sTranscript => $aMapping) {
-                                $aTranscriptNoVersion = explode(".", $sTranscript);
-                                $HGVSMapping = HGVS::check($aMapping['c']);
-                                $HGVSMappingPos = $HGVSMapping->getData();
-                                // Check if the transcript already exists in the database.
-                                // Starting with the newest version (from $aMappings),
-                                //  counting down the version number to see which version is present in the database ($aTranscripts).
-                                for ($i = $aTranscriptNoVersion[1]; $i > 0; $i--) {
-                                    if (array_key_exists($aTranscriptNoVersion[0] . "." . $i, $aTranscripts)) {
-                                        // Shorten the DNA and protein fields, if needed.
-                                        if (strlen($aMapping['c']) > $nMaxVOTDNALength) {
-                                            $aMapping['c'] = $this->shortenDNAInsertions($aMapping['c']);
-                                        }
-                                        if (strlen($aMapping['p']) > $nMaxVOTProteinLength) {
-                                            $aMapping['p'] = $this->shortenProteinInsertions($aMapping['p']);
-                                        }
-                                        $sTranscriptId = $aTranscripts[$aTranscriptNoVersion[0] . "." . $i];
-                                        $aVOGEntry['vots'][$sTranscriptId] = [
-                                            'transcriptid' => $sTranscriptId,
-                                            'effectid' => $aVOGEntry['effectid'],
-                                            'position_c_start' => ($HGVSMappingPos['position_start'] ?? null),
-                                            'position_c_start_intron' => ($HGVSMappingPos['position_start_intron'] ?? null),
-                                            'position_c_end' => ($HGVSMappingPos['position_end'] ?? null),
-                                            'position_c_end_intron' => ($HGVSMappingPos['position_end_intron'] ?? null),
-                                            'VariantOnTranscript/DNA' => ($aMapping['c'] ?: '-'),
-                                            'VariantOnTranscript/RNA' => ($aMapping['r'] ?: '-'),
-                                            'VariantOnTranscript/Protein' => ($aMapping['p'] ?: '-'),
-                                        ];
+                // Fill VOTs, but only for SNVs; CNVs don't need any VOTs.
+                if ($aVariant['type'] != 'CNV') {
+                    $aMappingData = Caches::getMapping($sVariant);
+                    foreach (($aMappingData ?: []) as $sSource => $aTranscripts) {
+                        // Loop all mapping data to find VOTs for this variant.
+                        foreach ($aTranscripts as $sTranscript => $aMapping) {
+                            if ($sTranscript == 's') {
+                                // This is annotation in the mapping info; we don't use this.
+                                continue;
+                            }
+
+                            // We'll do version-agnostic matching. If there is a full match, we'll take that,
+                            //  but otherwise, look for other versions as well.
+                            list($sTranscriptWithoutVersion, $nVersion) = explode('.', $sTranscript, 2);
+                            if (isset($aTranscriptsInLOVD[$sTranscript])) {
+                                $aVersionsToCheck = [$nVersion];
+                            } else {
+                                // LOVD can have newer and older transcripts, or both. And our mapping info can have
+                                //  multiple versions for a transcript as well. This would have been easier if I have
+                                //  both the mapping info and the LOVD transcripts grouped per version-less ID, but
+                                //  that's a lot of work, too. We can get issues with this, but it will work fine most
+                                //  of the time. Check from version 1 to $nVersion + 2. If we have version 4, we will
+                                //  check LOVD for versions 4, 3, 2, 1, 5, and 6.
+                                $aVersionsToCheck = array_reverse(range(1, $nVersion));
+                                $aVersionsToCheck[] = ($nVersion + 1);
+                                $aVersionsToCheck[] = ($nVersion + 2);
+                            }
+
+                            // Check what versions we have in LOVD, and then create the VOTs.
+                            foreach ($aVersionsToCheck as $nVersion) {
+                                $nTranscriptID = ($aTranscriptsInLOVD["$sTranscriptWithoutVersion.$nVersion"] ?? false);
+                                if ($nTranscriptID !== false) {
+                                    // Shorten the DNA and protein fields, if needed.
+                                    if (strlen($aMapping['c']) > $nMaxVOTDNALength) {
+                                        $aMapping['c'] = $this->shortenDNAInsertions($aMapping['c']);
                                     }
+                                    if (strlen($aMapping['p']) > $nMaxVOTProteinLength) {
+                                        $aMapping['p'] = $this->shortenProteinInsertions($aMapping['p']);
+                                    }
+                                    $aVariantInfo = (HGVS::check($aMapping['c'])->getData() ?: []);
+                                    $aVOGEntry['vots'][$nTranscriptID] = [
+                                        'transcriptid' => $nTranscriptID,
+                                        'effectid' => $aVOGEntry['effectid'],
+                                        'position_c_start' => ($aVariantInfo['position_start'] ?? null),
+                                        'position_c_start_intron' => ($aVariantInfo['position_start_intron'] ?? null),
+                                        'position_c_end' => ($aVariantInfo['position_end'] ?? null),
+                                        'position_c_end_intron' => ($aVariantInfo['position_end_intron'] ?? null),
+                                        'VariantOnTranscript/DNA' => ($aMapping['c'] ?: '-'),
+                                        'VariantOnTranscript/RNA' => ($aMapping['r'] ?: '-'),
+                                        'VariantOnTranscript/Protein' => ($aMapping['p'] ?: '-'),
+                                    ];
                                 }
                             }
                         }
                     }
+
                     // For comparison reasons.
                     ksort($aVOGEntry['vots']);
                 }
+
                 // If this entry already exists, simply update the record when needed.
                 if (isset($aDataLOVD[$sLOVDKey])) {
                     // Variant has been seen already by this center.
@@ -598,14 +614,15 @@ class Processor
                                     $aTmpClassification = array('effectid' => 99); // Value doesn't actually matter.
                                     foreach (array_unique(array_merge(array_keys($aDiff['vots'][0]), array_keys($aDiff['vots'][1]))) as $nTranscriptID) {
                                         if (!isset($aDiff['vots'][0][$nTranscriptID])) {
-                                            $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Added mapping to transcript ' . array_search($nTranscriptID, $aTranscripts) . '.';
+                                            $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Added mapping to transcript ' . array_search($nTranscriptID, $aTranscriptsInLOVD) . '.';
                                         } elseif (!isset($aDiff['vots'][1][$nTranscriptID])) {
-                                            $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Removed mapping to transcript ' . array_search($nTranscriptID, $aTranscripts) . '.';
-                                        } elseif (array_diff_key($aDiff['vots'][0][$nTranscriptID], $aTmpClassification) != array_diff_key($aDiff['vots'][1][$nTranscriptID], $aTmpClassification)) {
-                                            // VOT is different, outside of the effectid fields.
-                                            $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Updated mapping to transcript ' . array_search($nTranscriptID, $aTranscripts) . '.';
+                                            $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Removed mapping to transcript ' . array_search($nTranscriptID, $aTranscriptsInLOVD) . '.';
+                                        } elseif (array_diff_key($aDiff['vots'][0][$nTranscriptID], $aKeysToFilter) != array_diff_key($aDiff['vots'][1][$nTranscriptID], $aKeysToFilter)) {
+                                            // VOT is different, while ignoring the effectid field.
+                                            $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Updated mapping to transcript ' . array_search($nTranscriptID, $aTranscriptsInLOVD) . '.';
                                         }
                                     }
+
                                 } elseif ($sKey != 'VariantOnGenome/Remarks_Non_Public') {
                                     // Don't self-report, of course.
                                     $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey] = array($Value, $aVOGEntry[$sKey]);
