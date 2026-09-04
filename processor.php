@@ -535,7 +535,11 @@ class Processor
                         if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] === false
                             || !is_array($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'])) {
                             // Somebody malformed this field...
-                            throw new \Exception("Variant ID $sVariant has an unparsable JSON object for center {$aVariant['center']} ($nCenterID)");
+                            // We don't want to die here, because that will leave us with half an update.
+                            // Instead, skip the variant and log an error so that we can fix it manually and re-run the Processor.
+                            $this->Log->add("Error: Variant $sVariant has an unparsable JSON object for center {$aVariant['center']} ($nCenterID).", '!!');
+                            $aVariantsSkipped[$sChromosome] ++;
+                            continue;
                         }
                     } elseif ($bRemarksNonPublic) {
                         $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] = array();
