@@ -58,6 +58,7 @@ class Processor
         'deleted' => 0,
         'skipped' => 0,
     );
+    private int $total_variants = 0;
     private string $lovd_genome_build = '';
     private $Settings;
     private $Log;
@@ -178,10 +179,12 @@ class Processor
             $sChrKey = strstr($aVariant['DNA'][$this->lovd_genome_build], ':', true) . ':' . $aVariant['native_info']['chr'];
             $sVariantKey = str_pad($nCenterID, 5, '0', STR_PAD_LEFT) . ':' . $aVariant['DNA'][$this->lovd_genome_build];
             $this->data[$sChrKey][$sVariantKey] = $aVariant;
+            $this->total_variants ++;
         }
 
         // Make sure we run everything in the correct order, from chr1 to 22, then X, Y, and M.
         ksort($this->data);
+        $this->Log->add("Loaded {$this->total_variants} variants from the data file.");
 
         $nNoCorrectBuildFound = count($this->data_rejected);
         if ($nNoCorrectBuildFound) {
@@ -260,6 +263,11 @@ class Processor
 
         // Store all of LOVD's transcripts, we need them; array(id_ncbi => id).
         $aTranscripts = LOVD::getAllTranscripts();
+
+        // Process updates in the database.
+        $nVariantsDone = 0;
+        $nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you can see the progress.
+        $tProgressReported = microtime(true); // Don't report progress again within a certain amount of time.
 
         $aVariantsCreated = array(); // Collects counters per chromosome.
         $aVariantsUpdated = array(); // Collects counters per chromosome.
@@ -366,6 +374,13 @@ class Processor
                     unset($aDataLOVD[$sLOVDKey]);
                 }
             }
+
+            // Report data loaded and get to work.
+            $nPercentageComplete = floor($nVariantsDone * 1000 / $this->total_variants);
+            $this->Log->add(
+                '[' . str_pad(number_format($nPercentageComplete / 10, 1), 5, ' ', STR_PAD_LEFT) .
+                "%] Chromosome $sChromosome data loaded, running updates...");
+            $tProgressReported = microtime(true); // Don't report again for a certain amount of time.
 
 
 
@@ -723,28 +738,45 @@ class Processor
 
                     $aVariantsCreated[$sChromosome] ++;
                 }
+
+
+
+                // Print update, for every percentage changed.
+                $nVariantsDone ++;
+                if ((microtime(true) - $tProgressReported) > 5 && $nVariantsDone != $this->total_variants
+                    && floor($nVariantsDone * 1000 / $this->total_variants) != $nPercentageComplete) {
+                    $nPercentageComplete = floor($nVariantsDone * 1000 / $this->total_variants);
+                    $this->Log->add(
+                        '[' . str_pad(number_format($nPercentageComplete / 10, 1), 5, ' ', STR_PAD_LEFT) .
+                        '%] ' . str_pad($nVariantsDone, strlen($this->total_variants), ' ', STR_PAD_LEFT) . ' variants processed...');
+                    $tProgressReported = microtime(true); // Don't report again for a certain amount of time.
+                }
             }
 
-            // Showing count per chromosome.
-            $this->Log->add("Chromosome: " . $sChromosome .
-                ":\n\tCreated: " . $aVariantsCreated[$sChromosome] .
-                "\n\tUpdated: " . $aVariantsUpdated[$sChromosome] .
-                "\n\tDeleted: " . $aVariantsDeleted[$sChromosome] .
-                "\n\tSkipped: " . $aVariantsSkipped[$sChromosome]);
-
-
+            // Report on the current progress.
+            $nPercentageComplete = floor($nVariantsDone * 1000 / $this->total_variants);
+            $this->Log->add(
+                '[' . str_pad(number_format($nPercentageComplete / 10, 1), 5, ' ', STR_PAD_LEFT) .
+                "%] Chromosome $sChromosome completed.\n" .
+                '         Variants created: ' . $aVariantsCreated[$sChromosome] . ".\n" .
+                '         Variants updated: ' . $aVariantsUpdated[$sChromosome] . ".\n" .
+                '         Variants deleted: ' . $aVariantsDeleted[$sChromosome] . ".\n" .
+                '         Variants skipped: ' . $aVariantsSkipped[$sChromosome] . ".\n");
         }
 
-        // Total count of variants created, updated, deleted or skipped.
+        // Final counts.
         $this->statistics['created'] = array_sum($aVariantsCreated);
         $this->statistics['updated'] = array_sum($aVariantsUpdated);
         $this->statistics['deleted'] = array_sum($aVariantsDeleted);
         $this->statistics['skipped'] = array_sum($aVariantsSkipped);
 
-        $this->Log->add("Total variants created: " . array_sum($aVariantsCreated) .
-        "\nTotal variants updated: " . array_sum($aVariantsUpdated) .
-        "\nTotal variants deleted: " . array_sum($aVariantsDeleted) .
-        "\nTotal variants skipped: " . array_sum($aVariantsSkipped));
+        $nPercentageComplete = floor($nVariantsDone * 1000 / $this->total_variants);
+        $this->Log->add(
+            '[' . str_pad(number_format($nPercentageComplete / 10, 1), 5, ' ', STR_PAD_LEFT) .
+            "%] [Totals] Variants created: {$this->statistics['created']}
+                  Variants updated: {$this->statistics['updated']}
+                  Variants deleted: {$this->statistics['deleted']}
+                  Variants skipped: {$this->statistics['skipped']}");
 
         if ($bDryRun) {
             // If we're doing a dry run, we're done now.
