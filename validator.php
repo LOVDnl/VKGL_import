@@ -57,13 +57,21 @@ class Validator
         // Now, check all variants in both data sets to see if they have been updated.
         $aUpdatedVariantKeys = array_intersect($aCurrentVariants, $aPreviousVariants);
         $nUpdated = 0;
-        $aKeysIgnored = array_flip(['genomic_native_reported', 'genomic_liftover_reported', 'status']);
+        $aKeysIgnored = array_flip(['genomic_native_reported', 'genomic_liftover_reported', 'status', 'annotation']);
         foreach ($aUpdatedVariantKeys as $sVariantKey) {
             // However, don't consider every difference an actual change.
             // Ignore the variant status, as it can get updated without any actual changes to the variant.
             if (array_diff_key($aCurrentData[$sVariantKey], $aKeysIgnored)
                 !== array_diff_key($aPreviousData[$sVariantKey], $aKeysIgnored)) {
                 $nUpdated ++;
+            } elseif ($aCurrentData[$sVariantKey]['annotation'] != $aPreviousData[$sVariantKey]['annotation']) {
+                // Unpack the annotation to see if the differences are relevant. LOVD does not store everything.
+                $aCurrentAnnotations = json_decode($aCurrentData[$sVariantKey]['annotation'], true);
+                $aPreviousAnnotations = json_decode($aPreviousData[$sVariantKey]['annotation'], true);
+                // Currently, LOVD only stores the reported_as field.
+                if ($aCurrentAnnotations['reported_as'] != $aPreviousAnnotations['reported_as']) {
+                    $nUpdated ++;
+                }
             }
         }
         $nTotalChanges = $nCreated + $nUpdated + $nDeleted;
