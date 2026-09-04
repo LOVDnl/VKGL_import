@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-04-28
- * Modified    : 2026-08-31
+ * Modified    : 2026-09-04
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -205,6 +205,10 @@ class Aggregator
                         $aObservation['annotation'] = json_decode($aObservation['annotation'], true);
                         // Note that this method also removes redundant fields from $aObservation.
                         $this->createReportedAs($aObservation);
+                        // Clean the *_reported fields to avoid senseless differences like hg19 <-> GRCh37.
+                        foreach (['genomic_native_reported', 'genomic_liftover_reported'] as $sColumn) {
+                            $aObservation[$sColumn] = str_replace(['GRCh37', 'GRCh38'], ['hg19', 'hg38'], $aObservation[$sColumn]);
+                        }
                         // Also add the classification to the annotation, so we can always find back the original
                         //  classifications of all observations (we may update the classification after this).
                         $aObservation['annotation']['classifications'] = $aObservation['classification'];
