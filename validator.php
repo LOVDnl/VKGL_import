@@ -57,11 +57,22 @@ class Validator
         // Now, check all variants in both data sets to see if they have been updated.
         $aUpdatedVariantKeys = array_intersect($aCurrentVariants, $aPreviousVariants);
         $nUpdated = 0;
+        // Ignore fields that LOVD doesn't currently store.
+        // Also, ignore the variant status, as it can get updated without any actual changes to the variant.
+        // We'll take a detailed look at that field to determine changes between public and non-public data.
+        // Finally, ignore the annotation in general; have a separate, more detailed look later.
         $aKeysIgnored = array_flip(['genomic_native_reported', 'genomic_liftover_reported', 'status', 'annotation']);
         foreach ($aUpdatedVariantKeys as $sVariantKey) {
             // However, don't consider every difference an actual change.
-            // Ignore the variant status, as it can get updated without any actual changes to the variant.
-            if (array_diff_key($aCurrentData[$sVariantKey], $aKeysIgnored)
+            if (str_ends_with($aPreviousData[$sVariantKey]['status'], 'opposite')
+                && !str_ends_with($aCurrentData[$sVariantKey]['status'], 'opposite')) {
+                // We changed from a hidden (deleted) variant to a public variant. That's not an update for LOVD.
+                $nCreated ++;
+            } elseif (!str_ends_with($aPreviousData[$sVariantKey]['status'], 'opposite')
+                && str_ends_with($aCurrentData[$sVariantKey]['status'], 'opposite')) {
+                // We changed from a public variant to a hidden (deleted) variant. That's not an update for LOVD.
+                $nDeleted ++;
+            } elseif (array_diff_key($aCurrentData[$sVariantKey], $aKeysIgnored)
                 !== array_diff_key($aPreviousData[$sVariantKey], $aKeysIgnored)) {
                 $nUpdated ++;
             } elseif ($aCurrentData[$sVariantKey]['annotation'] != $aPreviousData[$sVariantKey]['annotation']) {
