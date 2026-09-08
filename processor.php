@@ -306,11 +306,12 @@ class Processor
 
         foreach ($this->data as $sChrKey => $aVariants) {
             list($sRefSeq, $sChromosome) = explode(':', $sChrKey, 2);
-            // Reset counters.
-            $aVariantsCreated[$sChromosome] = 0; // Counters per chromosome.
-            $aVariantsUpdated[$sChromosome] = 0; // Counters per chromosome.
-            $aVariantsDeleted[$sChromosome] = 0; // Counters per chromosome.
-            $aVariantsSkipped[$sChromosome] = 0; // Counters per chromosome.
+
+            // Set counters.
+            $aVariantsCreated[$sChromosome] = 0;
+            $aVariantsUpdated[$sChromosome] = 0;
+            $aVariantsDeleted[$sChromosome] = 0;
+            $aVariantsSkipped[$sChromosome] = 0;
 
             // Load the data currently in the database.
             // Note, that if there are two entries of the same variant by the same center, we see only *one*.
@@ -320,11 +321,11 @@ class Processor
                     vog.id, vog.allele, vog.effectid, vog.chromosome, vog.position_g_start, vog.position_g_end, vog.type,
                     vog.created_by, vog.owned_by, vog.statusid, vog.`VariantOnGenome/DNA`,
                     vog.`VariantOnGenome/DBID`, ' .
-                    (!$bGeneticOrigin ? '' : 'vog.`VariantOnGenome/Genetic_origin`, ') .
-                    (!$bPublishedAs ? '' : 'vog.`VariantOnGenome/Published_as`, ') .
-                    (!$bRemarks ? '' : 'vog.`VariantOnGenome/Remarks`, ') .
-                    (!$bRemarksNonPublic ? '' : 'vog.`VariantOnGenome/Remarks_Non_Public`, ') .
-                    (!$bClassification ? '' : 'IFNULL(NULLIF(vog.`VariantOnGenome/ClinicalClassification`, ""), "-") AS `VariantOnGenome/ClinicalClassification`,') . '
+                    (!$bGeneticOrigin? '' : 'vog.`VariantOnGenome/Genetic_origin`, ') .
+                    (!$bPublishedAs? '' : 'vog.`VariantOnGenome/Published_as`, ') .
+                    (!$bRemarks? '' : 'vog.`VariantOnGenome/Remarks`, ') .
+                    (!$bRemarksNonPublic? '' : 'vog.`VariantOnGenome/Remarks_Non_Public`, ') .
+                    (!$bClassification? '' : 'IFNULL(NULLIF(vog.`VariantOnGenome/ClinicalClassification`, ""), "-") AS `VariantOnGenome/ClinicalClassification`,') . '
                     GROUP_CONCAT(vot.transcriptid, ";", vot.effectid, ";",
                         IFNULL(vot.position_c_start, "0"), ";",
                         IFNULL(vot.position_c_start_intron, "0"), ";",
@@ -336,9 +337,9 @@ class Processor
                 FROM ' . TABLE_VARIANTS . ' AS vog LEFT OUTER JOIN ' . TABLE_VARIANTS_ON_TRANSCRIPTS . ' AS vot USING (id)
                 WHERE vog.chromosome = ? AND vog.created_by IN (?' . str_repeat(', ?', count($this->center_ids) - 1) . ')
                 GROUP BY vog.id',
-                    array_merge(
-                        array($sRefSeq, $sChromosome),
-                        array_values($this->center_ids)))->fetchAllGroupAssoc();
+                array_merge(
+                    array($sRefSeq, $sChromosome),
+                    array_values($this->center_ids)))->fetchAllGroupAssoc();
 
 
 
@@ -437,7 +438,7 @@ class Processor
                     'effectid' => (!isset($this->effect_mapping_LOVD[$aVariant['classification']]) ? 0 :
                         $this->effect_mapping_LOVD[$aVariant['classification']]) .
                         // Default to "Not curated" for concluded effect, unless a user filled something in already.
-                        (!isset($aDataLOVD[$sLOVDKey]) ? '0' : substr($aDataLOVD[$sLOVDKey]['effectid'], -1)),
+                        (!isset($aDataLOVD[$sLOVDKey])? '0' : substr($aDataLOVD[$sLOVDKey]['effectid'], -1)),
                     'chromosome' => $sChromosome,
                     'position_g_start' => $HGVSData['position_start'],
                     'position_g_end' => $HGVSData['position_end'],
@@ -663,10 +664,12 @@ class Processor
                                             return '`' . $sField . '`';
                                         }, array_keys($aVOT))) . ')
                                         VALUES (?' . str_repeat(', ?', count($aVOT)) . ')', array_merge(array($aVOGEntry['id']), array_values($aVOT)));
+
                                 } elseif (!isset($aDiff['vots'][1][$nTranscriptID])) {
                                     // Remove the transcript.
                                     $_DB->q('DELETE FROM ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
                                         WHERE id = ? AND transcriptid = ?', array($aVOGEntry['id'], $nTranscriptID));
+
                                 } elseif ($aDiff['vots'][0][$nTranscriptID] != $aDiff['vots'][1][$nTranscriptID]) {
                                     // Update the transcript, remove 'transcriptid' as an updateable field (it shouldn't be there, but still).
                                     $aFieldsToUpdate = array_diff_key($aDiff['vots'][1][$nTranscriptID], array('transcriptid' => 0));
@@ -679,6 +682,7 @@ class Processor
                             }
                             unset($aDiff['vots']); // So we don't run into it anymore.
                         }
+
                         // Update the VOG, remove 'id' as an updateable field (it shouldn't be there, but still).
                         $aFieldsToUpdate = array();
                         foreach ($aDiff as $sKey => $aColDiff) {
@@ -703,8 +707,10 @@ class Processor
                         $_DB->commit();
 
 
-                        //str_contains
-                        if ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_HIDDEN && str_contains($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks'], 'no longer found')){
+
+                        // Determine whether this variant was created (undeleted) or updated.
+                        if ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_HIDDEN
+                            && str_contains($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks'], 'no longer found')) {
                             $aVariantsCreated[$sChromosome] ++;
                         } else {
                             $aVariantsUpdated[$sChromosome] ++;
@@ -821,7 +827,7 @@ class Processor
                     UPDATE ' . TABLE_GENES . '
                     SET updated_by = ?, updated_date = ?
                     WHERE (updated_date IS NULL OR updated_date < ?) AND id IN (?' . str_repeat(', ?', count($aGenesUpdated) - 1) . ')',
-                        array_merge(array(0, $sNow, $sNow), $aGenesUpdated));
+                    array_merge(array(0, $sNow, $sNow), $aGenesUpdated));
                 $nUpdated = $q->rowCount();
                 $this->Log->add('[Totals] Gene(s) updated: ' . $nUpdated . '/' . count($aGenesUpdated) . '.');
             }
