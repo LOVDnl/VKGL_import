@@ -715,6 +715,9 @@ class Processor
                         // Determine whether this variant was created (undeleted) or updated.
                         if ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_HIDDEN && $aVOGEntry['statusid'] == STATUS_OK) {
                             $aVariantsCreated[$sChromosome] ++;
+                        } elseif ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_OK && $aVOGEntry['statusid'] == STATUS_HIDDEN) {
+                            // Variant was public but will be unpublished now (new conflict).
+                            $aVariantsDeleted[$sChromosome] ++;
                         } else {
                             $aVariantsUpdated[$sChromosome] ++;
                         }
