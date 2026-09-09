@@ -713,8 +713,7 @@ class Processor
 
 
                         // Determine whether this variant was created (undeleted) or updated.
-                        if ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_HIDDEN
-                            && str_contains($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks'], 'no longer found')) {
+                        if ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_HIDDEN && $aVOGEntry['statusid'] == STATUS_OK) {
                             $aVariantsCreated[$sChromosome] ++;
                         } else {
                             $aVariantsUpdated[$sChromosome] ++;
