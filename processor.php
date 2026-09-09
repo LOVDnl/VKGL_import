@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-14
- * Modified    : 2026-09-04
+ * Modified    : 2026-09-09
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -417,10 +417,14 @@ class Processor
                 }
                 // Do limit the input, depending on the field size.
                 if (strlen($aVariant['published_as']) > $nMaxVOGPublishedAsLength) {
-                    $aVariant['published_as'] = $this->shortenProteinInsertions($aVariant['published_as']);
+                    $aVariant['published_as'] = $this->removeDNASuffixes($aVariant['published_as']);
                     // Is more needed?
                     if (strlen($aVariant['published_as']) > $nMaxVOGPublishedAsLength) {
-                        $aVariant['published_as'] = $this->shortenDNAInsertions($aVariant['published_as']);
+                        $aVariant['published_as'] = $this->shortenProteinInsertions($aVariant['published_as']);
+                        // Is more needed?
+                        if (strlen($aVariant['published_as']) > $nMaxVOGPublishedAsLength) {
+                            $aVariant['published_as'] = $this->shortenDNAInsertions($aVariant['published_as']);
+                        }
                     }
                 }
 
@@ -840,6 +844,16 @@ class Processor
 
 
 
+    private function removeDNASuffixes ($sDNA)
+    {
+        // Removes DNA suffixes (delA -> del). These suffixes are anyway never needed, so can be discarded safely.
+        return preg_replace(['/del([ACGTN]+)/', '/dup([ACGTN]+)/'], ['del', 'dup'], $sDNA);
+    }
+
+
+
+
+
     public function saveErrors (string $sFile): bool
     {
         // Save errors to disk.
@@ -869,11 +883,17 @@ class Processor
     {
         // Radically shortens DNA insertions. We could do this more intelligently and shorten only what's necessary,
         //  but we don't use this for VOG/DNA entries anyway and doing this right would make this a lot more complex.
-        if (preg_match('/ins([ACGTN]+)\b/', $sDNA, $aRegs)) {
-            $sDNA = str_replace($aRegs[0], 'insN[' . strlen($aRegs[1]) . ']', $sDNA);
-        }
-
-        return $sDNA;
+        // This looks a bit weird, but since there can be multiple insertions, we need to replace them one by one,
+        //  and a simple str_replace() can't be limited to only replace once.
+        return preg_replace_callback(
+            '/ins([ACGTN]+)\b/',
+            function ($a)
+            {
+                // Only replace if it will result in a shorter string.
+                return (strlen($a[1]) <= 4? $a[0] : 'insN[' . strlen($a[1]) . ']');
+            },
+            $sDNA
+        );
     }
 
 
