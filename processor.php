@@ -624,7 +624,25 @@ class Processor
                             $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public']
                         );
                     }
-                    // Determine if there are any differences.
+
+                    // Reduce the differences in the published_as field by ignoring some updates. When we moved to the
+                    //  new pipeline in 2026, we updated the code that generates the published_as value. Some changes
+                    //  are not relevant enough to warrant an update, which gives us problems with the validation.
+                    if ($bPublishedAs && $aVOGEntry['VariantOnGenome/Published_as']
+                        && $aVOGEntry['VariantOnGenome/Published_as'] != $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']) {
+                        // If the difference simply a change of notation? If so, ignore. E.g.:
+                        // "NMNAT1(NM_001297778.1):c.25G>A (p.V9M)" (old)
+                        // "NMNAT1 NM_001297778.1:c.25G>A (p.V9M)" (new)
+                        // Also, correct in case we no longer have a protein change. Also then keep the original.
+                        // Finally, also ignore additions of the NM or NP to the protein change.
+                        if (str_starts_with(preg_replace('/\(([NX][CMR]_[0-9.]+|ENST[0-9.]+)\)/', ' $1', $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']),
+                            preg_replace('/\([NX][MRP]_[0-9]+\.[0-9]+:/', '(', $aVOGEntry['VariantOnGenome/Published_as']))) {
+                            // Don't change the published_as field; just leave it, pretend that there is no change.
+                            $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'] = $aVOGEntry['VariantOnGenome/Published_as'];
+                        }
+                    }
+
+                    // Determine if there are any differences; build up $aDiff, and report the changes in the JSON history.
                     $aDiff = array();
                     foreach ($aDataLOVD[$sLOVDKey] as $sKey => $Value) {
                         if (!isset($aVOGEntry[$sKey]) || $Value != $aVOGEntry[$sKey]) {
