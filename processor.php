@@ -400,8 +400,28 @@ class Processor
                     continue;
                 }
 
-                // Build variant entry.
+                // Build the "Published as" field. Start by unpacking the variant annotation and checking the
+                //  "reported_as" field. But check the value, because sometimes we just have a gene and a transcript in
+                //  there. I thought about removing these values in an earlier step in the pipeline, but then we'd lose
+                //  the information completely. I guess it's better to just prevent "GENE transcript" to overwrite
+                //  anything that we may have.
                 $aVariant['annotation'] = json_decode($aVariant['annotation'], true);
+                if (!empty($aVariant['annotation']['reported_as'])) {
+                    if (!is_array($aVariant['annotation']['reported_as'])) {
+                        $aVariant['annotation']['reported_as'] = [$aVariant['annotation']['reported_as']];
+                    }
+                    // Make sure we're only left with actual variant descriptions.
+                    $aVariant['annotation']['reported_as'] = implode(
+                        ', ',
+                        array_filter(
+                            $aVariant['annotation']['reported_as'],
+                            function ($s)
+                            {
+                                return str_contains($s, ':');
+                            }
+                        )
+                    );
+                }
                 if (empty($aVariant['annotation']['reported_as'])) {
                     // If we didn't have a "reported_as" value in the variant's annotation, check the database if we
                     //  already have a value there. If so, just use that. If we have nothing, default to our
@@ -411,11 +431,10 @@ class Processor
                     } else {
                         $aVariant['published_as'] = $aVariant['genomic_native_reported'];
                     }
-                } elseif (is_array($aVariant['annotation']['reported_as'])) {
-                    $aVariant['published_as'] = implode(', ', $aVariant['annotation']['reported_as']);
                 } else {
                     $aVariant['published_as'] = $aVariant['annotation']['reported_as'];
                 }
+
                 // Do limit the input, depending on the field size.
                 if (strlen($aVariant['published_as']) > $nMaxVOGPublishedAsLength) {
                     $aVariant['published_as'] = $this->removeDNASuffixes($aVariant['published_as']);
@@ -436,6 +455,8 @@ class Processor
                     // Backward compatible with LOVD3.
                     $HGVSData['type'] = 'subst';
                 }
+
+                // Build variant entry.
                 $aVOGEntry = array(
                     'id' => null,
                     'allele' => '0', // Unknown.
