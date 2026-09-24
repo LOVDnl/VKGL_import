@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-14
- * Modified    : 2026-09-09
+ * Modified    : 2026-09-24
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -396,6 +396,7 @@ class Processor
                 // We will simply skip whatever is too long. See comments above explaining the reasoning.
                 if (strlen($sDNA) > $nMaxVOGDNALength) {
                     $aVariantsSkipped[$sChromosome] ++;
+                    $nVariantsDone ++;
                     continue;
                 }
 
@@ -560,6 +561,7 @@ class Processor
                             // Instead, skip the variant and log an error so that we can fix it manually and re-run the Processor.
                             $this->Log->add("Error: Variant $sVariant has an unparsable JSON object for center {$aVariant['center']} ($nCenterID).", '!!');
                             $aVariantsSkipped[$sChromosome] ++;
+                            $nVariantsDone ++;
                             continue;
                         }
                     } elseif ($bRemarksNonPublic) {
@@ -643,6 +645,7 @@ class Processor
 
                     if ($aDiff && $bDryRun) {
                         // We don't need to print updates or so when we're doing a dry run. So just continue.
+                        $nVariantsDone ++;
                         continue;
                     }
 
@@ -731,6 +734,7 @@ class Processor
                     if ($bDryRun) {
                         $aVariantsCreated[$sChromosome] ++;
                         // We don't need to print updates or so when we're doing a dry run. So just continue.
+                        $nVariantsDone ++;
                         continue;
                     }
 
@@ -813,6 +817,7 @@ class Processor
 
         if ($bDryRun) {
             // If we're doing a dry run, we're done now.
+            $this->Log->add('[100.0%] Dry run completed; this was a simulation.');
             return true;
         }
 
@@ -835,7 +840,7 @@ class Processor
                     WHERE (updated_date IS NULL OR updated_date < ?) AND id IN (?' . str_repeat(', ?', count($aGenesUpdated) - 1) . ')',
                     array_merge(array(0, $sNow, $sNow), $aGenesUpdated));
                 $nUpdated = $q->rowCount();
-                $this->Log->add('[Totals] Gene(s) updated: ' . $nUpdated . '/' . count($aGenesUpdated) . '.');
+                $this->Log->add('[100.0%] [Totals] Gene(s) updated: ' . $nUpdated . '/' . count($aGenesUpdated) . '.');
             }
         }
 
