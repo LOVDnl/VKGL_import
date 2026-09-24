@@ -677,6 +677,13 @@ class Processor
                         }
                     }
 
+                    // Prevent a lot of "false positive" edits because we kind of force a "published as" to exist.
+                    if (array_values(array_diff(array_keys($aDiff), ['VariantOnGenome/Remarks_Non_Public'])) == ['VariantOnGenome/Published_as']
+                        && !$aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']) {
+                        // No, never mind. We won't warrant having an update just because we fill in an empty "published as".
+                        $aDiff = []; // Cancel the update.
+                    }
+
                     // Because we were building this while building up the diff array:
                     if ($bRemarksNonPublic && $aDiff) {
                         $aDiff['VariantOnGenome/Remarks_Non_Public'][1] = $aVOGEntry['VariantOnGenome/Remarks_Non_Public'];
