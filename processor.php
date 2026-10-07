@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-14
- * Modified    : 2026-09-24
+ * Modified    : 2026-10-07
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -508,6 +508,7 @@ class Processor
                 }
 
                 // Fill VOTs, but only for SNVs; CNVs don't need any VOTs.
+                $aCrossVersionMappings = []; // Store for which transcripts we matched across transcript versions.
                 if ($aVariant['type'] != 'CNV') {
                     $aMappingData = Caches::getMapping($sVariant);
                     foreach (($aMappingData ?: []) as $sSource => $aTranscripts) {
@@ -558,6 +559,10 @@ class Processor
                                         'VariantOnTranscript/RNA' => ($aMapping['r'] ?: '-'),
                                         'VariantOnTranscript/Protein' => ($aMapping['p'] ?: '-'),
                                     ];
+
+                                    // Store if we just made a cross-version mapping. If so, we need to be more careful.
+                                    $aCrossVersionMappings[] = $nTranscriptID;
+                                    break;
                                 }
                             }
                         }
@@ -588,7 +593,8 @@ class Processor
                     } elseif ($bRemarksNonPublic) {
                         $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] = array();
                     }
-                    // Rebuild VOTs.
+
+                    // Rebuild VOT data currently in the database for this variant.
                     if (!$aDataLOVD[$sLOVDKey]['vots']) {
                         $aDataLOVD[$sLOVDKey]['vots'] = array();
                     } else {
@@ -608,10 +614,48 @@ class Processor
                                 'VariantOnTranscript/Protein' => $aVOT[8],
                             );
                         }
+
+                        // For comparison reasons.
                         ksort($aDataLOVD[$sLOVDKey]['vots']);
-                        // If $aVOGEntry is empty, we will fill it using the database ($aDataLOVD[$sLOVDKey]['vots'].
-                        if (!$aVOGEntry['vots']) {
-                            $aVOGEntry['vots'] = $aDataLOVD[$sLOVDKey]['vots'];
+
+                        // Don't just drop mappings that we already have in the database; merge them.
+                        $aVOGEntry['vots'] += $aDataLOVD[$sLOVDKey]['vots'];
+
+                        // However, we historically had pretty bad mappings in the database, too. Remove those if we have something good as well.
+                        $aGoodMappings = array_filter($aVOGEntry['vots'], function ($aVOT)
+                        {
+                            // Anything not too far into the UTRs is acceptable.
+                            // There are plenty of real mappings within 500 bp from the CDS that we got from VV.
+                            if ($aVOT['position_c_start'] < -500 || (preg_match('/^c\.\*([0-9]{3,})/', $aVOT['VariantOnTranscript/DNA'], $aMatches) && $aMatches[1] > 500)) {
+                                // Too far out; ignore.
+                                return false;
+                            }
+                            return true;
+                        });
+                        if ($aGoodMappings) {
+                            // Overwrite the mappings. This removes mappings that are too far out.
+                            $aVOGEntry['vots'] = $aGoodMappings;
+                        }
+
+                        // For comparison reasons.
+                        ksort($aVOGEntry['vots']);
+
+                        // If we made any cross-version mappings, prefer using the LOVD data when the cDNA is different.
+                        foreach ($aCrossVersionMappings as $nTranscriptID) {
+                            if (isset($aVOGEntry['vots'][$nTranscriptID])
+                                && isset($aDataLOVD[$sLOVDKey]['vots'][$nTranscriptID])
+                                && ($aVOGEntry['vots'][$nTranscriptID]['VariantOnTranscript/DNA']
+                                        != $aDataLOVD[$sLOVDKey]['vots'][$nTranscriptID]['VariantOnTranscript/DNA']
+                                    || $aVOGEntry['vots'][$nTranscriptID]['VariantOnTranscript/Protein']
+                                        != $aDataLOVD[$sLOVDKey]['vots'][$nTranscriptID]['VariantOnTranscript/Protein'])) {
+                                // This is too risky. Keep the mapping currently in LOVD.
+                                $aVOGEntry['vots'][$nTranscriptID] = array_merge(
+                                    $aDataLOVD[$sLOVDKey]['vots'][$nTranscriptID],
+                                    [
+                                        'effectid' => $aVOGEntry['vots'][$nTranscriptID]['effectid'],
+                                    ]
+                                );
+                            }
                         }
                     }
 
@@ -653,11 +697,11 @@ class Processor
                             if ($bRemarksNonPublic) {
                                 // Also report differences.
                                 if ($sKey == 'vots') {
-                                    // We won't report changes per field here, just per transcript.
-                                    // But, only report differences in VOTs that aren't the classification.
-                                    // We can't just remove the effectid from $aDiff, as that array is
-                                    //  being used to process the diff into the DB. So, hide it in the comparison only.
-                                    $aTmpClassification = array('effectid' => 99); // Value doesn't actually matter.
+                                    // We won't report changes per field here, just per transcript. However, exclude the
+                                    //  effectid when comparing the data. We can't just remove the effectid from $aDiff,
+                                    //  as that array is being used to process the diff into the DB.
+                                    // So, hide it in the comparison only.
+                                    $aKeysToFilter = array('effectid' => 99); // Value doesn't actually matter.
                                     foreach (array_unique(array_merge(array_keys($aDiff['vots'][0]), array_keys($aDiff['vots'][1]))) as $nTranscriptID) {
                                         if (!isset($aDiff['vots'][0][$nTranscriptID])) {
                                             $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Added mapping to transcript ' . array_search($nTranscriptID, $aTranscriptsInLOVD) . '.';
