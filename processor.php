@@ -728,12 +728,31 @@ class Processor
                         $aDiff = []; // Cancel the update.
                     }
 
-                    // Because we were building this while building up the diff array:
+                    // Because we were building this while building up the diff array,
+                    //  store the new value in the diff to make sure we'll store it in the database.
                     if ($bRemarksNonPublic && $aDiff) {
                         $aDiff['VariantOnGenome/Remarks_Non_Public'][1] = $aVOGEntry['VariantOnGenome/Remarks_Non_Public'];
                     }
 
+
+
+                    // If there is a diff, and we're in debug mode, report the diff but do nothing. This way, we can
+                    //  check if our code works well. To prevent very long diffs however, remove certain elements from
+                    //  the diff that we understand can easily change.
                     if ($aDiff && $bDryRun) {
+                        // Hide filling in an empty "Published as".
+                        if (!empty($aDiff['VariantOnGenome/Published_as'][1]) && empty($aDiff['VariantOnGenome/Published_as'][0])) {
+                            unset($aDiff['VariantOnGenome/Published_as']);
+                        }
+
+                        // Hide the JSON object, we know it works.
+                        unset($aDiff['VariantOnGenome/Remarks_Non_Public']);
+
+                        // Report the remaining diff to the screen, so we can see what kind of edits we're having.
+                        if ($aDiff) {
+                            var_dump($sVariant . ' (' . count($aDataLOVD[$sLOVDKey]['vots']) . ' -> ' . count($aVOGEntry['vots']) . ' VOTs)', $aDiff);
+                        }
+
                         // We don't need to print updates or so when we're doing a dry run. So just continue.
                         $nVariantsDone ++;
                         continue;
