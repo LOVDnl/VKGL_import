@@ -748,6 +748,65 @@ class Processor
                         // Hide the JSON object, we know it works.
                         unset($aDiff['VariantOnGenome/Remarks_Non_Public']);
 
+                        // Clean VOT changes, by removing VOTs from the diff array that are also in the new data.
+                        if (isset($aDiff['vots'])) {
+                            // Loop the original data's VOTs and see if we can find them in the new data.
+                            foreach ($aDiff['vots'][0] as $nTranscriptID => $aLOVDVot) {
+                                if (!isset($aDiff['vots'][1][$nTranscriptID])) {
+                                    $aDiff['vots'][0][$nTranscriptID] = $aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/DNA'] . ' (deleted)';
+                                } else {
+                                    // Obviously, classifications change a lot.
+                                    // We also have problems with the positions. The new libraries don't have the CDS
+                                    //  length for transcripts and simply start counting 3' UTR positions at 1000000.
+                                    // This causes a lot of senseless updates, but I guess we do have to process them,
+                                    //  to make sure we're consistent. If this causes sorting problems, we'll have to
+                                    //  run the position fixer in the LOVD, with the new libraries.
+                                    foreach (['effectid', 'position_c_start', 'position_c_end'] as $sField) {
+                                        unset($aLOVDVot[$sField], $aDiff['vots'][0][$nTranscriptID][$sField], $aDiff['vots'][1][$nTranscriptID][$sField]);
+                                    }
+
+                                    // The new pipeline improved a lot of RNA and Protein changes.
+                                    if (str_contains($aLOVDVot['VariantOnTranscript/DNA'], 'c.*')
+                                        && $aLOVDVot['VariantOnTranscript/RNA'] == 'r.(=)'
+                                        && $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'] == 'r.(?)') {
+                                        // The new one is better, silence this diff.
+                                        $aLOVDVot['VariantOnTranscript/RNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'];
+                                    } elseif ($aLOVDVot['position_c_start_intron']
+                                        && in_array($aLOVDVot['VariantOnTranscript/RNA'], ['r.?', 'r.(?)'])
+                                        && in_array($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'], ['r.(?)', 'r.(=)', 'r.spl?'])) {
+                                        // The new one is better, silence this diff.
+                                        $aLOVDVot['VariantOnTranscript/RNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'];
+                                    }
+                                    if ($aLOVDVot['VariantOnTranscript/Protein'] == 'p.(=)'
+                                        && str_ends_with($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'], '=)')) {
+                                        // E.g., p.(=) to p.(Leu8=).
+                                        // The new one is better, silence this diff.
+                                        $aLOVDVot['VariantOnTranscript/Protein'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'];
+                                    } elseif (str_contains($aLOVDVot['VariantOnTranscript/Protein'], '*')
+                                        && str_contains($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'], 'Ter')) {
+                                        // E.g., p.(Arg225*) to p.(Arg225Ter).
+                                        // Ter is better than *, replace it (which should silence this diff).
+                                        $aLOVDVot['VariantOnTranscript/Protein'] = str_replace('*', 'Ter', $aLOVDVot['VariantOnTranscript/Protein']);
+                                    } elseif ($aLOVDVot['VariantOnTranscript/Protein'] == 'p.?'
+                                        && $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'] != 'p.?') {
+                                        // We have quite a few entries in the database that had p.? while now,
+                                        //  we have a proper value. The new one is better, silence this diff.
+                                        $aLOVDVot['VariantOnTranscript/Protein'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'];
+                                    }
+
+                                    // If the same, toss, but do report it.
+                                    if ($aLOVDVot == $aDiff['vots'][1][$nTranscriptID]) {
+                                        // We have this one also in the new data. It's unchanged.
+                                        // We used to unset these entries, which works, but I wanted to have them still
+                                        //  printed to show me which mapping was left and which were deleted. It was
+                                        //  basically for me to double-check the method for building $aGoodMappings.
+                                        $aDiff['vots'][0][$nTranscriptID] = $aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/DNA'] . ' (unchanged)';
+                                        $aDiff['vots'][1][$nTranscriptID] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA'] . ' (unchanged)';
+                                    }
+                                }
+                            }
+                        }
+
                         // Report the remaining diff to the screen, so we can see what kind of edits we're having.
                         if ($aDiff) {
                             var_dump($sVariant . ' (' . count($aDataLOVD[$sLOVDKey]['vots']) . ' -> ' . count($aVOGEntry['vots']) . ' VOTs)', $aDiff);
