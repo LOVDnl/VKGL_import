@@ -805,6 +805,21 @@ class Processor
                                     }
                                 }
                             }
+
+                            if (!count($aDiff['vots'][0])) {
+                                // No real diff. Just additions by us.
+                                unset($aDiff['vots']);
+
+                            } else {
+                                // If we only have string data in the VOTs, we don't have to see it.
+                                // That's a combination of "(unchanged)" and "(deleted)",
+                                //  and we're now confident that this works well.
+                                if (!array_filter($aDiff['vots'][0], function ($aVOT) { return is_array($aVOT); }) && $aDiff['vots'][1]) {
+                                    // We only have strings in the original array, but we do have mappings left.
+                                    // These are acceptable changes.
+                                    unset($aDiff['vots']);
+                                }
+                            }
                         }
 
                         // Report the remaining diff to the screen, so we can see what kind of edits we're having.
