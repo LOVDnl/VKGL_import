@@ -822,6 +822,27 @@ class Processor
                             }
                         }
 
+                        // The new data files that we started receiving in 2026 don't show multiple genes or transcripts.
+                        // As such, our often longer published_as fields got shortened. Or, the old value was cut at 150
+                        //  characters by the old pipeline, and we now shorten based on the length of the actual field.
+                        // Hide these changes if they are the only diff.
+                        if ($bPublishedAs && $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']
+                            && array_keys($aDiff) == ['VariantOnGenome/Published_as']) {
+                            if (strlen($aVOGEntry['VariantOnGenome/Published_as']) >= 20
+                                && str_contains($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'], ', ')) {
+                                $aDiff = []; // Hide the diff from the debugging view, but process it if we're actually running.
+                            } elseif (strlen($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']) == 150) {
+                                $aDiff = []; // Hide the diff from the debugging view, but process it if we're actually running.
+                            }
+                        }
+
+                        // Check if the diff is simply a deletion or re-publication of this variant.
+                        // That's a status change, possibly an effectid change and Published_as change, and a Remarks change.
+                        if ($aDiff && array_values(array_diff(array_keys($aDiff), ['effectid', 'VariantOnGenome/Published_as', 'VariantOnGenome/Remarks'])) == ['statusid']
+                            && ($aDiff['statusid'] == [9, 4] || $aDiff['statusid'][1] == 9)) {
+                            $aDiff = []; // Hide the diff from the debugging view, but process it if we're actually running.
+                        }
+
                         // Report the remaining diff to the screen, so we can see what kind of edits we're having.
                         if ($aDiff) {
                             var_dump($sVariant . ' (' . count($aDataLOVD[$sLOVDKey]['vots']) . ' -> ' . count($aVOGEntry['vots']) . ' VOTs)', $aDiff);
