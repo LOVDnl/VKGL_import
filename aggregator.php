@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-04-28
- * Modified    : 2026-09-04
+ * Modified    : 2026-10-23
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -73,7 +73,7 @@ class Aggregator
         if ($aVariant['cDNA']) {
             $sReportedAs .= (!$sReportedAs? '' : ($aVariant['transcript']? ':' : ' ')) . $aVariant['cDNA'];
         }
-        if ($aVariant['protein']) {
+        if ($aVariant['protein'] && $aVariant['protein'] != 'None') {
             if ($aVariant['cDNA']) {
                 $sReportedAs .= ' (' . $aVariant['protein'] . ')';
             } else {
