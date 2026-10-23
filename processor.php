@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-14
- * Modified    : 2026-10-07
+ * Modified    : 2026-10-23
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -848,6 +848,16 @@ class Processor
                             var_dump($sVariant . ' (' . count($aDataLOVD[$sLOVDKey]['vots']) . ' -> ' . count($aVOGEntry['vots']) . ' VOTs)', $aDiff);
                         }
 
+                        if ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_HIDDEN && $aVOGEntry['statusid'] == STATUS_OK) {
+                            // Variant was non-public but will be published now (previously deleted or in conflict).
+                            $aVariantsCreated[$sChromosome] ++;
+                        } elseif ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_OK && $aVOGEntry['statusid'] == STATUS_HIDDEN) {
+                            // Variant was public but will be unpublished now (new conflict).
+                            $aVariantsDeleted[$sChromosome] ++;
+                        } else {
+                            $aVariantsUpdated[$sChromosome] ++;
+                        }
+
                         // We don't need to print updates or so when we're doing a dry run. So just continue.
                         $nVariantsDone ++;
                         continue;
@@ -921,6 +931,7 @@ class Processor
 
                         // Determine whether this variant was created (undeleted) or updated.
                         if ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_HIDDEN && $aVOGEntry['statusid'] == STATUS_OK) {
+                            // Variant was non-public but will be published now (previously deleted or in conflict).
                             $aVariantsCreated[$sChromosome] ++;
                         } elseif ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_OK && $aVOGEntry['statusid'] == STATUS_HIDDEN) {
                             // Variant was public but will be unpublished now (new conflict).
