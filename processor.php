@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-14
- * Modified    : 2026-10-23
+ * Modified    : 2026-10-28
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -290,14 +290,16 @@ class Processor
         // These are optional, so we don't want to die if we don't have them.
         $aActiveCols = $_DB->q('
             SELECT colid FROM ' . TABLE_ACTIVE_COLS . '
-            WHERE colid IN (?, ?, ?, ?, ?)',
+            WHERE colid IN (?, ?, ?, ?, ?, ?)',
             array(
+                'VariantOnGenome/DNA/hg38',
                 'VariantOnGenome/Genetic_origin',
                 'VariantOnGenome/Published_as',
                 'VariantOnGenome/Remarks',
                 'VariantOnGenome/Remarks_Non_Public',
                 'VariantOnGenome/ClinicalClassification',
             ))->fetchAllColumn();
+        $bDNA38 = in_array('VariantOnGenome/DNA/hg38', $aActiveCols);
         $bGeneticOrigin = in_array('VariantOnGenome/Genetic_origin', $aActiveCols);
         $bPublishedAs = in_array('VariantOnGenome/Published_as', $aActiveCols);
         $bRemarks = in_array('VariantOnGenome/Remarks', $aActiveCols);
@@ -321,6 +323,7 @@ class Processor
                     vog.id, vog.allele, vog.effectid, vog.chromosome, vog.position_g_start, vog.position_g_end, vog.type,
                     vog.created_by, vog.owned_by, vog.statusid, vog.`VariantOnGenome/DNA`,
                     vog.`VariantOnGenome/DBID`, ' .
+                    (!$bDNA38? '' : 'vog.`VariantOnGenome/DNA/hg38`, ') .
                     (!$bGeneticOrigin? '' : 'vog.`VariantOnGenome/Genetic_origin`, ') .
                     (!$bPublishedAs? '' : 'vog.`VariantOnGenome/Published_as`, ') .
                     (!$bRemarks? '' : 'vog.`VariantOnGenome/Remarks`, ') .
@@ -478,6 +481,7 @@ class Processor
                     'VariantOnGenome/ClinicalClassification' => (!isset($this->effect_mapping_classification[$aVariant['classification']])? '-' :
                         $this->effect_mapping_classification[$aVariant['classification']]),
                     'VariantOnGenome/DNA' => $sDNA, // Can actually also update, if the LOVD data is not correct.
+                    'VariantOnGenome/DNA/hg38' => substr(strstr(($aVariant['DNA']['hg38'] ?? ':'), ':'), 1),
                     'VariantOnGenome/DBID' => '', // FIXME: Will be filled in later for records to be created!
                     'VariantOnGenome/Genetic_origin' => 'CLASSIFICATION record',
                     'VariantOnGenome/Published_as' => $aVariant['published_as'],
@@ -493,6 +497,9 @@ class Processor
                 // Some of these columns are optional.
                 if (!$bClassification) {
                     unset($aVOGEntry['VariantOnGenome/ClinicalClassification']);
+                }
+                if (!$bDNA38) {
+                    unset($aVOGEntry['VariantOnGenome/DNA/hg38']);
                 }
                 if (!$bGeneticOrigin) {
                     unset($aVOGEntry['VariantOnGenome/Genetic_origin']);
