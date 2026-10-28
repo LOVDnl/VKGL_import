@@ -747,6 +747,11 @@ class Processor
                     //  check if our code works well. To prevent very long diffs however, remove certain elements from
                     //  the diff that we understand can easily change.
                     if ($aDiff && $bDryRun) {
+                        // Hide filling in an empty hg38 DNA description.
+                        if (!empty($aDiff['VariantOnGenome/DNA/hg38'][1]) && empty($aDiff['VariantOnGenome/DNA/hg38'][0])) {
+                            unset($aDiff['VariantOnGenome/DNA/hg38']);
+                        }
+
                         // Hide filling in an empty "Published as".
                         if (!empty($aDiff['VariantOnGenome/Published_as'][1]) && empty($aDiff['VariantOnGenome/Published_as'][0])) {
                             unset($aDiff['VariantOnGenome/Published_as']);
