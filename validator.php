@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-12
- * Modified    : 2026-09-04
+ * Modified    : 2026-10-30
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -80,7 +80,7 @@ class Validator
                 $aCurrentAnnotations = json_decode($aCurrentData[$sVariantKey]['annotation'], true);
                 $aPreviousAnnotations = json_decode($aPreviousData[$sVariantKey]['annotation'], true);
                 // Currently, LOVD only stores the reported_as field.
-                if ($aCurrentAnnotations['reported_as'] != $aPreviousAnnotations['reported_as']) {
+                if (($aCurrentAnnotations['reported_as'] ?? '') != ($aPreviousAnnotations['reported_as'] ?? '')) {
                     $nUpdated ++;
                 }
             }
