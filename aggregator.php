@@ -248,8 +248,10 @@ class Aggregator
                         // The values of the column 'classification' will be handled separately.
                         // The column 'annotation' will be merged recursively.
                         // For each of the remaining columns, the values are combined into a single string.
-                        if ($sColumn == 'type' || $sColumn == 'genomic_liftover_normalized') {
+                        if ($sColumn == 'type' || $sColumn == 'genomic_native_normalized' || $sColumn == 'genomic_liftover_normalized') {
                             // Disallow having more than one unique value.
+                            // Yes, also the genomic_native_normalized could in theory have multiple values,
+                            //  as we swap the normalized fields when we notice we saw this variant on both builds.
                             // NOTE: This prevents CNVs and SNVs from getting merged, which would be bad.
                             //       If that ever happens, we may need to handle that and aggregate separately?
                             throw new \Exception("Variant merging conflict for $sVariant in $sCenter, field $sColumn contains non-unique values " . implode(', ', $aValues));
@@ -405,10 +407,42 @@ class Aggregator
             }
 
             $aVariant = array_combine($aHeaders, $aDataLine);
+
+            // Before storing the data, check what field to use; the native or liftover value?
+            // The same variants are reported both on hg19 and hg38.
+            // We can only group properly (both within each center and between centers) if we correct for this.
+            if (isset($this->data[$aVariant['genomic_native_normalized']])
+                || empty($aVariant['genomic_liftover_normalized'])
+                || !isset($this->data[$aVariant['genomic_liftover_normalized']])) {
+                // Store by the native_normalized field.
+                $sVariantToUse = $aVariant['genomic_native_normalized'];
+
+            } else {
+                // We have seen this variant before, but only by the liftover value.
+                $sVariantToUse = $aVariant['genomic_liftover_normalized'];
+            }
+
+            // If we have seen this variant before from this center, we may need to swap our fields.
+            // Otherwise, we can't properly merge this center's entries.
+            // We will not swap the reported fields;
+            //  this way, we'll nicely store that the variant has been reported on both builds.
+            if (isset($this->data[$sVariantToUse][$aVariant['center']])
+                && $this->data[$sVariantToUse][$aVariant['center']][0]['genomic_native_normalized'] == $aVariant['genomic_liftover_normalized']) {
+                // NOTE: If this variant will be added to the error file because of conflicts,
+                //        the error file will show this center's first reported and normalized values.
+                list(
+                    $aVariant['genomic_native_normalized'],
+                    $aVariant['genomic_liftover_normalized']
+                    ) = [
+                    $aVariant['genomic_liftover_normalized'],
+                    $aVariant['genomic_native_normalized'],
+                ];
+            }
+
             // Store the data grouped by the normalized variant description, then per center.
             // This allows us to easily group the multiple observations within one center and then compare the data
             //  between centers.
-            $this->data[$aVariant['genomic_native_normalized']][$aVariant['center']][] = $aVariant;
+            $this->data[$sVariantToUse][$aVariant['center']][] = $aVariant;
         }
 
         return true;
