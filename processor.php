@@ -1,0 +1,1148 @@
+<?php
+/*******************************************************************************
+ *
+ * VKGL-LOVD data pipeline.
+ *
+ * Created     : 2026-05-14
+ * Modified    : 2026-10-28
+ *
+ * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
+ * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
+ *               Marit de Koster <M.de_Koster@LUMC.nl>
+ *
+ *************/
+
+namespace LOVD\VKGL;
+
+require_once(__DIR__ . '/libs/HGVS-syntax-checker/HGVS.php');
+require_once(__DIR__ . '/libs/HGVS-syntax-checker/caches.php');
+require_once(__DIR__ . '/LOVD.php');
+use LOVD\HGVS\Caches;
+use LOVD\HGVS\HGVS;
+use LOVD\HGVS\HGVS_Chromosome;
+use LOVD\Log;
+use LOVD\LOVD;
+use LOVD\Settings;
+
+class Processor
+{
+    // Class abstracting the processing of the aggregated data in a local LOVD instance.
+    private array $center_ids = []; // [center => internal LOVD ID]; the generic VKGL account is added manually.
+    private array $data = [];
+    private array $data_rejected = [];
+    private array $data_rejected_output_header = [
+        'center',
+        'type',
+        'error',
+        'genomic_native_normalized',
+        'genomic_native_reported',
+    ];
+    private array $effect_mapping_classification = array(
+        'B' => 'benign',
+        'LB' => 'likely benign',
+        'VUS' => 'VUS',
+        'LP' => 'likely pathogenic',
+        'P' => 'pathogenic',
+    );
+    private array $effect_mapping_LOVD = array(
+        'B' => 1,
+        'LB' => 3,
+        'VUS' => 5,
+        'LP' => 7,
+        'P' => 9,
+    );
+    private array $flags = [];
+    private array $statistics = array(
+        'created' => 0,
+        'updated' => 0,
+        'deleted' => 0,
+        'skipped' => 0,
+    );
+    private int $total_variants = 0;
+    private string $lovd_genome_build = '';
+    private $Settings;
+    private $Log;
+
+    public static function process (string $sFile, Settings $Settings, Log $Log, array $aFlags = []): Processor
+    {
+        // Process the given data into the LOVD configured in the settings.
+        $o = new Processor();
+        $o->Settings = $Settings;
+        $o->Log = $Log;
+        foreach ($aFlags as $sFlag => $bValue) {
+            $o->flags[$sFlag] = $bValue;
+        }
+
+        // Connect to LOVD and check if that worked.
+        $b = LOVD::connect(($Settings->get('lovd_path') ?? ''), $Log);
+        if (!$b) {
+            throw new \Exception("Unable to connect to LOVD");
+        }
+
+        $o->prepare();
+        $o->parse($sFile);
+        $o->processData();
+        return $o;
+    }
+
+
+
+
+
+    public function getStatistics (): array
+    {
+        return $this->statistics;
+    }
+
+
+
+
+
+    public function hasErrors (): bool
+    {
+        return (bool) count($this->data_rejected);
+    }
+
+
+
+
+
+    public function parse (string $sFile): bool
+    {
+        // Parse the data file and add the contents to $this->data.
+        if (!file_exists($sFile) || !is_readable($sFile)) {
+            throw new \Exception("File $sFile does not exist or is not readable");
+        }
+
+        $aLines = file($sFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if (!$aLines) {
+            throw new \Exception("File $sFile could not be opened");
+        }
+
+        // First line should be headers. No need to use strtolower() here, this is our own format.
+        $aHeaders = explode("\t", array_shift($aLines));
+        $nHeaders = count($aHeaders);
+        $aHeaders = array_map('trim', $aHeaders, array_fill(0, $nHeaders, '"'));
+
+        foreach ($aLines as $sLine) {
+            $aDataLine = explode("\t", rtrim($sLine));
+            // Trim quotes off of the data.
+            $aDataLine = array_map(function ($sData) {
+                return trim($sData, '"');
+            }, $aDataLine);
+            $nDataColumns = count($aDataLine);
+            if ($nHeaders > $nDataColumns) {
+                // We accidentally trimmed off empty fields.
+                $aDataLine = array_pad($aDataLine, $nHeaders, '');
+            }
+            $aVariant = array_combine($aHeaders, $aDataLine);
+
+            // Collect all necessary data about the variant's builds.
+            $aVariant['native_info'] = HGVS_Chromosome::getInfoByNC(strstr($aVariant['genomic_native_normalized'], ':', true));
+            $aVariant['DNA'][$aVariant['native_info']['build']] = $aVariant['genomic_native_normalized'];
+            // Note: this may store false, when we have no liftover value.
+            $aVariant['liftover_info'] = HGVS_Chromosome::getInfoByNC(strstr($aVariant['genomic_liftover_normalized'], ':', true));
+            if ($aVariant['liftover_info']) {
+                $aVariant['DNA'][$aVariant['liftover_info']['build']] = $aVariant['genomic_liftover_normalized'];
+
+                // Also check if both descriptions are using the same chromosome. They should, but you never know.
+                if ($aVariant['native_info']['chr'] != $aVariant['liftover_info']['chr']) {
+                    $this->data_rejected[] = array_merge(
+                        $aVariant,
+                        [
+                            'error' => "Variant's native and liftover descriptions are on different chromosomes: {$aVariant['native_info']['chr']} and {$aVariant['liftover_info']['chr']}.",
+                        ]
+                    );
+                    continue;
+                }
+            }
+
+            // Check if this variant's build(s) match the LOVD's build. If this variant does not have a description on
+            //  LOVD's build, the variant will not be added to the dataset, but saved to the error file, instead.
+            if (!isset($aVariant['DNA'][$this->lovd_genome_build])) {
+                $this->data_rejected[] = array_merge(
+                    $aVariant,
+                    [
+                        'error' => "LOVD has been configured to use {$this->lovd_genome_build}, this variant has descriptions only on " . implode(' and ', array_keys($aVariant['DNA'])) . '.',
+                    ]
+                );
+                continue;
+            }
+
+            $nCenterID = (int) ($this->center_ids[$aVariant['center']] ?? 0);
+            if (!$nCenterID) {
+                throw new \Exception("Center {$aVariant['center']} is not configured in the settings, or no LOVD ID has been set");
+            }
+
+            // Store the data by NC+chr value, then by center ID + variant description.
+            // That way, we can easily check if a variant is in the data file.
+            $sChrKey = strstr($aVariant['DNA'][$this->lovd_genome_build], ':', true) . ':' . $aVariant['native_info']['chr'];
+            $sVariantKey = str_pad($nCenterID, 5, '0', STR_PAD_LEFT) . ':' . $aVariant['DNA'][$this->lovd_genome_build];
+            $this->data[$sChrKey][$sVariantKey] = $aVariant;
+            $this->total_variants ++;
+        }
+
+        // Make sure we run everything in the correct order, from chr1 to 22, then X, Y, and M.
+        ksort($this->data);
+        $this->Log->add("Loaded {$this->total_variants} variants from the data file.");
+
+        $nNoCorrectBuildFound = count($this->data_rejected);
+        if ($nNoCorrectBuildFound) {
+            $this->Log->add("Found $nNoCorrectBuildFound variant" . ($nNoCorrectBuildFound == 1? '' : 's') . " without a description on {$this->lovd_genome_build}; cannot process this variant in this LOVD instance.");
+        }
+        return true;
+    }
+
+
+
+
+
+    public function prepare (): void
+    {
+        // Prepare by collecting relevant information and doing some checks.
+
+        // We need this a lot, so query it here.
+        $this->lovd_genome_build = LOVD::getGenomeBuild();
+
+        // Check if we have all the settings for the centers filled in OK.
+        foreach ($this->Settings->get('centers') as $sCenter => $aCenter) {
+            if (isset($aCenter['id'])) {
+                $this->center_ids[$sCenter] = (int) $aCenter['id'];
+            }
+        }
+
+        $bAccountsOK = true;
+        $this->center_ids['generic_vkgl_account'] = (int) ($this->Settings->get('vkgl_generic_id') ?? 0);
+        if (!$this->center_ids['generic_vkgl_account']) {
+            $bAccountsOK = false;
+            $this->Log->add("The generic VKGL account ID is not configured; please add vkgl_generic_id to the settings.json file.");
+        }
+
+        // Make sure all IDs are unique. Flip the array and check the count.
+        $aCenterIDsToNames = array_flip($this->center_ids);
+        if (count($aCenterIDsToNames) != count($this->center_ids)) {
+            // There is a problem. At least one of the IDs is non-unique.
+            $bAccountsOK = false;
+            foreach ($this->center_ids as $sCenter => $nCenterID) {
+                if ($sCenter != $aCenterIDsToNames[$nCenterID]) {
+                    $this->Log->add("LOVD user ID #{$nCenterID} is assigned to both {$aCenterIDsToNames[$nCenterID]} and {$sCenter}.");
+                }
+            }
+        }
+
+        // Now make sure that the accounts exist in LOVD.
+        // Check the given user accounts by using the user IDs ($this->center_ids).
+        // Check if the users with ID are found in LOVD.
+        $aUsers = LOVD::getUsers($this->center_ids);
+        $aUserIDsMissing = array_diff(array_values($this->center_ids), array_keys($aUsers));
+        foreach ($aUserIDsMissing as $nUserID) {
+            $bAccountsOK = false;
+            $this->Log->add("LOVD user ID #{$nUserID} not found in LOVD but assigned to {$aCenterIDsToNames[$nUserID]}.");
+        }
+
+        if (!$bAccountsOK) {
+            $this->Log->add("Please check your settings and try again.");
+            throw new \Exception('Failed to get all LOVD user accounts — see the status log');
+        }
+    }
+
+
+
+
+
+    public function processData (): bool
+    {
+        // Process the data into the LOVD instance.
+        global $_CONF, $_DB, $_TABLES, $_SETT, $_T;
+
+        // Are we doing a dry run?
+        $bDryRun = !empty($this->flags['dry-run']);
+        if ($bDryRun) {
+            $this->Log->add('Dry run enabled, not running any database updates.');
+        }
+
+        // Store all of LOVD's transcripts, we need them; array(id_ncbi => id).
+        $aTranscriptsInLOVD = LOVD::getAllTranscripts();
+
+        // Process updates in the database.
+        $nVariantsDone = 0;
+        $nPercentageComplete = 0; // Integer of percentage with one decimal (!), so you can see the progress.
+        $tProgressReported = microtime(true); // Don't report progress again within a certain amount of time.
+
+        $aVariantsCreated = array(); // Collects counters per chromosome.
+        $aVariantsUpdated = array(); // Collects counters per chromosome.
+        $aVariantsDeleted = array(); // Collects counters per chromosome.
+        $aVariantsSkipped = array(); // Collects counters per chromosome.
+        $sNow = date('Y-m-d H:i:s');
+
+        // Process updates per chromosome but show progress over the total number of variants.
+        // We won't process variants that we can't hold. We could shorten the variant, but:
+        // 1) If that shortening is not done exactly as before, linking database entries to file contents fails, and
+        // 2) Contracting the VOG/DNA description may actually create non-unique values for unique variants, and
+        // 3) Anyway, labs won't be able to match the DNA variant.
+        // We're only losing a handful of variants by skipping them if the VOG/DNA field is too long.
+        $nMaxVOGDNALength = lovd_getColumnLength(TABLE_VARIANTS, 'VariantOnGenome/DNA');
+        $nMaxVOGPublishedAsLength = lovd_getColumnLength(TABLE_VARIANTS, 'VariantOnGenome/Published_as');
+        $nMaxVOTDNALength = lovd_getColumnLength(TABLE_VARIANTS_ON_TRANSCRIPTS, 'VariantOnTranscript/DNA');
+        $nMaxVOTProteinLength = lovd_getColumnLength(TABLE_VARIANTS_ON_TRANSCRIPTS, 'VariantOnTranscript/Protein');
+
+        // Check if we actually have some columns that we use, activated.
+        // These are optional, so we don't want to die if we don't have them.
+        $aActiveCols = $_DB->q('
+            SELECT colid FROM ' . TABLE_ACTIVE_COLS . '
+            WHERE colid IN (?, ?, ?, ?, ?, ?)',
+            array(
+                'VariantOnGenome/DNA/hg38',
+                'VariantOnGenome/Genetic_origin',
+                'VariantOnGenome/Published_as',
+                'VariantOnGenome/Remarks',
+                'VariantOnGenome/Remarks_Non_Public',
+                'VariantOnGenome/ClinicalClassification',
+            ))->fetchAllColumn();
+        $bDNA38 = in_array('VariantOnGenome/DNA/hg38', $aActiveCols);
+        $bGeneticOrigin = in_array('VariantOnGenome/Genetic_origin', $aActiveCols);
+        $bPublishedAs = in_array('VariantOnGenome/Published_as', $aActiveCols);
+        $bRemarks = in_array('VariantOnGenome/Remarks', $aActiveCols);
+        $bRemarksNonPublic = in_array('VariantOnGenome/Remarks_Non_Public', $aActiveCols);
+        $bClassification = in_array('VariantOnGenome/ClinicalClassification', $aActiveCols);
+
+        foreach ($this->data as $sChrKey => $aVariants) {
+            list($sRefSeq, $sChromosome) = explode(':', $sChrKey, 2);
+
+            // Set counters.
+            $aVariantsCreated[$sChromosome] = 0;
+            $aVariantsUpdated[$sChromosome] = 0;
+            $aVariantsDeleted[$sChromosome] = 0;
+            $aVariantsSkipped[$sChromosome] = 0;
+
+            // Load the data currently in the database.
+            // Note, that if there are two entries of the same variant by the same center, we see only *one*.
+            $_DB->q('SET group_concat_max_len = 10000');
+            $aDataLOVD = $_DB->q('
+                SELECT CONCAT(vog.created_by, ":", ?, ":", vog.`VariantOnGenome/DNA`) AS ID,
+                    vog.id, vog.allele, vog.effectid, vog.chromosome, vog.position_g_start, vog.position_g_end, vog.type,
+                    vog.created_by, vog.owned_by, vog.statusid, vog.`VariantOnGenome/DNA`,
+                    vog.`VariantOnGenome/DBID`, ' .
+                    (!$bDNA38? '' : 'vog.`VariantOnGenome/DNA/hg38`, ') .
+                    (!$bGeneticOrigin? '' : 'vog.`VariantOnGenome/Genetic_origin`, ') .
+                    (!$bPublishedAs? '' : 'vog.`VariantOnGenome/Published_as`, ') .
+                    (!$bRemarks? '' : 'vog.`VariantOnGenome/Remarks`, ') .
+                    (!$bRemarksNonPublic? '' : 'vog.`VariantOnGenome/Remarks_Non_Public`, ') .
+                    (!$bClassification? '' : 'IFNULL(NULLIF(vog.`VariantOnGenome/ClinicalClassification`, ""), "-") AS `VariantOnGenome/ClinicalClassification`,') . '
+                    GROUP_CONCAT(vot.transcriptid, ";", vot.effectid, ";",
+                        IFNULL(vot.position_c_start, "0"), ";",
+                        IFNULL(vot.position_c_start_intron, "0"), ";",
+                        IFNULL(vot.position_c_end, "0"), ";",
+                        IFNULL(vot.position_c_end_intron, "0"), ";",
+                        IFNULL(NULLIF(vot.`VariantOnTranscript/DNA`, ""), "-"), ";",
+                        IFNULL(NULLIF(vot.`VariantOnTranscript/RNA`, ""), "-"), ";",
+                        IFNULL(NULLIF(vot.`VariantOnTranscript/Protein`, ""), "-") SEPARATOR ";;") AS vots
+                FROM ' . TABLE_VARIANTS . ' AS vog LEFT OUTER JOIN ' . TABLE_VARIANTS_ON_TRANSCRIPTS . ' AS vot USING (id)
+                WHERE vog.chromosome = ? AND vog.created_by IN (?' . str_repeat(', ?', count($this->center_ids) - 1) . ')
+                GROUP BY vog.id',
+                array_merge(
+                    array($sRefSeq, $sChromosome),
+                    array_values($this->center_ids)))->fetchAllGroupAssoc();
+
+
+
+            // Check all LOVD data and mark data as removed when it's not present in the data file anymore.
+            $sRemoveMessage = 'VKGL data sharing initiative Nederland; Variant no longer found in the VKGL dataset for this center.';
+            foreach ($aDataLOVD as $sLOVDKey => $aLOVDVariant) {
+                // Remove variant if needed. Don't touch the Remarks_Non_Public, we don't want to complicate things.
+                // Also, don't run this if we don't have to. Check status and current remarks.
+                if (!isset($this->data[$sChrKey][$sLOVDKey])) {
+                    if (str_starts_with($aLOVDVariant['VariantOnGenome/Remarks'], $sRemoveMessage)
+                        && $aLOVDVariant['statusid'] <= STATUS_HIDDEN) {
+                        // No update needed; already deleted.
+                        continue;
+                    }
+
+                    if ($bDryRun) {
+                        $aVariantsDeleted[$sChromosome] ++;
+                    } else {
+                        $q = $_DB->q('UPDATE ' . TABLE_VARIANTS . '
+                                      SET `VariantOnGenome/Remarks` = ?, statusid = ?, edited_by = 0, edited_date = ?
+                                      WHERE id = ?',
+                            array(
+                                $sRemoveMessage,
+                                STATUS_HIDDEN,
+                                $sNow,
+                                $aLOVDVariant['id'],
+                            )
+                        );
+                        if ($q->rowCount()) {
+                            $aVariantsDeleted[$sChromosome] ++;
+                        }
+                    }
+                    unset($aDataLOVD[$sLOVDKey]);
+                }
+            }
+
+            // Report data loaded and get to work.
+            $nPercentageComplete = floor($nVariantsDone * 1000 / $this->total_variants);
+            $this->Log->add(
+                '[' . str_pad(number_format($nPercentageComplete / 10, 1), 5, ' ', STR_PAD_LEFT) .
+                "%] Chromosome $sChromosome data loaded, running updates...");
+            $tProgressReported = microtime(true); // Don't report again for a certain amount of time.
+
+
+
+            // Now, loop the data in the data file and process each variant.
+            foreach ($aVariants as $sLOVDKey => $aVariant) {
+                list($nCenterID, $sVariant) = explode(':', $sLOVDKey, 2);
+                $sDNA = substr(strstr($sVariant, ':'), 1);
+
+                // LOVD+ has a much shorter DNA field; only 150 characters.
+                // Trying to put in a variant that's bigger will crash this process.
+                // However, we may also simply find variants longer than 255 characters.
+                // We will simply skip whatever is too long. See comments above explaining the reasoning.
+                if (strlen($sDNA) > $nMaxVOGDNALength) {
+                    $aVariantsSkipped[$sChromosome] ++;
+                    $nVariantsDone ++;
+                    continue;
+                }
+
+                // Build the "Published as" field. Start by unpacking the variant annotation and checking the
+                //  "reported_as" field. But check the value, because sometimes we just have a gene and a transcript in
+                //  there. I thought about removing these values in an earlier step in the pipeline, but then we'd lose
+                //  the information completely. I guess it's better to just prevent "GENE transcript" to overwrite
+                //  anything that we may have.
+                $aVariant['annotation'] = json_decode($aVariant['annotation'], true);
+                if (!empty($aVariant['annotation']['reported_as'])) {
+                    if (!is_array($aVariant['annotation']['reported_as'])) {
+                        $aVariant['annotation']['reported_as'] = [$aVariant['annotation']['reported_as']];
+                    }
+                    // Make sure we're only left with actual variant descriptions.
+                    $aVariant['annotation']['reported_as'] = implode(
+                        ', ',
+                        array_filter(
+                            $aVariant['annotation']['reported_as'],
+                            function ($s)
+                            {
+                                return str_contains($s, ':');
+                            }
+                        )
+                    );
+                }
+                if (empty($aVariant['annotation']['reported_as'])) {
+                    // If we didn't have a "reported_as" value in the variant's annotation, check the database if we
+                    //  already have a value there. If so, just use that. If we have nothing, default to our
+                    //  genomic_native_reported field.
+                    if (!empty($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'])) {
+                        $aVariant['published_as'] = $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'];
+                    } else {
+                        $aVariant['published_as'] = $aVariant['genomic_native_reported'];
+                    }
+                } else {
+                    $aVariant['published_as'] = $aVariant['annotation']['reported_as'];
+                }
+
+                // Do limit the input, depending on the field size.
+                if (strlen($aVariant['published_as']) > $nMaxVOGPublishedAsLength) {
+                    $aVariant['published_as'] = $this->removeDNASuffixes($aVariant['published_as']);
+                    // Is more needed?
+                    if (strlen($aVariant['published_as']) > $nMaxVOGPublishedAsLength) {
+                        $aVariant['published_as'] = $this->shortenProteinInsertions($aVariant['published_as']);
+                        // Is more needed?
+                        if (strlen($aVariant['published_as']) > $nMaxVOGPublishedAsLength) {
+                            $aVariant['published_as'] = $this->shortenDNAInsertions($aVariant['published_as']);
+                        }
+                    }
+                }
+
+                // Add some needed fields; (type, position_start, position_end).
+                $HGVS = HGVS::check($sVariant);
+                $HGVSData = $HGVS->getData();
+                if ($HGVSData['type'] == '>') {
+                    // Backward compatible with LOVD3.
+                    $HGVSData['type'] = 'subst';
+                }
+
+                // Build variant entry.
+                $aVOGEntry = array(
+                    'id' => null,
+                    'allele' => '0', // Unknown.
+                    // Don't let internal conflicts cause notices here.
+                    'effectid' => (!isset($this->effect_mapping_LOVD[$aVariant['classification']]) ? 0 :
+                        $this->effect_mapping_LOVD[$aVariant['classification']]) .
+                        // Default to "Not curated" for concluded effect, unless a user filled something in already.
+                        (!isset($aDataLOVD[$sLOVDKey])? '0' : substr($aDataLOVD[$sLOVDKey]['effectid'], -1)),
+                    'chromosome' => $sChromosome,
+                    'position_g_start' => $HGVSData['position_start'],
+                    'position_g_end' => $HGVSData['position_end'],
+                    'type' => $HGVSData['type'],
+                    'created_by' => $nCenterID,
+                    // Created_date will be added later, right now we don't have it to prevent unneeded differences.
+                    'owned_by' => ($aVariant['status'] == 'single-lab' && $this->Settings->get('public_singlelab_owners') != 'y' ? // Should single-lab entry get the generic VKGL account as owner?
+                        $this->center_ids['generic_vkgl_account'] : $nCenterID),
+                    'statusid' => (str_ends_with($aVariant['status'], 'opposite')? STATUS_HIDDEN : STATUS_OK),
+                    // Don't let internal conflicts cause notices here.
+                    'VariantOnGenome/ClinicalClassification' => (!isset($this->effect_mapping_classification[$aVariant['classification']])? '-' :
+                        $this->effect_mapping_classification[$aVariant['classification']]),
+                    'VariantOnGenome/DNA' => $sDNA, // Can actually also update, if the LOVD data is not correct.
+                    'VariantOnGenome/DNA/hg38' => substr(strstr(($aVariant['DNA']['hg38'] ?? ':'), ':'), 1),
+                    'VariantOnGenome/DBID' => '', // FIXME: Will be filled in later for records to be created!
+                    'VariantOnGenome/Genetic_origin' => 'CLASSIFICATION record',
+                    'VariantOnGenome/Published_as' => $aVariant['published_as'],
+                    'VariantOnGenome/Remarks' => 'VKGL data sharing initiative Nederland' .
+                        (!str_ends_with($aVariant['status'], 'opposite')? '' : '; Variant classification is in conflict with' . ($aVariant['status'] == 'internal-opposite' ? 'in this center.' : ' a different center.')),
+                    'VariantOnGenome/Remarks_Non_Public' => array(
+                        'warning' => 'Do not remove or edit this field!',
+                        'updates' => array(),
+                    ),
+                    'vots' => array(),
+                );
+
+                // Some of these columns are optional.
+                if (!$bClassification) {
+                    unset($aVOGEntry['VariantOnGenome/ClinicalClassification']);
+                }
+                if (!$bDNA38) {
+                    unset($aVOGEntry['VariantOnGenome/DNA/hg38']);
+                }
+                if (!$bGeneticOrigin) {
+                    unset($aVOGEntry['VariantOnGenome/Genetic_origin']);
+                }
+                if (!$bPublishedAs) {
+                    unset($aVOGEntry['VariantOnGenome/Published_as']);
+                }
+                if (!$bRemarks) {
+                    unset($aVOGEntry['VariantOnGenome/Remarks']);
+                }
+                if (!$bRemarksNonPublic) {
+                    unset($aVOGEntry['VariantOnGenome/Remarks_Non_Public']);
+                }
+
+                // Fill VOTs, but only for SNVs; CNVs don't need any VOTs.
+                $aCrossVersionMappings = []; // Store for which transcripts we matched across transcript versions.
+                if ($aVariant['type'] != 'CNV') {
+                    $aMappingData = Caches::getMapping($sVariant);
+                    foreach (($aMappingData ?: []) as $sSource => $aTranscripts) {
+                        // Loop all mapping data to find VOTs for this variant.
+                        foreach ($aTranscripts as $sTranscript => $aMapping) {
+                            if ($sTranscript == 's') {
+                                // This is annotation in the mapping info; we don't use this.
+                                continue;
+                            }
+
+                            // We'll do version-agnostic matching. If there is a full match, we'll take that,
+                            //  but otherwise, look for other versions as well.
+                            list($sTranscriptWithoutVersion, $nVersion) = explode('.', $sTranscript, 2);
+                            if (isset($aTranscriptsInLOVD[$sTranscript])) {
+                                $aVersionsToCheck = [$nVersion];
+                            } else {
+                                // LOVD can have newer and older transcripts, or both. And our mapping info can have
+                                //  multiple versions for a transcript as well. This would have been easier if I have
+                                //  both the mapping info and the LOVD transcripts grouped per version-less ID, but
+                                //  that's a lot of work, too. We can get issues with this, but it will work fine most
+                                //  of the time. Check from version 1 to $nVersion + 2. If we have version 4, we will
+                                //  check LOVD for versions 4, 3, 2, 1, 5, and 6.
+                                $aVersionsToCheck = array_reverse(range(1, $nVersion));
+                                $aVersionsToCheck[] = ($nVersion + 1);
+                                $aVersionsToCheck[] = ($nVersion + 2);
+                            }
+
+                            // Check what versions we have in LOVD, and then create the VOTs.
+                            foreach ($aVersionsToCheck as $nVersion) {
+                                $nTranscriptID = ($aTranscriptsInLOVD["$sTranscriptWithoutVersion.$nVersion"] ?? false);
+                                if ($nTranscriptID !== false) {
+                                    // Shorten the DNA and protein fields, if needed.
+                                    if (strlen($aMapping['c']) > $nMaxVOTDNALength) {
+                                        $aMapping['c'] = $this->shortenDNAInsertions($aMapping['c']);
+                                    }
+                                    if (strlen($aMapping['p']) > $nMaxVOTProteinLength) {
+                                        $aMapping['p'] = $this->shortenProteinInsertions($aMapping['p']);
+                                    }
+                                    $aVariantInfo = (HGVS::check($aMapping['c'])->getData() ?: []);
+                                    $aVOGEntry['vots'][$nTranscriptID] = [
+                                        'transcriptid' => $nTranscriptID,
+                                        'effectid' => $aVOGEntry['effectid'],
+                                        'position_c_start' => ($aVariantInfo['position_start'] ?? null),
+                                        'position_c_start_intron' => ($aVariantInfo['position_start_intron'] ?? null),
+                                        'position_c_end' => ($aVariantInfo['position_end'] ?? null),
+                                        'position_c_end_intron' => ($aVariantInfo['position_end_intron'] ?? null),
+                                        'VariantOnTranscript/DNA' => ($aMapping['c'] ?: '-'),
+                                        'VariantOnTranscript/RNA' => ($aMapping['r'] ?: '-'),
+                                        'VariantOnTranscript/Protein' => ($aMapping['p'] ?: '-'),
+                                    ];
+
+                                    // Store if we just made a cross-version mapping. If so, we need to be more careful.
+                                    $aCrossVersionMappings[] = $nTranscriptID;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // For comparison reasons.
+                    ksort($aVOGEntry['vots']);
+                }
+
+                // If this entry already exists, simply update the record when needed.
+                if (isset($aDataLOVD[$sLOVDKey])) {
+                    // Variant has been seen already by this center.
+
+                    // Make it easier to compare with our array.
+                    // Build array from JSON object, if we have it.
+                    if (!empty($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'])) {
+                        $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] = json_decode($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'], true);
+                        if ($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] === false
+                            || !is_array($aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'])) {
+                            // Somebody malformed this field...
+                            // We don't want to die here, because that will leave us with half an update.
+                            // Instead, skip the variant and log an error so that we can fix it manually and re-run the Processor.
+                            $this->Log->add("Error: Variant $sVariant has an unparsable JSON object for center {$aVariant['center']} ($nCenterID).", '!!');
+                            $aVariantsSkipped[$sChromosome] ++;
+                            $nVariantsDone ++;
+                            continue;
+                        }
+                    } elseif ($bRemarksNonPublic) {
+                        $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public'] = array();
+                    }
+
+                    // Rebuild VOT data currently in the database for this variant.
+                    if (!$aDataLOVD[$sLOVDKey]['vots']) {
+                        $aDataLOVD[$sLOVDKey]['vots'] = array();
+                    } else {
+                        $aVOTs = explode(';;', $aDataLOVD[$sLOVDKey]['vots']);
+                        $aDataLOVD[$sLOVDKey]['vots'] = array();
+                        foreach ($aVOTs as $sVOT) {
+                            $aVOT = explode(';', $sVOT);
+                            $aDataLOVD[$sLOVDKey]['vots'][$aVOT[0]] = array(
+                                'transcriptid' => $aVOT[0],
+                                'effectid' => $aVOT[1],
+                                'position_c_start' => ($aVOT[2] ?: null),
+                                'position_c_start_intron' => ($aVOT[3] ?: null),
+                                'position_c_end' => ($aVOT[4] ?: null),
+                                'position_c_end_intron' => ($aVOT[5] ?: null),
+                                'VariantOnTranscript/DNA' => $aVOT[6],
+                                'VariantOnTranscript/RNA' => $aVOT[7],
+                                'VariantOnTranscript/Protein' => $aVOT[8],
+                            );
+                        }
+
+                        // For comparison reasons.
+                        ksort($aDataLOVD[$sLOVDKey]['vots']);
+
+                        // Don't just drop mappings that we already have in the database; merge them.
+                        $aVOGEntry['vots'] += $aDataLOVD[$sLOVDKey]['vots'];
+
+                        // However, we historically had pretty bad mappings in the database, too. Remove those if we have something good as well.
+                        $aGoodMappings = array_filter($aVOGEntry['vots'], function ($aVOT)
+                        {
+                            // Anything not too far into the UTRs is acceptable.
+                            // There are plenty of real mappings within 500 bp from the CDS that we got from VV.
+                            if ($aVOT['position_c_start'] < -500 || (preg_match('/^c\.\*([0-9]{3,})/', $aVOT['VariantOnTranscript/DNA'], $aMatches) && $aMatches[1] > 500)) {
+                                // Too far out; ignore.
+                                return false;
+                            }
+                            return true;
+                        });
+                        if ($aGoodMappings) {
+                            // Overwrite the mappings. This removes mappings that are too far out.
+                            $aVOGEntry['vots'] = $aGoodMappings;
+                        }
+
+                        // For comparison reasons.
+                        ksort($aVOGEntry['vots']);
+
+                        // If we made any cross-version mappings, prefer using the LOVD data when the cDNA is different.
+                        foreach ($aCrossVersionMappings as $nTranscriptID) {
+                            if (isset($aVOGEntry['vots'][$nTranscriptID])
+                                && isset($aDataLOVD[$sLOVDKey]['vots'][$nTranscriptID])
+                                && ($aVOGEntry['vots'][$nTranscriptID]['VariantOnTranscript/DNA']
+                                        != $aDataLOVD[$sLOVDKey]['vots'][$nTranscriptID]['VariantOnTranscript/DNA']
+                                    || $aVOGEntry['vots'][$nTranscriptID]['VariantOnTranscript/Protein']
+                                        != $aDataLOVD[$sLOVDKey]['vots'][$nTranscriptID]['VariantOnTranscript/Protein'])) {
+                                // This is too risky. Keep the mapping currently in LOVD.
+                                $aVOGEntry['vots'][$nTranscriptID] = array_merge(
+                                    $aDataLOVD[$sLOVDKey]['vots'][$nTranscriptID],
+                                    [
+                                        'effectid' => $aVOGEntry['vots'][$nTranscriptID]['effectid'],
+                                    ]
+                                );
+                            }
+                        }
+                    }
+
+                    // Make my life easier, just copy some values.
+                    $aVOGEntry['id'] = $aDataLOVD[$sLOVDKey]['id'];
+                    $aVOGEntry['VariantOnGenome/DBID'] = $aDataLOVD[$sLOVDKey]['VariantOnGenome/DBID'];
+                    if ($bRemarksNonPublic) {
+                        $aVOGEntry['VariantOnGenome/Remarks_Non_Public'] = array_merge(
+                            $aVOGEntry['VariantOnGenome/Remarks_Non_Public'],
+                            $aDataLOVD[$sLOVDKey]['VariantOnGenome/Remarks_Non_Public']
+                        );
+                    }
+
+                    // Reduce the differences in the published_as field by ignoring some updates. When we moved to the
+                    //  new pipeline in 2026, we updated the code that generates the published_as value. Some changes
+                    //  are not relevant enough to warrant an update, which gives us problems with the validation.
+                    if ($bPublishedAs && $aVOGEntry['VariantOnGenome/Published_as']
+                        && $aVOGEntry['VariantOnGenome/Published_as'] != $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']) {
+                        // If the difference simply a change of notation? If so, ignore. E.g.:
+                        // "NMNAT1(NM_001297778.1):c.25G>A (p.V9M)" (old)
+                        // "NMNAT1 NM_001297778.1:c.25G>A (p.V9M)" (new)
+                        // Also, correct in case we no longer have a protein change. Also then keep the original.
+                        // Finally, also ignore additions of the NM or NP to the protein change.
+                        if (str_starts_with(preg_replace('/\(([NX][CMR]_[0-9.]+|ENST[0-9.]+)\)/', ' $1', $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']),
+                            preg_replace('/\([NX][MRP]_[0-9]+\.[0-9]+:/', '(', $aVOGEntry['VariantOnGenome/Published_as']))) {
+                            // Don't change the published_as field; just leave it, pretend that there is no change.
+                            $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'] = $aVOGEntry['VariantOnGenome/Published_as'];
+                        }
+                    }
+
+                    // Determine if there are any differences; build up $aDiff, and report the changes in the JSON history.
+                    $aDiff = array();
+                    foreach ($aDataLOVD[$sLOVDKey] as $sKey => $Value) {
+                        if (!isset($aVOGEntry[$sKey]) || $Value != $aVOGEntry[$sKey]) {
+                            $aDiff[$sKey] = array(
+                                $Value,
+                                (!isset($aVOGEntry[$sKey]) ? 'NULL' : $aVOGEntry[$sKey]),
+                            );
+                            if ($bRemarksNonPublic) {
+                                // Also report differences.
+                                if ($sKey == 'vots') {
+                                    // We won't report changes per field here, just per transcript. However, exclude the
+                                    //  effectid when comparing the data. We can't just remove the effectid from $aDiff,
+                                    //  as that array is being used to process the diff into the DB.
+                                    // So, hide it in the comparison only.
+                                    $aKeysToFilter = array('effectid' => 99); // Value doesn't actually matter.
+                                    foreach (array_unique(array_merge(array_keys($aDiff['vots'][0]), array_keys($aDiff['vots'][1]))) as $nTranscriptID) {
+                                        if (!isset($aDiff['vots'][0][$nTranscriptID])) {
+                                            $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Added mapping to transcript ' . array_search($nTranscriptID, $aTranscriptsInLOVD) . '.';
+                                        } elseif (!isset($aDiff['vots'][1][$nTranscriptID])) {
+                                            $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Removed mapping to transcript ' . array_search($nTranscriptID, $aTranscriptsInLOVD) . '.';
+                                        } elseif (array_diff_key($aDiff['vots'][0][$nTranscriptID], $aKeysToFilter) != array_diff_key($aDiff['vots'][1][$nTranscriptID], $aKeysToFilter)) {
+                                            // VOT is different, while ignoring the effectid field.
+                                            $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey][] = 'Updated mapping to transcript ' . array_search($nTranscriptID, $aTranscriptsInLOVD) . '.';
+                                        }
+                                    }
+
+                                } elseif ($sKey != 'VariantOnGenome/Remarks_Non_Public') {
+                                    // Don't self-report, of course.
+                                    $aVOGEntry['VariantOnGenome/Remarks_Non_Public']['updates'][$sNow][$sKey] = array($Value, $aVOGEntry[$sKey]);
+                                }
+                            }
+                        }
+                    }
+
+                    // Prevent a lot of "false positive" edits because we kind of force a "published as" to exist.
+                    if (array_values(array_diff(array_keys($aDiff), ['VariantOnGenome/Remarks_Non_Public'])) == ['VariantOnGenome/Published_as']
+                        && !$aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']) {
+                        // No, never mind. We won't warrant having an update just because we fill in an empty "published as".
+                        $aDiff = []; // Cancel the update.
+                    }
+
+                    // Because we were building this while building up the diff array,
+                    //  store the new value in the diff to make sure we'll store it in the database.
+                    if ($bRemarksNonPublic && $aDiff) {
+                        $aDiff['VariantOnGenome/Remarks_Non_Public'][1] = $aVOGEntry['VariantOnGenome/Remarks_Non_Public'];
+                    }
+
+
+
+                    // If there is a diff, and we're in debug mode, report the diff but do nothing. This way, we can
+                    //  check if our code works well. To prevent very long diffs however, remove certain elements from
+                    //  the diff that we understand can easily change.
+                    if ($aDiff && $bDryRun) {
+                        // Hide filling in an empty hg38 DNA description.
+                        if (!empty($aDiff['VariantOnGenome/DNA/hg38'][1]) && empty($aDiff['VariantOnGenome/DNA/hg38'][0])) {
+                            unset($aDiff['VariantOnGenome/DNA/hg38']);
+                        }
+
+                        // Hide filling in an empty "Published as".
+                        if (!empty($aDiff['VariantOnGenome/Published_as'][1]) && empty($aDiff['VariantOnGenome/Published_as'][0])) {
+                            unset($aDiff['VariantOnGenome/Published_as']);
+                        }
+
+                        // Hide the JSON object, we know it works.
+                        unset($aDiff['VariantOnGenome/Remarks_Non_Public']);
+
+                        // Clean VOT changes, by removing VOTs from the diff array that are also in the new data.
+                        if (isset($aDiff['vots'])) {
+                            // Loop the original data's VOTs and see if we can find them in the new data.
+                            foreach ($aDiff['vots'][0] as $nTranscriptID => $aLOVDVot) {
+                                if (!isset($aDiff['vots'][1][$nTranscriptID])) {
+                                    $aDiff['vots'][0][$nTranscriptID] = $aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/DNA'] . ' (deleted)';
+                                } else {
+                                    // Obviously, classifications change a lot.
+                                    // We also have problems with the positions. The new libraries don't have the CDS
+                                    //  length for transcripts and simply start counting 3' UTR positions at 1000000.
+                                    // This causes a lot of senseless updates, but I guess we do have to process them,
+                                    //  to make sure we're consistent. If this causes sorting problems, we'll have to
+                                    //  run the position fixer in the LOVD, with the new libraries.
+                                    foreach (['effectid', 'position_c_start', 'position_c_end'] as $sField) {
+                                        unset($aLOVDVot[$sField], $aDiff['vots'][0][$nTranscriptID][$sField], $aDiff['vots'][1][$nTranscriptID][$sField]);
+                                    }
+
+                                    // The new pipeline improved a lot of RNA and Protein changes.
+                                    if (str_contains($aLOVDVot['VariantOnTranscript/DNA'], 'c.*')
+                                        && $aLOVDVot['VariantOnTranscript/RNA'] == 'r.(=)'
+                                        && $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'] == 'r.(?)') {
+                                        // The new one is better, silence this diff.
+                                        $aLOVDVot['VariantOnTranscript/RNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'];
+                                    } elseif ($aLOVDVot['position_c_start_intron']
+                                        && in_array($aLOVDVot['VariantOnTranscript/RNA'], ['r.?', 'r.(?)'])
+                                        && in_array($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'], ['r.(?)', 'r.(=)', 'r.spl?'])) {
+                                        // The new one is better, silence this diff.
+                                        $aLOVDVot['VariantOnTranscript/RNA'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/RNA'];
+                                    }
+                                    if ($aLOVDVot['VariantOnTranscript/Protein'] == 'p.(=)'
+                                        && str_ends_with($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'], '=)')) {
+                                        // E.g., p.(=) to p.(Leu8=).
+                                        // The new one is better, silence this diff.
+                                        $aLOVDVot['VariantOnTranscript/Protein'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'];
+                                    } elseif (str_contains($aLOVDVot['VariantOnTranscript/Protein'], '*')
+                                        && str_contains($aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'], 'Ter')) {
+                                        // E.g., p.(Arg225*) to p.(Arg225Ter).
+                                        // Ter is better than *, replace it (which should silence this diff).
+                                        $aLOVDVot['VariantOnTranscript/Protein'] = str_replace('*', 'Ter', $aLOVDVot['VariantOnTranscript/Protein']);
+                                    } elseif ($aLOVDVot['VariantOnTranscript/Protein'] == 'p.?'
+                                        && $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'] != 'p.?') {
+                                        // We have quite a few entries in the database that had p.? while now,
+                                        //  we have a proper value. The new one is better, silence this diff.
+                                        $aLOVDVot['VariantOnTranscript/Protein'] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/Protein'];
+                                    }
+
+                                    // If the same, toss, but do report it.
+                                    if ($aLOVDVot == $aDiff['vots'][1][$nTranscriptID]) {
+                                        // We have this one also in the new data. It's unchanged.
+                                        // We used to unset these entries, which works, but I wanted to have them still
+                                        //  printed to show me which mapping was left and which were deleted. It was
+                                        //  basically for me to double-check the method for building $aGoodMappings.
+                                        $aDiff['vots'][0][$nTranscriptID] = $aDiff['vots'][0][$nTranscriptID]['VariantOnTranscript/DNA'] . ' (unchanged)';
+                                        $aDiff['vots'][1][$nTranscriptID] = $aDiff['vots'][1][$nTranscriptID]['VariantOnTranscript/DNA'] . ' (unchanged)';
+                                    }
+                                }
+                            }
+
+                            if (!count($aDiff['vots'][0])) {
+                                // No real diff. Just additions by us.
+                                unset($aDiff['vots']);
+
+                            } else {
+                                // If we only have string data in the VOTs, we don't have to see it.
+                                // That's a combination of "(unchanged)" and "(deleted)",
+                                //  and we're now confident that this works well.
+                                if (!array_filter($aDiff['vots'][0], function ($aVOT) { return is_array($aVOT); }) && $aDiff['vots'][1]) {
+                                    // We only have strings in the original array, but we do have mappings left.
+                                    // These are acceptable changes.
+                                    unset($aDiff['vots']);
+                                }
+                            }
+                        }
+
+                        // The new data files that we started receiving in 2026 don't show multiple genes or transcripts.
+                        // As such, our often longer published_as fields got shortened. Or, the old value was cut at 150
+                        //  characters by the old pipeline, and we now shorten based on the length of the actual field.
+                        // Hide these changes if they are the only diff.
+                        if ($bPublishedAs && $aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']
+                            && array_keys($aDiff) == ['VariantOnGenome/Published_as']) {
+                            if (strlen($aVOGEntry['VariantOnGenome/Published_as']) >= 20
+                                && str_contains($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as'], ', ')) {
+                                $aDiff = []; // Hide the diff from the debugging view, but process it if we're actually running.
+                            } elseif (strlen($aDataLOVD[$sLOVDKey]['VariantOnGenome/Published_as']) == 150) {
+                                $aDiff = []; // Hide the diff from the debugging view, but process it if we're actually running.
+                            }
+                        }
+
+                        // Check if the diff is simply a deletion or re-publication of this variant.
+                        // That's a status change, possibly an effectid change and Published_as change, and a Remarks change.
+                        if ($aDiff && array_values(array_diff(array_keys($aDiff), ['effectid', 'VariantOnGenome/Published_as', 'VariantOnGenome/Remarks'])) == ['statusid']
+                            && ($aDiff['statusid'] == [9, 4] || $aDiff['statusid'][1] == 9)) {
+                            $aDiff = []; // Hide the diff from the debugging view, but process it if we're actually running.
+                        }
+
+                        // Report the remaining diff to the screen, so we can see what kind of edits we're having.
+                        if ($aDiff) {
+                            var_dump($sVariant . ' (' . count($aDataLOVD[$sLOVDKey]['vots']) . ' -> ' . count($aVOGEntry['vots']) . ' VOTs)', $aDiff);
+                        }
+
+                        if ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_HIDDEN && $aVOGEntry['statusid'] == STATUS_OK) {
+                            // Variant was non-public but will be published now (previously deleted or in conflict).
+                            $aVariantsCreated[$sChromosome] ++;
+                        } elseif ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_OK && $aVOGEntry['statusid'] == STATUS_HIDDEN) {
+                            // Variant was public but will be unpublished now (new conflict).
+                            $aVariantsDeleted[$sChromosome] ++;
+                        } else {
+                            $aVariantsUpdated[$sChromosome] ++;
+                        }
+
+                        // We don't need to print updates or so when we're doing a dry run. So just continue.
+                        $nVariantsDone ++;
+                        continue;
+                    }
+
+
+
+                    // If there is no diff, there is nothing to do.
+                    if (!$aDiff) {
+                        $aVariantsSkipped[$sChromosome] ++;
+
+                    } else {
+                        // Run update. A dry-run with a diff doesn't get here, because it already continued.
+                        // Update atomically, we don't want half updates.
+                        $_DB->beginTransaction();
+
+                        // Start with the VOTs.
+                        if (isset($aDiff['vots'])) {
+                            foreach (array_unique(array_merge(array_keys($aDiff['vots'][0]), array_keys($aDiff['vots'][1]))) as $nTranscriptID) {
+                                if (!isset($aDiff['vots'][0][$nTranscriptID])) {
+                                    // Add the transcript.
+                                    $aVOT = $aDiff['vots'][1][$nTranscriptID];
+                                    $_DB->q('INSERT INTO ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
+                                        (id, ' . implode(', ', array_map(function ($sField) {
+                                            return '`' . $sField . '`';
+                                        }, array_keys($aVOT))) . ')
+                                        VALUES (?' . str_repeat(', ?', count($aVOT)) . ')', array_merge(array($aVOGEntry['id']), array_values($aVOT)));
+
+                                } elseif (!isset($aDiff['vots'][1][$nTranscriptID])) {
+                                    // Remove the transcript.
+                                    $_DB->q('DELETE FROM ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
+                                        WHERE id = ? AND transcriptid = ?', array($aVOGEntry['id'], $nTranscriptID));
+
+                                } elseif ($aDiff['vots'][0][$nTranscriptID] != $aDiff['vots'][1][$nTranscriptID]) {
+                                    // Update the transcript, remove 'transcriptid' as an updateable field (it shouldn't be there, but still).
+                                    $aFieldsToUpdate = array_diff_key($aDiff['vots'][1][$nTranscriptID], array('transcriptid' => 0));
+                                    $_DB->q('UPDATE ' . TABLE_VARIANTS_ON_TRANSCRIPTS . ' SET ' .
+                                        implode(', ', array_map(function ($sField) {
+                                            return '`' . $sField . '` = ?';
+                                        }, array_keys($aFieldsToUpdate))) . '
+                                        WHERE id = ? AND transcriptid = ?', array_merge(array_values($aFieldsToUpdate), array($aVOGEntry['id'], $nTranscriptID)));
+                                }
+                            }
+                            unset($aDiff['vots']); // So we don't run into it anymore.
+                        }
+
+                        // Update the VOG, remove 'id' as an updateable field (it shouldn't be there, but still).
+                        $aFieldsToUpdate = array();
+                        foreach ($aDiff as $sKey => $aColDiff) {
+                            if ($sKey != 'id') {
+                                if ($sKey == 'VariantOnGenome/Remarks_Non_Public') {
+                                    $aFieldsToUpdate[$sKey] = json_encode($aColDiff[1]);
+                                } else {
+                                    $aFieldsToUpdate[$sKey] = $aColDiff[1];
+                                }
+                            }
+                        }
+                        $aFieldsToUpdate['edited_by'] = 0;
+                        $aFieldsToUpdate['edited_date'] = $sNow;
+
+                        $_DB->q('UPDATE ' . TABLE_VARIANTS . ' SET ' .
+                            implode(', ', array_map(function ($sField) {
+                                return '`' . $sField . '` = ?';
+                            }, array_keys($aFieldsToUpdate))) . '
+                            WHERE id = ?', array_merge(array_values($aFieldsToUpdate), array($aVOGEntry['id'])));
+
+                        // If we get here, everything went well.
+                        $_DB->commit();
+
+
+
+                        // Determine whether this variant was created (undeleted) or updated.
+                        if ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_HIDDEN && $aVOGEntry['statusid'] == STATUS_OK) {
+                            // Variant was non-public but will be published now (previously deleted or in conflict).
+                            $aVariantsCreated[$sChromosome] ++;
+                        } elseif ($aDataLOVD[$sLOVDKey]['statusid'] == STATUS_OK && $aVOGEntry['statusid'] == STATUS_HIDDEN) {
+                            // Variant was public but will be unpublished now (new conflict).
+                            $aVariantsDeleted[$sChromosome] ++;
+                        } else {
+                            $aVariantsUpdated[$sChromosome] ++;
+                        }
+                    }
+
+
+
+                } else {
+                    // Variant hasn't been seen yet by this center. Create it in the database.
+                    // Do this only, if we don't have LOVD variants that need to be cached.
+                    if ($bDryRun) {
+                        $aVariantsCreated[$sChromosome] ++;
+                        // We don't need to print updates or so when we're doing a dry run. So just continue.
+                        $nVariantsDone ++;
+                        continue;
+                    }
+
+                    // Prepare additional data.
+                    $aVOGEntry['created_date'] = $sNow;
+                    if ($bRemarksNonPublic) {
+                        $aVOGEntry['VariantOnGenome/Remarks_Non_Public'] = json_encode($aVOGEntry['VariantOnGenome/Remarks_Non_Public']);
+                    }
+                    // We can be more correct here by adding VOT data, but this function expects that in quite a complex manner.
+                    $aVOGEntry['VariantOnGenome/DBID'] = lovd_fetchDBID($aVOGEntry);
+
+                    // Run atomically, we don't want half inserts.
+                    $_DB->beginTransaction();
+
+                    // Insert the VOG first.
+                    $aVOTs = $aVOGEntry['vots'];
+                    unset($aVOGEntry['vots']);
+                    $aFields = array_keys($aVOGEntry);
+                    $_DB->q('INSERT INTO ' . TABLE_VARIANTS . '
+                        (' . implode(', ', array_map(function ($sField) {
+                            return '`' . $sField . '`';
+                        }, $aFields)) . ')
+                        VALUES (?' . str_repeat(', ?', count($aFields) - 1) . ')', array_values($aVOGEntry));
+                    $aVOGEntry['id'] = $_DB->lastInsertId();
+
+                    // Then the VOTs.
+                    foreach ($aVOTs as $aVOT) {
+                        // Add the transcript.
+                        $_DB->q('INSERT INTO ' . TABLE_VARIANTS_ON_TRANSCRIPTS . '
+                            (id, ' . implode(', ', array_map(function ($sField) {
+                                return '`' . $sField . '`';
+                            }, array_keys($aVOT))) . ')
+                            VALUES (?' . str_repeat(', ?', count($aVOT)) . ')', array_merge(array($aVOGEntry['id']), array_values($aVOT)));
+                    }
+
+                    // If we get here, everything went well.
+                    $_DB->commit();
+
+                    $aVariantsCreated[$sChromosome] ++;
+                }
+
+
+
+                // Print update, for every percentage changed.
+                $nVariantsDone ++;
+                if ((microtime(true) - $tProgressReported) > 5 && $nVariantsDone != $this->total_variants
+                    && floor($nVariantsDone * 1000 / $this->total_variants) != $nPercentageComplete) {
+                    $nPercentageComplete = floor($nVariantsDone * 1000 / $this->total_variants);
+                    $this->Log->add(
+                        '[' . str_pad(number_format($nPercentageComplete / 10, 1), 5, ' ', STR_PAD_LEFT) .
+                        '%] ' . str_pad($nVariantsDone, strlen($this->total_variants), ' ', STR_PAD_LEFT) . ' variants processed...');
+                    $tProgressReported = microtime(true); // Don't report again for a certain amount of time.
+                }
+            }
+
+            // Report on the current progress.
+            $nPercentageComplete = floor($nVariantsDone * 1000 / $this->total_variants);
+            $this->Log->add(
+                '[' . str_pad(number_format($nPercentageComplete / 10, 1), 5, ' ', STR_PAD_LEFT) .
+                "%] Chromosome $sChromosome completed.\n" .
+                '         Variants created: ' . $aVariantsCreated[$sChromosome] . ".\n" .
+                '         Variants updated: ' . $aVariantsUpdated[$sChromosome] . ".\n" .
+                '         Variants deleted: ' . $aVariantsDeleted[$sChromosome] . ".\n" .
+                '         Variants skipped: ' . $aVariantsSkipped[$sChromosome] . ".\n");
+        }
+
+        // Final counts.
+        $this->statistics['created'] = array_sum($aVariantsCreated);
+        $this->statistics['updated'] = array_sum($aVariantsUpdated);
+        $this->statistics['deleted'] = array_sum($aVariantsDeleted);
+        $this->statistics['skipped'] = array_sum($aVariantsSkipped);
+
+        $nPercentageComplete = floor($nVariantsDone * 1000 / $this->total_variants);
+        $this->Log->add(
+            '[' . str_pad(number_format($nPercentageComplete / 10, 1), 5, ' ', STR_PAD_LEFT) .
+            "%] [Totals] Variants created: {$this->statistics['created']}
+                  Variants updated: {$this->statistics['updated']}
+                  Variants deleted: {$this->statistics['deleted']}
+                  Variants skipped: {$this->statistics['skipped']}");
+
+        if ($bDryRun) {
+            // If we're doing a dry run, we're done now.
+            $this->Log->add('[100.0%] Dry run completed; this was a simulation.');
+            return true;
+        }
+
+        if (!LOVD_plus) {
+            // Update all gene's updated dates.
+            // We're going to make this easy for us; all entries created or edited at $sNow,
+            //  we're going to assume are ours. Run on entire database.
+            $aGenesUpdated = $_DB->q('
+                SELECT DISTINCT t.geneid
+                FROM ' . TABLE_TRANSCRIPTS . ' AS t
+                    INNER JOIN ' . TABLE_VARIANTS_ON_TRANSCRIPTS . ' AS vot ON (t.id = vot.transcriptid)
+                    INNER JOIN ' . TABLE_VARIANTS . ' AS vog ON (vot.id = vog.id)
+                WHERE vog.created_date = ? OR vog.edited_date = ?', array($sNow, $sNow))->fetchAllColumn();
+
+            if ($aGenesUpdated) {
+                // We can't use lovd_setUpdatedDate(), since that contains $_AUTH checks that we won't be able to pass.
+                $q = $_DB->q('
+                    UPDATE ' . TABLE_GENES . '
+                    SET updated_by = ?, updated_date = ?
+                    WHERE (updated_date IS NULL OR updated_date < ?) AND id IN (?' . str_repeat(', ?', count($aGenesUpdated) - 1) . ')',
+                    array_merge(array(0, $sNow, $sNow), $aGenesUpdated));
+                $nUpdated = $q->rowCount();
+                $this->Log->add('[100.0%] [Totals] Gene(s) updated: ' . $nUpdated . '/' . count($aGenesUpdated) . '.');
+            }
+        }
+
+        return true;
+    }
+
+
+
+
+
+    private function removeDNASuffixes ($sDNA)
+    {
+        // Removes DNA suffixes (delA -> del). These suffixes are anyway never needed, so can be discarded safely.
+        return preg_replace(['/del([ACGTN]+)/', '/dup([ACGTN]+)/'], ['del', 'dup'], $sDNA);
+    }
+
+
+
+
+
+    public function saveErrors (string $sFile): bool
+    {
+        // Save errors to disk.
+        // No need to sort anything; the input file was already fully sorted.
+        $aData = [implode("\t", $this->data_rejected_output_header)];
+        foreach ($this->data_rejected as $aVariant) {
+            $aLine = [];
+            foreach ($this->data_rejected_output_header as $sField) {
+                $aLine[] = ($aVariant[$sField] ?? '');
+            }
+            $aData[] = implode("\t", $aLine);
+        }
+        $aData[] = '';
+
+        // Save the data.
+        return (bool) file_put_contents(
+            $sFile,
+            implode("\r\n", $aData)
+        );
+    }
+
+
+
+
+
+    private function shortenDNAInsertions ($sDNA)
+    {
+        // Radically shortens DNA insertions. We could do this more intelligently and shorten only what's necessary,
+        //  but we don't use this for VOG/DNA entries anyway and doing this right would make this a lot more complex.
+        // This looks a bit weird, but since there can be multiple insertions, we need to replace them one by one,
+        //  and a simple str_replace() can't be limited to only replace once.
+        return preg_replace_callback(
+            '/ins([ACGTN]+)\b/',
+            function ($a)
+            {
+                // Only replace if it will result in a shorter string.
+                return (strlen($a[1]) <= 4? $a[0] : 'insN[' . strlen($a[1]) . ']');
+            },
+            $sDNA
+        );
+    }
+
+
+
+
+
+    private function shortenProteinInsertions ($sProtein)
+    {
+        // Radically shortens protein insertions. We could do this more intelligently and shorten only what's necessary,
+        //  but this is for annotation only and doing this right would make this a lot more complex.
+        if (preg_match('/ins(([A-Z][a-z]{2})+)\b/', $sProtein, $aRegs)) {
+            $sProtein = str_replace($aRegs[0], 'insXaa[' . (strlen($aRegs[1]) / 3) . ']', $sProtein);
+        }
+
+        return $sProtein;
+    }
+}
+?>

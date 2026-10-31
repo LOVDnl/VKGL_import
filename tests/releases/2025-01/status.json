@@ -1,0 +1,32 @@
+{
+    "step": 4,
+    "data_files": {
+        "lumc_SNV.txt": "lumc",
+        "radboud_mumc_CNV.txt": "radboud_mumc",
+        "radboud_mumc_SNV.txt": "radboud_mumc",
+        "lumc_Franklin.tsv": "lumc",
+        "lumc_NxClinical.tsv": "lumc",
+        "nki.txt": "lumc",
+        "erasmus.txt": "lumc",
+        "umcg.csv": "radboud_mumc",
+        "umcu.txt": "radboud_mumc",
+        "aumc.csv": "radboud_mumc"
+    },
+    "output_files": {
+        "formatted": "vkgl_data.01-raw.tsv",
+        "normalized": "vkgl_data.02-normalized.tsv",
+        "aggregated": "vkgl_data.03-aggregated.tsv"
+    },
+    "error_files": {
+        "formatted": "vkgl_data.01-raw.errors.tsv",
+        "aggregated": "vkgl_data.03-aggregated.errors.tsv"
+    },
+    "statistics": {
+        "formatting": {
+            "errors": {
+                "radboud_mumc": 15
+            }
+        },
+        "normalizing": []
+    }
+}
