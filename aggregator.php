@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-04-28
- * Modified    : 2026-10-30
+ * Modified    : 2026-11-05
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -535,7 +535,7 @@ class Aggregator
                     return $n;
                 }
                 // Types are the same. Sort on DNA.
-                return strcmp($a['genomic_native_normalized'], $b['genomic_native_normalized']);
+                return strnatcmp($a['genomic_native_normalized'], $b['genomic_native_normalized']);
             });
             $this->data[$sCenter] = $aVariants;
         }
@@ -563,7 +563,7 @@ class Aggregator
                     return $n;
                 }
                 // Types are the same. Sort on DNA.
-                return strcmp($a['genomic_native_normalized'], $b['genomic_native_normalized']);
+                return strnatcmp($a['genomic_native_normalized'], $b['genomic_native_normalized']);
             });
             $this->data_rejected[$sCenter] = $aVariants;
         }
