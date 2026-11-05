@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-03-10
- * Modified    : 2026-08-05
+ * Modified    : 2026-11-05
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmer  : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>
@@ -381,7 +381,7 @@ class Normalizer
         // Start by sorting by center.
         ksort($this->data);
 
-        // Then loop per center and sort those variants on the genomic_native_normalized field.
+        // Then loop per center and sort those variants on the variant type and genomic_native_normalized fields.
         foreach ($this->data as $sCenter => $aVariants) {
             usort($aVariants, function ($a, $b) {
                 // First, sort on variant type. If we had stored the data per type, this would have been much easier.
@@ -392,7 +392,7 @@ class Normalizer
                     return $n;
                 }
                 // Types are the same. Sort on DNA.
-                return strcmp($a['genomic_native_normalized'], $b['genomic_native_normalized']);
+                return strnatcmp($a['genomic_native_normalized'], $b['genomic_native_normalized']);
             });
             $this->data[$sCenter] = $aVariants;
         }
