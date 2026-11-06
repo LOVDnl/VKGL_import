@@ -80,7 +80,10 @@ class Validator
                 $aCurrentAnnotations = json_decode($aCurrentData[$sVariantKey]['annotation'], true);
                 $aPreviousAnnotations = json_decode($aPreviousData[$sVariantKey]['annotation'], true);
                 // Currently, LOVD only stores the reported_as field.
-                if (($aCurrentAnnotations['reported_as'] ?? '') != ($aPreviousAnnotations['reported_as'] ?? '')) {
+                $aPreviousAnnotations = [($aPreviousAnnotations['reported_as'] ?? '')];
+                $aCurrentAnnotations = [($aCurrentAnnotations['reported_as'] ?? '')];
+                // But wait, when it's emptied, we don't empty it in LOVD. So that should not be an update here, either.
+                if ($aPreviousAnnotations != $aCurrentAnnotations && $aCurrentAnnotations[0]) {
                     $nUpdated ++;
                 }
             }
