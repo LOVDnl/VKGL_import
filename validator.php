@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-05-12
- * Modified    : 2026-10-30
+ * Modified    : 2026-11-06
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -188,8 +188,28 @@ class Validator
                 // We accidentally trimmed off empty fields.
                 $aDataLine = array_pad($aDataLine, $nHeaders, '');
             }
-
             $aVariant = array_combine($aHeaders, $aDataLine);
+
+            // Store the data as much as possibly by the hg19 description. For 2026-04, UMCG had lots of variants
+            //  previously found on both genome builds that had lost their hg19 native observation, due to us no longer
+            //  using the Alissa data. That caused these variants to "swap" from a merged native hg19 entry to a native
+            //  hg38 entry. This caused massive false positive deletes and creates. Therefore, focus on storing by hg19
+            //  always. When a hg38 loses its hg19 liftover value, we'll delete them from LOVD anyway, so a delete would
+            //  actually be a correct prediction.
+            $aDescriptions = array_filter([
+                $aVariant['genomic_native_normalized'],
+                $aVariant['genomic_liftover_normalized']
+            ]);
+            natsort($aDescriptions);
+
+            // Now, the hg19 description is first in the array (but not necessarily key 0).
+            // Sort the DNA fields as well, so we won't have to deal with fake updates.
+            list($aVariant['genomic_native_normalized'], $aVariant['genomic_liftover_normalized']) = array_pad(
+                array_values($aDescriptions),
+                2,
+                ''
+            );
+
             // Store the data grouped by the center and normalized variant description together in one key value.
             // This allows us to easily run diffs.
             $aData[$aVariant['center'] . ':' . $aVariant['genomic_native_normalized']] = $aVariant;
