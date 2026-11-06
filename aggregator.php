@@ -4,7 +4,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-04-28
- * Modified    : 2026-11-05
+ * Modified    : 2026-11-06
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -67,21 +67,35 @@ class Aggregator
         // "IVD NM_002225.5 p.(Val89Ile)", etc.
 
         $sReportedAs = $aVariant['gene'];
+        $bVariantPresent = false;
         if ($aVariant['transcript']) {
             $sReportedAs .= (!$sReportedAs? '' : ' ') . $aVariant['transcript'];
         }
         if ($aVariant['cDNA']) {
             $sReportedAs .= (!$sReportedAs? '' : ($aVariant['transcript']? ':' : ' ')) . $aVariant['cDNA'];
+            $bVariantPresent = true;
         }
         if ($aVariant['protein'] && $aVariant['protein'] != 'None') {
+            $bVariantPresent = true;
             if ($aVariant['cDNA']) {
                 $sReportedAs .= ' (' . $aVariant['protein'] . ')';
             } else {
                 $sReportedAs .= (!$sReportedAs? '' : ' ') . $aVariant['protein'];
             }
         }
+
+        // Only store something if we ended up with some information.
+        // If there is no data, LOVD will use the genomic_native_reported field.
         if ($sReportedAs) {
-            $aVariant['annotation']['reported_as'] = $sReportedAs;
+            // Newer pipelines sometimes just send us gene + transcript. This isn't really a "reported as" value.
+            // Also, LOVD actually doesn't use these values at all for the "Published as" field.
+            // Just in case, we will store them, in case people want to see it in the annotation.
+            // But we'll store it in a different place.
+            if (!$bVariantPresent) {
+                $aVariant['annotation']['reported_transcript'] = $sReportedAs;
+            } else {
+                $aVariant['annotation']['reported_as'] = $sReportedAs;
+            }
             ksort($aVariant['annotation']); // For comparison reasons.
         }
         // Remove the fields from the data to save memory.
