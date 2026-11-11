@@ -5,7 +5,7 @@
  * VKGL-LOVD data pipeline.
  *
  * Created     : 2026-02-23
- * Modified    : 2026-09-04
+ * Modified    : 2026-11-11
  *
  * Copyright   : 2004-2026 Leiden University Medical Center; http://www.LUMC.nl/
  * Programmers : Ivo F.A.C. Fokkema <I.F.A.C.Fokkema@LUMC.nl>,
@@ -509,6 +509,7 @@ if ($Status->get('step') < $nStep) {
             (array) $Status->get('statistics|normalizing|errors'),
         )
     );
+    ksort($aStatistics['errors']);
     $Statistics->set($sRelease, $aStatistics);
 
     // Finally, log that we're done and continue.
